@@ -162,7 +162,7 @@ export function attachGateEvents(){
       render();
       return;
     }
-    loginLockout = {attempts:0, until:0};
+    loginLockout.attempts = 0; loginLockout.until = 0;
     state.session = {name:account.name, role:account.role, username:account.username, accountId:account.id};
     await savePersonal('session', state.session);
     state._loginError=null;
