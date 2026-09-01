@@ -182,7 +182,6 @@ export function attachGateEvents(){
    violation until then. */
 
 /* ===================== public ===================== */
-export const PUBLIC_OUTSTANDING_STATUSES = ['pending','resolve_requested','resolve_forwarded'];
 export function publicHTML(){
   const q = (state.search||'').toLowerCase();
   const totalStudents = state.roster.length;
