@@ -1019,9 +1019,19 @@ let trContainer = null;
 let trInited = false;
 let trLastSyncedRaw = {};
 const TR_STATE_KEY_FOR = { treasury_accounts:'accounts', treasury_transactions:'transactions', treasury_dues_amount:'duesAmount', treasury_liquidation_notes:'liquidationNotes' };
-// Bound to trState (Treasury's own local state), distinct from the mutateShared
-// exported by sync.js which is bound to Watch's own state object.
-const mutateShared = makeMutateShared(trState, TR_STATE_KEY_FOR);
+// NOTE: this is deliberately NOT called immediately here. treasury-embed.js
+// and sync.js import from each other (a circular dependency), so at the
+// moment this module first loads, sync.js hasn't necessarily finished
+// initializing makeMutateShared yet — calling it right away throws
+// "Cannot access 'makeMutateShared' before initialization" and crashes the
+// entire app's module graph (this was the "Alpha Watch not loading" bug).
+// Deferring the call to first use (well after all modules have loaded)
+// avoids that entirely.
+let _mutateShared = null;
+function mutateShared(key, mutator){
+  if(!_mutateShared) _mutateShared = makeMutateShared(trState, TR_STATE_KEY_FOR);
+  return _mutateShared(key, mutator);
+}
 
 function trRenderCurrent(){
   if(!trContainer) return;
