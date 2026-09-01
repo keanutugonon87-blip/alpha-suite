@@ -1,0 +1,42 @@
+/* Alpha Suite — shared design system (theme.css)
+   Navy/gold/cream palette, shadows, radii, and base typography/resets.
+   Both alpha-watch.html and alpha-treasury.html <link> this file, instead
+   of each carrying its own copy of this :root block. App-specific layout
+   and screens live in each app's own stylesheet
+   (alpha-watch/app.css, alpha-treasury/app.css). */
+
+:root{
+  --navy-950:#0a0a33;
+  --navy-900:#0f0f4a;
+  --navy-800:#151566;
+  --navy-700:#1c1c86;
+  --royal:#2b2bd6;
+  --gold:#f0b429;
+  --gold-light:#ffd868;
+  --gold-dim:#c98f16;
+  --cream:#f7f4ec;
+  --paper:#fffdf8;
+  --ink:#14141f;
+  --ink-soft:#4a4a5e;
+  --line:#e4dfd0;
+  --pending:#d98c1f;
+  --pending-bg:#fdf1de;
+  --resolved:#237a4f;
+  --resolved-bg:#e4f5ec;
+  --danger:#c23b3b;
+  --danger-bg:#fbe8e6;
+  --radius:14px;
+  --shadow:0 8px 28px rgba(10,10,51,0.12);
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--cream);
+  color:var(--ink);
+  font-family:'Manrope',sans-serif;
+  -webkit-font-smoothing:antialiased;
+  min-height:100vh;
+}
+::selection{background:var(--gold-light);color:var(--navy-950);}
+.mono{font-family:'JetBrains Mono',monospace;}
+.display{font-family:'Cinzel',serif;}
