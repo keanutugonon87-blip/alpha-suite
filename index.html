@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALPHA SUITE</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles/theme.css">
+<style>
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
+  .wrap{max-width:520px;width:100%;text-align:center;}
+  .crest{width:72px;height:72px;margin:0 auto 18px;}
+  .crest img{width:100%;height:100%;object-fit:contain;}
+  h1{font-family:'Cinzel',serif;color:var(--navy-900);font-size:26px;letter-spacing:1.5px;margin:0 0 8px;}
+  p.sub{color:var(--ink-soft);margin:0 0 32px;font-size:14px;}
+  .cards{display:grid;gap:16px;}
+  a.card{
+    display:block;text-decoration:none;background:var(--paper);border:1.5px solid var(--line);
+    border-radius:var(--radius);padding:20px 22px;text-align:left;box-shadow:var(--shadow);
+    transition:transform .15s ease, border-color .15s ease;
+  }
+  a.card:hover{transform:translateY(-2px);border-color:var(--gold);}
+  a.card b{font-family:'Cinzel',serif;color:var(--navy-900);font-size:17px;letter-spacing:.5px;display:block;margin-bottom:4px;}
+  a.card span{color:var(--ink-soft);font-size:13px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crest"><img src="assets/logo.png" alt="Alpha logo"></div>
+  <h1>ALPHA SUITE</h1>
+  <p class="sub">BSMT 1-Alpha class governance tools</p>
+  <div class="cards">
+    <a class="card" href="alpha-watch.html">
+      <b>ALPHA WATCH</b>
+      <span>Roster, dress/grooming standard, and violation ledger</span>
+    </a>
+    <a class="card" href="alpha-treasury.html">
+      <b>ALPHA TREASURY</b>
+      <span>Class fund collections, expenses, and liquidation reports</span>
+    </a>
+  </div>
+</div>
+</body>
+</html>
