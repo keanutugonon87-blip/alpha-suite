@@ -10,38 +10,220 @@
 <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="src/styles/theme.css">
 <style>
-  body{display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;}
-  .wrap{max-width:520px;width:100%;text-align:center;}
-  .crest{width:72px;height:72px;margin:0 auto 18px;}
-  .crest img{width:100%;height:100%;object-fit:contain;}
-  h1{font-family:'Cinzel',serif;color:var(--navy-900);font-size:26px;letter-spacing:1.5px;margin:0 0 8px;}
-  p.sub{color:var(--ink-soft);margin:0 0 32px;font-size:14px;}
-  .cards{display:grid;gap:16px;}
-  a.card{
-    display:block;text-decoration:none;background:var(--paper);border:1.5px solid var(--line);
-    border-radius:var(--radius);padding:20px 22px;text-align:left;box-shadow:var(--shadow);
-    transition:transform .15s ease, border-color .15s ease;
+  /* ============ Base / atmosphere ============ */
+  html, body{
+    height:100%;
   }
-  a.card:hover{transform:translateY(-2px);border-color:var(--gold);}
-  a.card b{font-family:'Cinzel',serif;color:var(--navy-900);font-size:17px;letter-spacing:.5px;display:block;margin-bottom:4px;}
-  a.card span{color:var(--ink-soft);font-size:13px;}
+  body{
+    display:flex;align-items:center;justify-content:center;min-height:100vh;padding:24px;
+    position:relative;
+    overflow-x:hidden;
+    background:
+      radial-gradient(ellipse 60% 45% at 50% 8%, rgba(201,162,39,0.16), transparent 60%),
+      radial-gradient(ellipse 90% 70% at 50% 100%, rgba(22,35,58,0.55), transparent 70%),
+      linear-gradient(180deg, var(--navy-900, #16233A) 0%, #0c1424 60%, #070c16 100%);
+    isolation:isolate;
+  }
+
+  /* starfield */
+  body::before{
+    content:"";
+    position:fixed; inset:0; z-index:-2; pointer-events:none;
+    background-image:
+      radial-gradient(1.5px 1.5px at 10% 20%, rgba(255,255,255,.55) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 25% 65%, rgba(255,255,255,.4) 50%, transparent 51%),
+      radial-gradient(1px 1px at 40% 15%, rgba(255,255,255,.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 60% 80%, rgba(255,255,255,.35) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 75% 30%, rgba(255,255,255,.5) 50%, transparent 51%),
+      radial-gradient(1px 1px at 85% 60%, rgba(255,255,255,.4) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 92% 12%, rgba(255,255,255,.45) 50%, transparent 51%),
+      radial-gradient(1px 1px at 15% 88%, rgba(255,255,255,.35) 50%, transparent 51%),
+      radial-gradient(1px 1px at 50% 45%, rgba(255,255,255,.3) 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 35% 92%, rgba(255,255,255,.4) 50%, transparent 51%);
+    background-repeat:repeat;
+    background-size:100% 100%;
+    animation:twinkle 6s ease-in-out infinite alternate;
+  }
+
+  /* moon glow behind crest */
+  .moon-glow{
+    position:absolute; top:50%; left:50%; transform:translate(-50%,-58%);
+    width:340px; height:340px; border-radius:50%; z-index:-1; pointer-events:none;
+    background:radial-gradient(circle, rgba(247,231,178,0.35) 0%, rgba(201,162,39,0.16) 40%, transparent 72%);
+    filter:blur(2px);
+    animation:moonPulse 5s ease-in-out infinite;
+  }
+
+  /* large faint howling wolf watermark */
+  .howl-watermark{
+    position:fixed; z-index:-1; pointer-events:none;
+    top:50%; left:50%;
+    width:min(900px, 130vw);
+    transform:translate(-50%,-52%);
+    opacity:0.05;
+    filter:drop-shadow(0 0 40px rgba(201,162,39,0.25));
+    animation:breathe 8s ease-in-out infinite;
+  }
+  .howl-watermark img{ width:100%; height:auto; display:block; }
+
+  @keyframes twinkle{
+    0%{opacity:.7} 100%{opacity:1}
+  }
+  @keyframes moonPulse{
+    0%,100%{ transform:translate(-50%,-58%) scale(1); opacity:.9; }
+    50%{ transform:translate(-50%,-58%) scale(1.08); opacity:1; }
+  }
+  @keyframes breathe{
+    0%,100%{ transform:translate(-50%,-52%) scale(1); }
+    50%{ transform:translate(-50%,-52%) scale(1.035); }
+  }
+
+  /* ============ Content ============ */
+  .wrap{max-width:520px;width:100%;text-align:center;position:relative;z-index:1;}
+
+  .crest-frame{
+    position:relative;
+    width:104px;height:104px;
+    margin:0 auto 22px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .crest{width:88px;height:88px;position:relative;z-index:2;
+    filter:drop-shadow(0 4px 18px rgba(0,0,0,0.45));
+  }
+  .crest img{width:100%;height:100%;object-fit:contain;}
+
+  /* howl rings — like sound waves emanating from the crest */
+  .howl-ring{
+    position:absolute; left:50%; top:50%;
+    border:1.5px solid rgba(201,162,39,0.55);
+    border-radius:50%;
+    transform:translate(-50%,-50%) scale(0.6);
+    opacity:0;
+    animation:ringOut 3.6s ease-out infinite;
+  }
+  .howl-ring.r1{width:104px;height:104px; animation-delay:0s;}
+  .howl-ring.r2{width:104px;height:104px; animation-delay:1.2s;}
+  .howl-ring.r3{width:104px;height:104px; animation-delay:2.4s;}
+  @keyframes ringOut{
+    0%{ transform:translate(-50%,-50%) scale(0.55); opacity:0.7; }
+    70%{ opacity:0.12; }
+    100%{ transform:translate(-50%,-50%) scale(2.3); opacity:0; }
+  }
+
+  h1{
+    font-family:'Cinzel',serif;color:#F3EFE3;font-size:28px;letter-spacing:2.5px;margin:0 0 8px;
+    text-shadow:0 0 22px rgba(201,162,39,0.35);
+    opacity:0; transform:translateY(14px);
+    animation:fadeUp .7s ease forwards; animation-delay:.15s;
+  }
+  p.sub{
+    color:rgba(230,228,220,0.72);margin:0 0 34px;font-size:14px;letter-spacing:.3px;
+    opacity:0; transform:translateY(14px);
+    animation:fadeUp .7s ease forwards; animation-delay:.32s;
+  }
+
+  @keyframes fadeUp{
+    to{ opacity:1; transform:translateY(0); }
+  }
+
+  .cards{display:grid;gap:16px;}
+
+  a.card{
+    display:block;text-decoration:none;
+    background:linear-gradient(180deg, rgba(251,247,238,0.98), rgba(245,240,227,0.96));
+    border:1.5px solid rgba(201,162,39,0.28);
+    border-radius:var(--radius, 14px);
+    padding:20px 22px 20px 26px;
+    text-align:left;
+    box-shadow:0 10px 30px -12px rgba(0,0,0,0.55);
+    position:relative;
+    overflow:hidden;
+    isolation:isolate;
+    transition:transform .28s cubic-bezier(.2,.8,.2,1), box-shadow .28s ease, border-color .28s ease;
+    opacity:0; transform:translateY(18px);
+    animation:fadeUp .7s ease forwards;
+  }
+  .cards a.card:nth-child(1){ animation-delay:.48s; }
+  .cards a.card:nth-child(2){ animation-delay:.62s; }
+
+  /* left gold accent bar that grows in on hover */
+  a.card::before{
+    content:"";
+    position:absolute; left:0; top:0; bottom:0; width:4px;
+    background:linear-gradient(180deg,#C9A227,#8f7218);
+    transform:scaleY(0); transform-origin:top;
+    transition:transform .3s ease;
+  }
+  a.card:hover::before{ transform:scaleY(1); }
+
+  /* subtle sheen sweep on hover */
+  a.card::after{
+    content:"";
+    position:absolute; top:0; left:-60%; width:40%; height:100%;
+    background:linear-gradient(120deg, transparent, rgba(255,255,255,0.35), transparent);
+    transform:skewX(-20deg);
+    transition:left .6s ease;
+    z-index:1;
+    pointer-events:none;
+  }
+  a.card:hover::after{ left:120%; }
+
+  a.card:hover{
+    transform:translateY(-4px) scale(1.012);
+    border-color:rgba(201,162,39,0.75);
+    box-shadow:0 18px 38px -14px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,162,39,0.15);
+  }
+
+  a.card b{
+    font-family:'Cinzel',serif;color:var(--navy-900,#16233A);font-size:17px;letter-spacing:.6px;
+    display:flex; align-items:center; gap:8px;
+    margin-bottom:5px;
+  }
+  a.card b .arrow{
+    display:inline-block; color:#C9A227; font-size:15px;
+    transform:translateX(0); transition:transform .28s ease;
+  }
+  a.card:hover b .arrow{ transform:translateX(4px); }
+
+  a.card span{color:var(--ink-soft,#5b5b5b);font-size:13px;line-height:1.45;}
+
+  footer.tag{
+    margin-top:30px; font-size:11px; letter-spacing:1.5px; text-transform:uppercase;
+    color:rgba(230,228,220,0.4);
+    opacity:0; animation:fadeUp .7s ease forwards; animation-delay:.78s;
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{ animation:none !important; transition:none !important; }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="crest"><img src="assets/logo.png" alt="Alpha logo"></div>
-  <h1>ALPHA SUITE</h1>
-  <p class="sub">BSMT 1-Alpha class governance tools</p>
-  <div class="cards">
-    <a class="card" href="alpha-watch.html">
-      <b>ALPHA WATCH</b>
-      <span>Roster, dress/grooming standard, and violation ledger</span>
-    </a>
-    <a class="card" href="alpha-treasury.html">
-      <b>ALPHA TREASURY</b>
-      <span>Class fund collections, expenses, and liquidation reports</span>
-    </a>
+
+  <div class="howl-watermark"><img src="assets/wolf-crest.png" alt=""></div>
+
+  <div class="wrap">
+    <div class="moon-glow"></div>
+    <div class="crest-frame">
+      <span class="howl-ring r1"></span>
+      <span class="howl-ring r2"></span>
+      <span class="howl-ring r3"></span>
+      <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
+    </div>
+    <h1>ALPHA SUITE</h1>
+    <p class="sub">BSMT 1-Alpha class governance tools</p>
+    <div class="cards">
+      <a class="card" href="alpha-watch.html">
+        <b>ALPHA WATCH <span class="arrow">&#8250;</span></b>
+        <span>Roster, dress/grooming standard, and violation ledger</span>
+      </a>
+      <a class="card" href="alpha-treasury.html">
+        <b>ALPHA TREASURY <span class="arrow">&#8250;</span></b>
+        <span>Class fund collections, expenses, and liquidation reports</span>
+      </a>
+    </div>
+    <footer class="tag">Batch 28 &middot; Palompon Institute of Technology</footer>
   </div>
-</div>
+
 </body>
 </html>
