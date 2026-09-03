@@ -51,49 +51,90 @@
 
   .grid{
     display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:20px;
+    align-items:start;
   }
 
-  .flip-card{ perspective:1200px; height:264px; }
-  .flip-inner{
-    position:relative; width:100%; height:100%; transform-style:preserve-3d;
-    transition:transform .6s cubic-bezier(.2,.8,.2,1);
+  .officer-card{
+    background:var(--paper); border:1.5px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:18px 16px 14px; position:relative;
+    opacity:0; transform:translateY(14px); animation:cardIn .55s ease forwards;
   }
-  .flip-card.flipped .flip-inner{ transform:rotateY(180deg); }
-  @media (hover:hover) and (pointer:fine){
-    .flip-card:not(.editing):hover .flip-inner{ transform:rotateY(180deg); }
-  }
-  .face{
-    position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
-    border-radius:var(--radius); display:flex; flex-direction:column; align-items:center; justify-content:center;
-    padding:20px 16px; text-align:center;
-  }
-  .face-front{
-    background:var(--paper); border:1.5px solid var(--line); box-shadow:var(--shadow); cursor:pointer;
-  }
-  .face-front .avatar{
-    width:78px; height:78px; border-radius:50%; overflow:hidden; margin-bottom:14px;
+  @keyframes cardIn{ to{ opacity:1; transform:translateY(0); } }
+
+  /* ---- square photo with living silhouette + bottom gradient ---- */
+  .photo-square{
+    position:relative; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden;
+    margin-bottom:14px;
     background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
-    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center; flex-shrink:0;
   }
-  .face-front .avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .face-front .avatar .fallback{ color:var(--gold); width:60%; height:60%; display:flex; align-items:center; justify-content:center; }
-  .off-name{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:14.5px; margin:0 0 6px; line-height:1.3; }
+  .photo-square img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-square .fallback{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--gold);
+  }
+  .photo-square .fallback svg{ width:42%; height:42%; }
+
+  /* slow drifting shadow — a living silhouette moving across the frame */
+  .photo-square .silhouette-drift{
+    position:absolute; inset:-25%; pointer-events:none; mix-blend-mode:multiply; opacity:.5;
+    background:radial-gradient(closest-side, rgba(8,10,26,0.95), transparent 70%);
+    filter:blur(7px);
+    animation:silhouetteDrift 15s ease-in-out infinite;
+  }
+  @keyframes silhouetteDrift{
+    0%,100%{ transform:translate(-10%,-6%) scale(1); opacity:.42; }
+    25%{ transform:translate(12%,-12%) scale(1.18); opacity:.26; }
+    50%{ transform:translate(14%,10%) scale(1.05); opacity:.46; }
+    75%{ transform:translate(-14%,12%) scale(1.12); opacity:.3; }
+  }
+
+  /* static bottom gradient for depth */
+  .photo-square .photo-gradient{
+    position:absolute; inset:0; pointer-events:none;
+    background:linear-gradient(to top, rgba(9,11,26,0.62) 0%, rgba(9,11,26,0.16) 40%, transparent 62%);
+  }
+
+  /* breathing gold rim */
+  .photo-square .photo-ring{
+    position:absolute; inset:0; border-radius:inherit; pointer-events:none;
+    border:2px solid rgba(240,180,41,0.85);
+    animation:ringPulse 3.6s ease-in-out infinite;
+  }
+  @keyframes ringPulse{
+    0%,100%{ box-shadow:0 0 0 0 rgba(240,180,41,0); border-color:rgba(240,180,41,0.75); }
+    50%{ box-shadow:0 0 16px 2px rgba(240,180,41,0.35); border-color:rgba(255,214,102,1); }
+  }
+
+  .off-name{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:14.5px; margin:0 0 6px; line-height:1.3; text-align:center; }
   .off-role{
-    display:inline-block; font-size:10.5px; letter-spacing:1.1px; text-transform:uppercase;
+    display:block; width:fit-content; margin:0 auto;
+    font-size:10.5px; letter-spacing:1.1px; text-transform:uppercase;
     color:var(--gold-dim); background:rgba(240,180,41,0.14); border:1px solid rgba(240,180,41,0.4);
     border-radius:20px; padding:4px 12px;
   }
-  .flip-hint{ position:absolute; bottom:9px; right:11px; font-size:9px; letter-spacing:.4px; color:#b8b3a4; text-transform:uppercase; }
 
-  .face-back{
-    background:linear-gradient(165deg,var(--navy-800),var(--navy-950));
-    border:1.5px solid var(--gold-dim); transform:rotateY(180deg); cursor:pointer; overflow-y:auto;
+  /* ---- collapsible credentials ---- */
+  .cred-toggle{
+    display:flex; align-items:center; justify-content:center; gap:6px; width:100%;
+    background:transparent; border:none; cursor:pointer; margin-top:12px; padding:6px 4px;
+    font-family:'Manrope',sans-serif; font-size:10.5px; font-weight:800; letter-spacing:1px; text-transform:uppercase;
+    color:var(--gold-dim);
   }
-  .face-back .cred-label{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
-  .face-back p{ font-size:12px; line-height:1.55; color:rgba(255,255,255,0.88); margin:0; white-space:pre-line; }
-  .face-back .empty{ color:rgba(255,255,255,0.45); font-style:italic; }
+  .cred-toggle:hover{ color:var(--navy-900); }
+  .cred-toggle .chev{ width:10px; height:10px; transition:transform .3s ease; }
+  .officer-card.expanded .cred-toggle .chev{ transform:rotate(180deg); }
+
+  .cred-panel{
+    max-height:0; overflow:hidden; opacity:0;
+    transition:max-height .45s cubic-bezier(.2,.8,.2,1), opacity .35s ease;
+  }
+  .officer-card.expanded .cred-panel{ max-height:640px; opacity:1; }
+  .cred-inner{ padding-top:12px; margin-top:2px; border-top:1px solid var(--line); text-align:left; }
+  .cred-label{ font-size:9.5px; letter-spacing:1.6px; text-transform:uppercase; color:var(--gold-dim); font-weight:800; margin-bottom:6px; }
+  .cred-inner p{ font-size:12px; line-height:1.6; color:var(--ink); margin:0; white-space:pre-line; }
+  .cred-inner p.empty{ color:var(--ink-soft); font-style:italic; }
 
   .edit-tools{
+
     position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:5;
   }
   .icon-btn{
@@ -105,17 +146,21 @@
   .icon-btn.danger:hover{ color:var(--danger); border-color:var(--danger); }
 
   .add-tile{
-    border:1.6px dashed var(--line); border-radius:var(--radius); height:264px;
-    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    border:1.6px dashed var(--line); border-radius:var(--radius);
+    padding:18px 16px 20px;
+    display:flex; flex-direction:column; align-items:center;
     color:var(--ink-soft); cursor:pointer; background:rgba(255,255,255,0.4);
     transition:border-color .2s ease, color .2s ease, background .2s ease;
   }
   .add-tile:hover{ border-color:var(--gold-dim); color:var(--navy-900); background:var(--paper); }
-  .add-tile .plus-circle{
-    width:44px; height:44px; border-radius:50%; border:1.6px dashed var(--gold-dim);
-    display:flex; align-items:center; justify-content:center;
+  .add-tile .add-square{
+    width:100%; aspect-ratio:1/1; border-radius:12px; border:1.6px dashed var(--gold-dim);
+    display:flex; align-items:center; justify-content:center; margin-bottom:14px;
   }
-  .add-tile .plus-circle svg{ width:18px; height:18px; color:var(--gold-dim); }
+  .add-tile .add-square svg{ width:32px; height:32px; color:var(--gold-dim); }
+  .add-tile .add-label{ font-size:13px; font-weight:700; }
+
+  @media (max-width:480px){ .cred-panel.expanded{ max-height:900px; } }
 
   /* ===== Gate (login/setup) ===== */
   .gate-wrap{ display:flex; align-items:center; justify-content:center; min-height:80vh; padding:24px; }
@@ -188,7 +233,12 @@
 
   footer.tag{ text-align:center; margin-top:50px; font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:#b8b3a4; }
 
-  @media (max-width:480px){ .flip-card, .add-tile{ height:238px; } }
+
+
+  @media (prefers-reduced-motion: reduce){
+    .officer-card, .silhouette-drift, .photo-ring{ animation:none !important; }
+    .cred-panel, .cred-toggle .chev{ transition:none !important; }
+  }
 </style>
 </head>
 <body>
@@ -221,6 +271,7 @@ const state = {
   modal: null,           // {type, data}
   loginError: '',
   setupError: '',
+  expandedIds: new Set(), // officer ids whose credentials panel is open
 };
 
 function showToastSafe(msg){ showToast(msg); }
@@ -363,34 +414,45 @@ function renderTopbar(){
   }
 }
 
+const CHEVRON_SVG = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+
 function renderDirectory(app){
   const editing = !!state.session;
-  const cards = state.officers.map(o => `
-    <div class="flip-card ${editing ? 'editing' : ''}" data-id="${o.id}">
-      <div class="flip-inner">
-        <div class="face face-front" data-flip="${o.id}">
-          ${editing ? `
-            <div class="edit-tools">
-              <button class="icon-btn" data-edit="${o.id}" title="Edit">${ICONS.pen}</button>
-              <button class="icon-btn danger" data-remove="${o.id}" title="Remove">${ICONS.trash}</button>
-            </div>` : ''}
-          <div class="avatar">${avatarInner(o)}</div>
-          <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
-          <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
-          <span class="flip-hint">Tap &#8635;</span>
-        </div>
-        <div class="face face-back" data-flip="${o.id}">
+  const cards = state.officers.map(o => {
+    const expanded = state.expandedIds.has(o.id);
+    return `
+    <div class="officer-card ${expanded ? 'expanded' : ''}" data-id="${o.id}">
+      ${editing ? `
+        <div class="edit-tools">
+          <button class="icon-btn" data-edit="${o.id}" title="Edit">${ICONS.pen}</button>
+          <button class="icon-btn danger" data-remove="${o.id}" title="Remove">${ICONS.trash}</button>
+        </div>` : ''}
+      <div class="photo-square">
+        ${avatarInner(o)}
+        <div class="silhouette-drift"></div>
+        <div class="photo-gradient"></div>
+        <div class="photo-ring"></div>
+      </div>
+      <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
+      <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
+      <button class="cred-toggle" data-toggle="${o.id}">
+        <span>${expanded ? 'Hide Credentials' : 'Leadership Credentials'}</span>
+        ${CHEVRON_SVG}
+      </button>
+      <div class="cred-panel">
+        <div class="cred-inner">
           <div class="cred-label">Leadership Credentials</div>
           ${o.credentials ? `<p>${escapeHtml(o.credentials)}</p>` : `<p class="empty">No credentials added yet.</p>`}
         </div>
       </div>
     </div>
-  `).join('');
+  `;
+  }).join('');
 
   const addTile = editing ? `
     <div class="add-tile" id="addOfficerTile">
-      <div class="plus-circle">${ICONS.plus}</div>
-      <span>Add Officer</span>
+      <div class="add-square">${ICONS.plus}</div>
+      <span class="add-label">Add Officer</span>
     </div>` : '';
 
   app.innerHTML = `
@@ -398,18 +460,14 @@ function renderDirectory(app){
       <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
       <h1>MEET THE OFFICERS</h1>
       <div class="rule"></div>
-      <p>${editing ? 'Tap a card to flip it, or use the pencil to edit' : 'BSMT 1-Alpha · Batch 28 — tap a card to reveal leadership credentials'}</p>
+      <p>${editing ? 'Tap Leadership Credentials to expand, or use the pencil to edit' : 'BSMT 1-Alpha · Batch 28 — tap Leadership Credentials to read more'}</p>
     </div>
     <div class="grid">${cards}${addTile}</div>
     <footer class="tag">Batch 28 &middot; Palompon Institute of Technology</footer>
   `;
 
-  app.querySelectorAll('[data-flip]').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if(e.target.closest('.edit-tools')) return;
-      const card = el.closest('.flip-card');
-      card.classList.toggle('flipped');
-    });
+  app.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', () => toggleCredentials(el.dataset.toggle));
   });
   app.querySelectorAll('[data-edit]').forEach(el => {
     el.addEventListener('click', (e) => {
@@ -428,6 +486,16 @@ function renderDirectory(app){
   });
   const addTileEl = document.getElementById('addOfficerTile');
   if(addTileEl) addTileEl.onclick = () => openOfficerModal(null);
+}
+
+function toggleCredentials(id){
+  const card = document.querySelector(`.officer-card[data-id="${CSS.escape(id)}"]`);
+  if(!card) return;
+  const willExpand = !card.classList.contains('expanded');
+  card.classList.toggle('expanded', willExpand);
+  const label = card.querySelector('.cred-toggle span');
+  if(label) label.textContent = willExpand ? 'Hide Credentials' : 'Leadership Credentials';
+  if(willExpand) state.expandedIds.add(id); else state.expandedIds.delete(id);
 }
 
 function openOfficerModal(officer){
