@@ -232,11 +232,18 @@ const data = createSupabaseSync({
   onSaveError: () => showToastSafe('Sync failed — check your connection and try again'),
 });
 const { loadShared, saveShared, loadPersonal, savePersonal, subscribeRealtime, startPolling } = data;
-const mutateShared = data.makeMutateShared(state, { officers_roster: 'officers', officers_accounts: 'accounts' });
+const mutateSharedRaw = data.makeMutateShared(state, { officers_roster: 'officers', officers_accounts: 'accounts' });
+async function mutateShared(key, mutator){
+  const next = await mutateSharedRaw(key, mutator);
+  lastSyncedRaw[key] = JSON.stringify(next);
+  return next;
+}
 
 const SYNC_KEYS = ['officers_roster', 'officers_accounts'];
+let lastSyncedRaw = {};
 
 function applyRemoteUpdate(key, value){
+  lastSyncedRaw[key] = JSON.stringify(value);
   if(key === 'officers_roster'){ state.officers = value; }
   if(key === 'officers_accounts'){
     state.accounts = value;
@@ -249,6 +256,20 @@ function applyRemoteUpdate(key, value){
       }
     }
   }
+  renderPreserveFocus();
+}
+
+// A remote update (e.g. another officer editing at the same time) shouldn't
+// yank focus out from under someone actively typing in a modal. If a modal
+// with editable fields is open, skip the destructive re-render — the fresh
+// data is already in state and will show next time the modal re-renders
+// (e.g. on close/save) rather than mid-keystroke.
+function renderPreserveFocus(){
+  const modalOpen = document.getElementById('modalBack');
+  const typing = modalOpen && document.activeElement &&
+    ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) &&
+    modalOpen.contains(document.activeElement);
+  if(typing){ return; }
   render();
 }
 
@@ -726,6 +747,8 @@ async function boot(){
   ]);
   state.officers = officers || [];
   state.accounts = accounts || [];
+  lastSyncedRaw['officers_roster'] = JSON.stringify(state.officers);
+  lastSyncedRaw['officers_accounts'] = JSON.stringify(state.accounts);
   if(session && (accounts||[]).some(a => a.id === session.accountId)){
     state.session = session;
   }
@@ -734,7 +757,7 @@ async function boot(){
 
   subscribeRealtime((key, value) => applyRemoteUpdate(key, value));
   startPolling(SYNC_KEYS, {
-    getLastRaw: () => undefined,
+    getLastRaw: (k) => lastSyncedRaw[k],
     onChange: (key, value) => applyRemoteUpdate(key, value),
     shouldPoll: () => true,
     intervalMs: 20000,
