@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ALPHA OFFICERS</title>
+<link rel="icon" type="image/png" href="assets/favicon-32.png">
+<link rel="apple-touch-icon" href="assets/apple-touch-icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;900&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="src/styles/theme.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<style>
+  body{ min-height:100vh; }
+
+  .topbar{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 20px; background:var(--paper); border-bottom:1px solid var(--line);
+    position:sticky; top:0; z-index:20;
+  }
+  .topbar .brand{ display:flex; align-items:center; gap:10px; text-decoration:none; }
+  .topbar .brand img{ width:32px; height:32px; object-fit:contain; }
+  .topbar .brand b{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:15px; letter-spacing:.8px; }
+  .topbar .right{ display:flex; align-items:center; gap:10px; }
+  .topbar .who{ font-size:12px; color:var(--ink-soft); }
+  .topbar .who b{ color:var(--navy-900); }
+
+  .btn{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:'Manrope',sans-serif; font-weight:700; font-size:12.5px;
+    padding:9px 16px; border-radius:10px; border:1.5px solid transparent;
+    cursor:pointer; text-decoration:none; transition:transform .15s ease, filter .15s ease, box-shadow .15s ease;
+  }
+  .btn:active{ transform:translateY(1px); }
+  .btn-gold{ background:var(--gold); color:var(--navy-950); box-shadow:0 6px 16px rgba(240,180,41,0.35); }
+  .btn-gold:hover{ filter:brightness(1.06); }
+  .btn-ghost{ background:transparent; border-color:var(--line); color:var(--ink-soft); }
+  .btn-ghost:hover{ border-color:var(--gold-dim); color:var(--navy-900); }
+  .btn-danger{ background:var(--danger-bg); color:var(--danger); }
+  .btn-sm{ padding:6px 10px; font-size:11.5px; border-radius:8px; }
+  .btn svg{ width:14px; height:14px; }
+
+  main{ max-width:1080px; margin:0 auto; padding:36px 20px 80px; }
+
+  .hero-head{ text-align:center; margin-bottom:8px; }
+  .hero-head .crest{ width:76px; height:76px; margin:0 auto 12px; }
+  .hero-head .crest img{ width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 4px 14px rgba(15,15,74,0.25)); }
+  .hero-head h1{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:26px; letter-spacing:2px; margin:0 0 6px; }
+  .hero-head .rule{ width:56px; height:2px; margin:10px auto 14px; background:linear-gradient(90deg,transparent,var(--gold-dim),transparent); }
+  .hero-head p{ color:var(--ink-soft); font-size:13.5px; margin:0 0 30px; }
+
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fit, minmax(190px,1fr)); gap:20px;
+  }
+
+  .flip-card{ perspective:1200px; height:264px; }
+  .flip-inner{
+    position:relative; width:100%; height:100%; transform-style:preserve-3d;
+    transition:transform .6s cubic-bezier(.2,.8,.2,1);
+  }
+  .flip-card.flipped .flip-inner{ transform:rotateY(180deg); }
+  @media (hover:hover) and (pointer:fine){
+    .flip-card:not(.editing):hover .flip-inner{ transform:rotateY(180deg); }
+  }
+  .face{
+    position:absolute; inset:0; -webkit-backface-visibility:hidden; backface-visibility:hidden;
+    border-radius:var(--radius); display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:20px 16px; text-align:center;
+  }
+  .face-front{
+    background:var(--paper); border:1.5px solid var(--line); box-shadow:var(--shadow); cursor:pointer;
+  }
+  .face-front .avatar{
+    width:78px; height:78px; border-radius:50%; overflow:hidden; margin-bottom:14px;
+    background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
+    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center; flex-shrink:0;
+  }
+  .face-front .avatar img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .face-front .avatar .fallback{ color:var(--gold); width:60%; height:60%; display:flex; align-items:center; justify-content:center; }
+  .off-name{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:14.5px; margin:0 0 6px; line-height:1.3; }
+  .off-role{
+    display:inline-block; font-size:10.5px; letter-spacing:1.1px; text-transform:uppercase;
+    color:var(--gold-dim); background:rgba(240,180,41,0.14); border:1px solid rgba(240,180,41,0.4);
+    border-radius:20px; padding:4px 12px;
+  }
+  .flip-hint{ position:absolute; bottom:9px; right:11px; font-size:9px; letter-spacing:.4px; color:#b8b3a4; text-transform:uppercase; }
+
+  .face-back{
+    background:linear-gradient(165deg,var(--navy-800),var(--navy-950));
+    border:1.5px solid var(--gold-dim); transform:rotateY(180deg); cursor:pointer; overflow-y:auto;
+  }
+  .face-back .cred-label{ font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--gold); margin-bottom:8px; }
+  .face-back p{ font-size:12px; line-height:1.55; color:rgba(255,255,255,0.88); margin:0; white-space:pre-line; }
+  .face-back .empty{ color:rgba(255,255,255,0.45); font-style:italic; }
+
+  .edit-tools{
+    position:absolute; top:8px; right:8px; display:flex; gap:6px; z-index:5;
+  }
+  .icon-btn{
+    width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;
+    background:rgba(255,255,255,0.92); border:1px solid var(--line); color:var(--ink-soft); cursor:pointer;
+  }
+  .icon-btn svg{ width:14px; height:14px; }
+  .icon-btn:hover{ color:var(--navy-900); border-color:var(--gold-dim); }
+  .icon-btn.danger:hover{ color:var(--danger); border-color:var(--danger); }
+
+  .add-tile{
+    border:1.6px dashed var(--line); border-radius:var(--radius); height:264px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+    color:var(--ink-soft); cursor:pointer; background:rgba(255,255,255,0.4);
+    transition:border-color .2s ease, color .2s ease, background .2s ease;
+  }
+  .add-tile:hover{ border-color:var(--gold-dim); color:var(--navy-900); background:var(--paper); }
+  .add-tile .plus-circle{
+    width:44px; height:44px; border-radius:50%; border:1.6px dashed var(--gold-dim);
+    display:flex; align-items:center; justify-content:center;
+  }
+  .add-tile .plus-circle svg{ width:18px; height:18px; color:var(--gold-dim); }
+
+  /* ===== Gate (login/setup) ===== */
+  .gate-wrap{ display:flex; align-items:center; justify-content:center; min-height:80vh; padding:24px; }
+  .gate-card{
+    max-width:380px; width:100%; background:var(--paper); border:1px solid var(--line);
+    border-radius:20px; padding:32px 28px; text-align:center; box-shadow:var(--shadow);
+  }
+  .gate-card .crest{ width:64px; height:64px; margin:0 auto 12px; }
+  .gate-card .crest img{ width:100%; height:100%; object-fit:contain; }
+  .gate-card h1{ font-family:'Cinzel',serif; font-size:20px; letter-spacing:1.5px; margin:4px 0 2px; color:var(--navy-950); }
+  .gate-card .tag{ font-size:10.5px; letter-spacing:1.8px; text-transform:uppercase; color:var(--gold-dim); font-weight:700; margin-bottom:22px; }
+  .field{ text-align:left; margin-bottom:14px; }
+  .field label{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.6px; color:var(--ink-soft); display:block; margin-bottom:5px; }
+  .field input, .field select, .field textarea{
+    width:100%; padding:10px 12px; border-radius:9px; border:1.5px solid var(--line);
+    font-family:'Manrope',sans-serif; font-size:13.5px; background:#fff; color:var(--ink);
+  }
+  .field input:focus, .field select:focus, .field textarea:focus{ outline:2px solid var(--royal); outline-offset:1px; border-color:var(--royal); }
+  .field textarea{ resize:vertical; min-height:70px; }
+  .gate-note{ font-size:11px; color:var(--ink-soft); margin-top:14px; line-height:1.5; }
+  .gate-error{ background:var(--danger-bg); color:var(--danger); font-size:12px; border-radius:8px; padding:8px 10px; margin-bottom:14px; }
+  .gate-switch{ font-size:12px; color:var(--ink-soft); margin-top:16px; }
+  .gate-switch a{ color:var(--royal); font-weight:700; text-decoration:none; cursor:pointer; }
+  .btn-block{ width:100%; justify-content:center; padding:11px 16px; font-size:13.5px; }
+
+  /* ===== Modal ===== */
+  .modal-back{
+    position:fixed; inset:0; background:rgba(10,10,30,0.55); z-index:50;
+    display:flex; align-items:flex-end; justify-content:center;
+  }
+  @media(min-width:640px){ .modal-back{ align-items:center; } }
+  .modal{
+    background:var(--paper); width:100%; max-width:460px; border-radius:20px 20px 0 0;
+    padding:24px 22px 26px; max-height:88vh; overflow-y:auto;
+  }
+  @media(min-width:640px){ .modal{ border-radius:20px; } }
+  .modal h2{ font-family:'Cinzel',serif; color:var(--navy-950); font-size:18px; margin:0 0 16px; }
+  .modal-actions{ display:flex; gap:10px; margin-top:18px; }
+  .modal-actions .btn{ flex:1; justify-content:center; }
+
+  .photo-picker{ display:flex; align-items:center; gap:14px; margin-bottom:16px; }
+  .photo-picker .preview{
+    width:64px; height:64px; border-radius:50%; overflow:hidden; flex-shrink:0;
+    background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
+    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
+  }
+  .photo-picker .preview img{ width:100%; height:100%; object-fit:cover; }
+  .photo-picker .preview .fallback{ color:var(--gold); width:55%; height:55%; }
+  .photo-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .accounts-list{ margin-top:6px; }
+  .acc-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 0; border-bottom:1px solid var(--line);
+  }
+  .acc-row:last-child{ border-bottom:none; }
+  .acc-main b{ display:block; font-size:13px; color:var(--navy-900); }
+  .acc-main span{ font-size:11.5px; color:var(--ink-soft); }
+  .acc-actions{ display:flex; gap:6px; }
+
+  .toast{
+    position:fixed; bottom:22px; left:50%; transform:translateX(-50%);
+    background:var(--navy-950); color:#fff; padding:10px 18px; border-radius:10px;
+    font-size:12.5px; z-index:100; box-shadow:0 10px 24px rgba(0,0,0,0.3);
+    opacity:0; pointer-events:none; transition:opacity .25s ease, transform .25s ease;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(-6px); }
+
+  .empty-state{ text-align:center; color:var(--ink-soft); padding:60px 20px; font-size:13.5px; }
+
+  footer.tag{ text-align:center; margin-top:50px; font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:#b8b3a4; }
+
+  @media (max-width:480px){ .flip-card, .add-tile{ height:238px; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="brand" href="index.html">
+    <img src="assets/wolf-crest.png" alt="">
+    <b>ALPHA OFFICERS</b>
+  </a>
+  <div class="right" id="topbarRight"></div>
+</div>
+
+<main id="app"></main>
+
+<div id="toast" class="toast"></div>
+
+<script type="module">
+import { createSupabaseSync } from './src/scripts/shared/supabase-client.js';
+import { ICONS } from './src/scripts/shared/icons.js';
+
+const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_m3l1Dxhwj6bIse-3UwBB4w_fqZXLuD0';
+
+const state = {
+  loading: true,
+  officers: [],
+  accounts: [],
+  session: null,        // {name, role, username, accountId}
+  screen: 'public',      // public | gate-login | gate-setup
+  modal: null,           // {type, data}
+  loginError: '',
+  setupError: '',
+};
+
+function showToastSafe(msg){ showToast(msg); }
+
+const data = createSupabaseSync({
+  url: SUPABASE_URL,
+  key: SUPABASE_ANON_KEY,
+  storageNamespace: 'alpha-officers',
+  onSaveError: () => showToastSafe('Sync failed — check your connection and try again'),
+});
+const { loadShared, saveShared, loadPersonal, savePersonal, subscribeRealtime, startPolling } = data;
+const mutateShared = data.makeMutateShared(state, { officers_roster: 'officers', officers_accounts: 'accounts' });
+
+const SYNC_KEYS = ['officers_roster', 'officers_accounts'];
+
+function applyRemoteUpdate(key, value){
+  if(key === 'officers_roster'){ state.officers = value; }
+  if(key === 'officers_accounts'){
+    state.accounts = value;
+    if(state.session){
+      const acc = value.find(a => a.id === state.session.accountId);
+      if(!acc){
+        state.session = null;
+        savePersonal('session', null);
+        showToast('Your account was removed — please sign in again');
+      }
+    }
+  }
+  render();
+}
+
+async function hashPassword(username, password){
+  const enc = new TextEncoder();
+  const d = enc.encode('alpha-officers::' + String(username).trim().toLowerCase() + '::' + password);
+  const digest = await crypto.subtle.digest('SHA-256', d);
+  return Array.from(new Uint8Array(digest)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+
+function resizeImageFile(file, maxSize){
+  return new Promise((resolve, reject) => {
+    if(!file.type || !file.type.startsWith('image/')){ reject(new Error('Not an image')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read file'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Could not load image'));
+      img.onload = () => {
+        let { width, height } = img;
+        const scale = Math.min(1, maxSize / Math.max(width, height));
+        width = Math.max(1, Math.round(width*scale));
+        height = Math.max(1, Math.round(height*scale));
+        const canvas = document.createElement('canvas');
+        canvas.width = width; canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        resolve(canvas.toDataURL('image/jpeg', 0.85));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function escapeHtml(s){
+  return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function roleLabel(role){ return role === 'mayor' ? 'Mayor' : 'P.I.O.'; }
+
+let toastTimer;
+function showToast(msg){
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2600);
+}
+
+const FALLBACK_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:100%;height:100%;"><path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.2c-3.3 0-9.8 1.6-9.8 4.9V21h19.6v-1.9c0-3.3-6.5-4.9-9.8-4.9z"/></svg>`;
+
+function avatarInner(officer){
+  if(officer && officer.photo){
+    return `<img src="${officer.photo}" alt="">`;
+  }
+  return `<div class="fallback">${FALLBACK_SVG}</div>`;
+}
+
+/* ============ Rendering ============ */
+
+function render(){
+  renderTopbar();
+  const app = document.getElementById('app');
+  if(state.loading){ app.innerHTML = `<div class="empty-state">Loading officers…</div>`; return; }
+
+  if(state.screen === 'gate-login') return renderLogin(app);
+  if(state.screen === 'gate-setup') return renderSetup(app);
+  renderDirectory(app);
+  renderModal();
+}
+
+function renderTopbar(){
+  const right = document.getElementById('topbarRight');
+  if(state.session){
+    right.innerHTML = `
+      <span class="who">Signed in as <b>${escapeHtml(state.session.name)}</b> · ${roleLabel(state.session.role)}</span>
+      ${state.session.role === 'mayor' ? `<button class="btn btn-ghost btn-sm" id="manageAccBtn">${ICONS.users}Accounts</button>` : ''}
+      <button class="btn btn-ghost btn-sm" id="signOutBtn">Sign Out</button>
+    `;
+    const manageBtn = document.getElementById('manageAccBtn');
+    if(manageBtn) manageBtn.onclick = () => { state.modal = {type:'accounts'}; render(); };
+    document.getElementById('signOutBtn').onclick = () => {
+      state.session = null; savePersonal('session', null); state.screen = 'public'; render();
+    };
+  } else {
+    right.innerHTML = `<button class="btn btn-gold btn-sm" id="loginBtn">${ICONS.key}Officer Login</button>`;
+    document.getElementById('loginBtn').onclick = () => {
+      state.screen = state.accounts.length ? 'gate-login' : 'gate-setup';
+      render();
+    };
+  }
+}
+
+function renderDirectory(app){
+  const editing = !!state.session;
+  const cards = state.officers.map(o => `
+    <div class="flip-card ${editing ? 'editing' : ''}" data-id="${o.id}">
+      <div class="flip-inner">
+        <div class="face face-front" data-flip="${o.id}">
+          ${editing ? `
+            <div class="edit-tools">
+              <button class="icon-btn" data-edit="${o.id}" title="Edit">${ICONS.pen}</button>
+              <button class="icon-btn danger" data-remove="${o.id}" title="Remove">${ICONS.trash}</button>
+            </div>` : ''}
+          <div class="avatar">${avatarInner(o)}</div>
+          <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
+          <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
+          <span class="flip-hint">Tap &#8635;</span>
+        </div>
+        <div class="face face-back" data-flip="${o.id}">
+          <div class="cred-label">Leadership Credentials</div>
+          ${o.credentials ? `<p>${escapeHtml(o.credentials)}</p>` : `<p class="empty">No credentials added yet.</p>`}
+        </div>
+      </div>
+    </div>
+  `).join('');
+
+  const addTile = editing ? `
+    <div class="add-tile" id="addOfficerTile">
+      <div class="plus-circle">${ICONS.plus}</div>
+      <span>Add Officer</span>
+    </div>` : '';
+
+  app.innerHTML = `
+    <div class="hero-head">
+      <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
+      <h1>MEET THE OFFICERS</h1>
+      <div class="rule"></div>
+      <p>${editing ? 'Tap a card to flip it, or use the pencil to edit' : 'BSMT 1-Alpha · Batch 28 — tap a card to reveal leadership credentials'}</p>
+    </div>
+    <div class="grid">${cards}${addTile}</div>
+    <footer class="tag">Batch 28 &middot; Palompon Institute of Technology</footer>
+  `;
+
+  app.querySelectorAll('[data-flip]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if(e.target.closest('.edit-tools')) return;
+      const card = el.closest('.flip-card');
+      card.classList.toggle('flipped');
+    });
+  });
+  app.querySelectorAll('[data-edit]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const o = state.officers.find(x => x.id === el.dataset.edit);
+      openOfficerModal(o);
+    });
+  });
+  app.querySelectorAll('[data-remove]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const o = state.officers.find(x => x.id === el.dataset.remove);
+      state.modal = {type:'confirm-remove', data:o};
+      render();
+    });
+  });
+  const addTileEl = document.getElementById('addOfficerTile');
+  if(addTileEl) addTileEl.onclick = () => openOfficerModal(null);
+}
+
+function openOfficerModal(officer){
+  state.modal = {
+    type:'officer',
+    data: officer ? {...officer} : { id:null, name:'', position:'', credentials:'', photo:'' }
+  };
+  render();
+}
+
+/* ============ Modal ============ */
+
+function renderModal(){
+  const existing = document.getElementById('modalBack');
+  if(existing) existing.remove();
+  if(!state.modal) return;
+
+  const back = document.createElement('div');
+  back.className = 'modal-back';
+  back.id = 'modalBack';
+
+  if(state.modal.type === 'officer') back.innerHTML = officerModalHTML(state.modal.data);
+  if(state.modal.type === 'confirm-remove') back.innerHTML = confirmRemoveHTML(state.modal.data);
+  if(state.modal.type === 'accounts') back.innerHTML = accountsModalHTML();
+  if(state.modal.type === 'add-account') back.innerHTML = addAccountHTML();
+  if(state.modal.type === 'reset-pass') back.innerHTML = resetPassHTML(state.modal.data);
+
+  back.addEventListener('click', (e) => { if(e.target === back){ state.modal = null; render(); } });
+  document.body.appendChild(back);
+  wireModal();
+}
+
+function officerModalHTML(d){
+  const isNew = !d.id;
+  return `
+  <div class="modal">
+    <h2>${isNew ? 'Add Officer' : 'Edit Officer'}</h2>
+    <div class="photo-picker">
+      <div class="preview" id="photoPreview">${avatarInner(d)}</div>
+      <div class="photo-actions">
+        <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+          ${ICONS.camera || ''} Upload Photo
+          <input type="file" id="photoInput" accept="image/*" style="display:none;">
+        </label>
+        ${d.photo ? `<button class="btn btn-ghost btn-sm" id="removePhotoBtn">Remove</button>` : ''}
+      </div>
+    </div>
+    <div class="field"><label>Full Name</label><input id="m_off_name" value="${escapeHtml(d.name)}" placeholder="e.g. Keanu Makipig Tugonon"></div>
+    <div class="field"><label>Position</label><input id="m_off_position" value="${escapeHtml(d.position)}" placeholder="e.g. Mayor"></div>
+    <div class="field"><label>Leadership Credentials</label><textarea id="m_off_credentials" placeholder="Achievements, training, leadership experience...">${escapeHtml(d.credentials)}</textarea></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+      <button class="btn btn-gold" id="modalSave">${isNew ? 'Add Officer' : 'Save Changes'}</button>
+    </div>
+  </div>`;
+}
+
+function confirmRemoveHTML(o){
+  return `
+  <div class="modal">
+    <h2>Remove Officer</h2>
+    <p style="font-size:13.5px;color:var(--ink-soft);">Remove <b>${escapeHtml(o.name || 'this officer')}</b> from the directory? This can't be undone.</p>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+      <button class="btn btn-danger" id="modalConfirmRemove">Remove</button>
+    </div>
+  </div>`;
+}
+
+function accountsModalHTML(){
+  const rows = state.accounts.map(a => `
+    <div class="acc-row">
+      <div class="acc-main"><b>${escapeHtml(a.name)}${a.id === state.session.accountId ? ' (you)' : ''}</b><span>@${escapeHtml(a.username)} · ${roleLabel(a.role)}</span></div>
+      <div class="acc-actions">
+        <button class="icon-btn" data-reset="${a.id}" title="Reset password">${ICONS.key}</button>
+        ${a.id !== state.session.accountId ? `<button class="icon-btn danger" data-delacc="${a.id}" title="Remove account">${ICONS.trash}</button>` : ''}
+      </div>
+    </div>`).join('') || `<p style="font-size:13px;color:var(--ink-soft);">No accounts yet.</p>`;
+
+  return `
+  <div class="modal">
+    <h2>Officer Accounts</h2>
+    <div class="accounts-list">${rows}</div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">Close</button>
+      <button class="btn btn-gold" id="addAccountBtn">${ICONS.plus} Add Account</button>
+    </div>
+  </div>`;
+}
+
+function addAccountHTML(){
+  return `
+  <div class="modal">
+    <h2>Add Officer Account</h2>
+    <div class="field"><label>Full Name</label><input id="m_acc_name" placeholder="e.g. Maria Santos"></div>
+    <div class="field"><label>Role</label>
+      <select id="m_acc_role">
+        <option value="pio">P.I.O.</option>
+        <option value="mayor">Mayor</option>
+      </select>
+    </div>
+    <div class="field"><label>Username</label><input id="m_acc_username" placeholder="e.g. maria.pio" autocapitalize="off"></div>
+    <div class="field"><label>Starting Password</label><input type="password" id="m_acc_password" placeholder="At least 4 characters"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+      <button class="btn btn-gold" id="modalCreateAccount">Create Account</button>
+    </div>
+  </div>`;
+}
+
+function resetPassHTML(d){
+  return `
+  <div class="modal">
+    <h2>Reset Password</h2>
+    <p style="font-size:13px;color:var(--ink-soft);">Set a new password for ${escapeHtml(d.name)} (@${escapeHtml(d.username)}).</p>
+    <div class="field"><label>New Password</label><input type="password" id="m_reset_password" placeholder="At least 4 characters"></div>
+    <div class="modal-actions">
+      <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+      <button class="btn btn-gold" id="modalConfirmReset">Set Password</button>
+    </div>
+  </div>`;
+}
+
+function wireModal(){
+  const cancelBtn = document.getElementById('modalCancel');
+  if(cancelBtn) cancelBtn.onclick = () => { state.modal = null; render(); };
+
+  // Officer add/edit
+  const photoInput = document.getElementById('photoInput');
+  if(photoInput){
+    photoInput.onchange = async () => {
+      const file = photoInput.files[0];
+      if(!file) return;
+      try{
+        const dataUrl = await resizeImageFile(file, 500);
+        state.modal.data.photo = dataUrl;
+        document.getElementById('photoPreview').innerHTML = `<img src="${dataUrl}" alt="">`;
+        const removeBtn = document.getElementById('removePhotoBtn');
+        if(!removeBtn){ render(); }
+      }catch(e){ showToast('Could not load that image'); }
+    };
+  }
+  const removePhotoBtn = document.getElementById('removePhotoBtn');
+  if(removePhotoBtn) removePhotoBtn.onclick = () => { state.modal.data.photo = ''; render(); };
+
+  const saveBtn = document.getElementById('modalSave');
+  if(saveBtn){
+    saveBtn.onclick = async () => {
+      const name = document.getElementById('m_off_name').value.trim();
+      const position = document.getElementById('m_off_position').value.trim();
+      const credentials = document.getElementById('m_off_credentials').value.trim();
+      if(!name || !position){ showToast('Name and position are required'); return; }
+      const d = state.modal.data;
+      const isNew = !d.id;
+      await mutateShared('officers_roster', (list) => {
+        if(isNew){
+          return [...list, { id:'off_'+Date.now(), name, position, credentials, photo:d.photo||'' }];
+        }
+        return list.map(o => o.id === d.id ? {...o, name, position, credentials, photo:d.photo||''} : o);
+      });
+      state.modal = null;
+      showToast(isNew ? 'Officer added' : 'Officer updated');
+      render();
+    };
+  }
+
+  const confirmRemoveBtn = document.getElementById('modalConfirmRemove');
+  if(confirmRemoveBtn){
+    confirmRemoveBtn.onclick = async () => {
+      const id = state.modal.data.id;
+      await mutateShared('officers_roster', (list) => list.filter(o => o.id !== id));
+      state.modal = null;
+      showToast('Officer removed');
+      render();
+    };
+  }
+
+  // Accounts
+  const addAccountBtn = document.getElementById('addAccountBtn');
+  if(addAccountBtn) addAccountBtn.onclick = () => { state.modal = {type:'add-account'}; render(); };
+
+  const createAccountBtn = document.getElementById('modalCreateAccount');
+  if(createAccountBtn){
+    createAccountBtn.onclick = async () => {
+      const name = document.getElementById('m_acc_name').value.trim();
+      const role = document.getElementById('m_acc_role').value;
+      const username = document.getElementById('m_acc_username').value.trim();
+      const password = document.getElementById('m_acc_password').value;
+      if(!name || !username || !password){ showToast('Please fill in every field'); return; }
+      if(password.length < 4){ showToast('Password must be at least 4 characters'); return; }
+      if(state.accounts.some(a => a.username.toLowerCase() === username.toLowerCase())){ showToast('That username is taken'); return; }
+      const passwordHash = await hashPassword(username, password);
+      await mutateShared('officers_accounts', (list) => [...list, {id:'oacc_'+Date.now(), name, username, role, passwordHash}]);
+      state.modal = {type:'accounts'};
+      showToast('Account created');
+      render();
+    };
+  }
+
+  document.querySelectorAll('[data-reset]').forEach(el => {
+    el.onclick = () => {
+      const a = state.accounts.find(x => x.id === el.dataset.reset);
+      state.modal = {type:'reset-pass', data:a};
+      render();
+    };
+  });
+  document.querySelectorAll('[data-delacc]').forEach(el => {
+    el.onclick = async () => {
+      const id = el.dataset.delacc;
+      await mutateShared('officers_accounts', (list) => list.filter(a => a.id !== id));
+      showToast('Account removed');
+      render();
+    };
+  });
+
+  const confirmResetBtn = document.getElementById('modalConfirmReset');
+  if(confirmResetBtn){
+    confirmResetBtn.onclick = async () => {
+      const pw = document.getElementById('m_reset_password').value;
+      if(pw.length < 4){ showToast('Password must be at least 4 characters'); return; }
+      const target = state.modal.data;
+      const passwordHash = await hashPassword(target.username, pw);
+      await mutateShared('officers_accounts', (list) => list.map(a => a.id === target.id ? {...a, passwordHash} : a));
+      state.modal = {type:'accounts'};
+      showToast('Password reset');
+      render();
+    };
+  }
+}
+
+/* ============ Gate: setup / login ============ */
+
+function renderSetup(app){
+  app.innerHTML = `
+  <div class="gate-wrap">
+    <div class="gate-card">
+      <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
+      <h1>Set Up Officer Access</h1>
+      <div class="tag">First account &middot; Mayor</div>
+      ${state.setupError ? `<div class="gate-error">${escapeHtml(state.setupError)}</div>` : ''}
+      <div class="field"><label>Full Name</label><input id="su_name" placeholder="Your full name"></div>
+      <div class="field"><label>Username</label><input id="su_username" placeholder="e.g. juan.mayor" autocapitalize="off"></div>
+      <div class="field"><label>Password</label><input type="password" id="su_password" placeholder="At least 4 characters"></div>
+      <div class="field"><label>Confirm Password</label><input type="password" id="su_confirm" placeholder="Re-enter password"></div>
+      <button class="btn btn-gold btn-block" id="setupBtn">Create Mayor Account</button>
+      <p class="gate-note">Passwords are hashed before they're stored. This is built for lightweight class use, not high-security accounts — don't reuse a sensitive password here.</p>
+      <p class="gate-switch"><a id="backToPublic">&larr; Back to directory</a></p>
+    </div>
+  </div>`;
+
+  document.getElementById('backToPublic').onclick = () => { state.screen = 'public'; state.setupError=''; render(); };
+  document.getElementById('setupBtn').onclick = async () => {
+    const name = document.getElementById('su_name').value.trim();
+    const username = document.getElementById('su_username').value.trim();
+    const password = document.getElementById('su_password').value;
+    const confirm = document.getElementById('su_confirm').value;
+    if(!name || !username || !password){ state.setupError='Please fill in every field.'; render(); return; }
+    if(password.length < 4){ state.setupError='Password must be at least 4 characters.'; render(); return; }
+    if(password !== confirm){ state.setupError='Passwords do not match.'; render(); return; }
+    const passwordHash = await hashPassword(username, password);
+    const account = {id:'oacc_'+Date.now(), name, username, role:'mayor', passwordHash};
+    await mutateShared('officers_accounts', (list) => [...list, account]);
+    state.session = {name, role:'mayor', username, accountId:account.id};
+    await savePersonal('session', state.session);
+    state.screen = 'public';
+    state.setupError = '';
+    showToast('Welcome, Mayor ' + name.split(' ')[0] + '!');
+    render();
+  };
+}
+
+function renderLogin(app){
+  app.innerHTML = `
+  <div class="gate-wrap">
+    <div class="gate-card">
+      <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
+      <h1>Officer Login</h1>
+      <div class="tag">Mayor &amp; P.I.O. Access</div>
+      ${state.loginError ? `<div class="gate-error">${escapeHtml(state.loginError)}</div>` : ''}
+      <div class="field"><label>Username</label><input id="lg_username" placeholder="Your username" autocapitalize="off"></div>
+      <div class="field"><label>Password</label><input type="password" id="lg_password" placeholder="Your password"></div>
+      <button class="btn btn-gold btn-block" id="loginSubmit">Sign In</button>
+      <p class="gate-note">Forgot your password? Ask your Class Mayor to reset it from Accounts.</p>
+      <p class="gate-switch"><a id="backToPublic">&larr; Back to directory</a></p>
+    </div>
+  </div>`;
+
+  document.getElementById('backToPublic').onclick = () => { state.screen = 'public'; state.loginError=''; render(); };
+
+  const uInput = document.getElementById('lg_username');
+  const pInput = document.getElementById('lg_password');
+  const submit = async () => {
+    const username = uInput.value.trim();
+    const password = pInput.value;
+    if(!username || !password){ state.loginError='Enter your username and password.'; render(); return; }
+    const passwordHash = await hashPassword(username, password);
+    const account = state.accounts.find(a => a.username.toLowerCase() === username.toLowerCase() && a.passwordHash === passwordHash);
+    if(!account){ state.loginError='Incorrect username or password.'; render(); return; }
+    state.session = {name:account.name, role:account.role, username:account.username, accountId:account.id};
+    await savePersonal('session', state.session);
+    state.screen = 'public';
+    state.loginError = '';
+    showToast('Welcome back, ' + account.name.split(' ')[0] + '!');
+    render();
+  };
+  document.getElementById('loginSubmit').onclick = submit;
+  pInput.addEventListener('keydown', (e) => { if(e.key === 'Enter') submit(); });
+}
+
+/* ============ Boot ============ */
+
+async function boot(){
+  const [officers, accounts, session] = await Promise.all([
+    loadShared('officers_roster', []),
+    loadShared('officers_accounts', []),
+    loadPersonal('session', null),
+  ]);
+  state.officers = officers || [];
+  state.accounts = accounts || [];
+  if(session && (accounts||[]).some(a => a.id === session.accountId)){
+    state.session = session;
+  }
+  state.loading = false;
+  render();
+
+  subscribeRealtime((key, value) => applyRemoteUpdate(key, value));
+  startPolling(SYNC_KEYS, {
+    getLastRaw: () => undefined,
+    onChange: (key, value) => applyRemoteUpdate(key, value),
+    shouldPoll: () => true,
+    intervalMs: 20000,
+  });
+}
+
+boot();
+</script>
+</body>
+</html>
