@@ -61,36 +61,47 @@
   }
   @keyframes cardIn{ to{ opacity:1; transform:translateY(0); } }
 
-  /* ---- square photo with living silhouette + bottom gradient ---- */
+  .officer-card{
+    transition:transform .2s ease, box-shadow .2s ease;
+  }
+  @media (hover:hover) and (pointer:fine){
+    .officer-card:hover{ transform:translateY(-3px); box-shadow:0 16px 30px -14px rgba(20,20,50,0.28); }
+  }
+  .officer-card:active{ transform:translateY(-1px) scale(0.995); }
+
+  /* ---- square photo with live light sweep + bottom gradient ---- */
   .photo-square{
     position:relative; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden;
     margin-bottom:14px;
     background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
   }
   .photo-square img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
+  .photo-square.editable{ cursor:pointer; }
   .photo-square .fallback{
     position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--gold);
   }
   .photo-square .fallback svg{ width:42%; height:42%; }
 
-  /* slow drifting shadow — a living silhouette moving across the frame */
-  .photo-square .silhouette-drift{
-    position:absolute; inset:-25%; pointer-events:none; mix-blend-mode:multiply; opacity:.5;
-    background:radial-gradient(closest-side, rgba(8,10,26,0.95), transparent 70%);
-    filter:blur(7px);
-    animation:silhouetteDrift 15s ease-in-out infinite;
+  /* a soft light sweep passing across the frame — reads as "alive" without
+     darkening/muddying the photo underneath the way a multiply shadow would */
+  .photo-square .light-sweep{
+    position:absolute; inset:-35%; pointer-events:none; mix-blend-mode:screen; opacity:0;
+    background:linear-gradient(115deg, transparent 32%, rgba(255,255,255,0.5) 45%, rgba(255,214,102,0.4) 53%, transparent 66%);
+    animation:sweepMove 7s ease-in-out infinite;
   }
-  @keyframes silhouetteDrift{
-    0%,100%{ transform:translate(-10%,-6%) scale(1); opacity:.42; }
-    25%{ transform:translate(12%,-12%) scale(1.18); opacity:.26; }
-    50%{ transform:translate(14%,10%) scale(1.05); opacity:.46; }
-    75%{ transform:translate(-14%,12%) scale(1.12); opacity:.3; }
+  @keyframes sweepMove{
+    0%{ transform:translate(-45%,-12%); opacity:0; }
+    12%{ opacity:.4; }
+    50%{ transform:translate(15%,10%); opacity:.15; }
+    88%{ opacity:.4; }
+    100%{ transform:translate(-45%,-12%); opacity:0; }
   }
 
-  /* static bottom gradient for depth */
+  /* static bottom gradient for depth — strengthened so it reads consistently
+     on both bright and dark photos */
   .photo-square .photo-gradient{
     position:absolute; inset:0; pointer-events:none;
-    background:linear-gradient(to top, rgba(9,11,26,0.62) 0%, rgba(9,11,26,0.16) 40%, transparent 62%);
+    background:linear-gradient(to top, rgba(6,8,22,0.8) 0%, rgba(6,8,22,0.34) 38%, transparent 66%);
   }
 
   /* breathing gold rim */
@@ -103,6 +114,23 @@
     0%,100%{ box-shadow:0 0 0 0 rgba(240,180,41,0); border-color:rgba(240,180,41,0.75); }
     50%{ box-shadow:0 0 16px 2px rgba(240,180,41,0.35); border-color:rgba(255,214,102,1); }
   }
+
+  /* small role badge tucked in the corner of the photo */
+  .role-badge{
+    position:absolute; bottom:8px; left:8px; width:26px; height:26px; border-radius:50%;
+    background:rgba(9,11,26,0.72); border:1.5px solid var(--gold);
+    display:flex; align-items:center; justify-content:center; color:var(--gold);
+    backdrop-filter:blur(2px);
+  }
+  .role-badge svg{ width:14px; height:14px; }
+
+  /* upload progress spinner overlay */
+  .photo-loading{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+    background:rgba(9,11,26,0.55); color:var(--gold);
+  }
+  .photo-loading svg{ width:26px; height:26px; animation:spin .8s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
 
   .off-name{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:14.5px; margin:0 0 6px; line-height:1.3; text-align:center; }
   .off-role{
@@ -140,10 +168,16 @@
   .icon-btn{
     width:28px; height:28px; border-radius:8px; display:flex; align-items:center; justify-content:center;
     background:rgba(255,255,255,0.92); border:1px solid var(--line); color:var(--ink-soft); cursor:pointer;
+    transition:transform .15s ease;
   }
+  .icon-btn:active{ transform:scale(0.92); }
   .icon-btn svg{ width:14px; height:14px; }
   .icon-btn:hover{ color:var(--navy-900); border-color:var(--gold-dim); }
   .icon-btn.danger:hover{ color:var(--danger); border-color:var(--danger); }
+  @media (hover:none) and (pointer:coarse){
+    .icon-btn{ width:34px; height:34px; }
+    .icon-btn svg{ width:16px; height:16px; }
+  }
 
   .add-tile{
     border:1.6px dashed var(--line); border-radius:var(--radius);
@@ -201,15 +235,25 @@
   .modal-actions{ display:flex; gap:10px; margin-top:18px; }
   .modal-actions .btn{ flex:1; justify-content:center; }
 
-  .photo-picker{ display:flex; align-items:center; gap:14px; margin-bottom:16px; }
-  .photo-picker .preview{
-    width:64px; height:64px; border-radius:50%; overflow:hidden; flex-shrink:0;
+  .photo-picker{ margin-bottom:18px; }
+  .reposition-frame{
+    position:relative; width:180px; max-width:100%; aspect-ratio:1/1; margin:0 auto 10px;
+    border-radius:14px; overflow:hidden; touch-action:none; cursor:grab;
     background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
-    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
+    border:2px solid var(--gold);
   }
-  .photo-picker .preview img{ width:100%; height:100%; object-fit:cover; }
-  .photo-picker .preview .fallback{ color:var(--gold); width:55%; height:55%; }
-  .photo-actions{ display:flex; gap:8px; flex-wrap:wrap; }
+  .reposition-frame:active{ cursor:grabbing; }
+  .reposition-frame img{ width:100%; height:100%; object-fit:cover; display:block; pointer-events:none; user-select:none; }
+  .reposition-frame .fallback{
+    position:absolute; inset:0; display:flex; align-items:center; justify-content:center; color:var(--gold);
+  }
+  .reposition-frame .fallback svg{ width:44%; height:44%; }
+  .reposition-hint{
+    position:absolute; bottom:6px; left:50%; transform:translateX(-50%);
+    font-size:9.5px; letter-spacing:.4px; color:#fff; background:rgba(9,11,26,0.6);
+    padding:3px 9px; border-radius:20px; white-space:nowrap; pointer-events:none;
+  }
+  .photo-actions{ display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
 
   .accounts-list{ margin-top:6px; }
   .acc-row{
@@ -236,8 +280,8 @@
 
 
   @media (prefers-reduced-motion: reduce){
-    .officer-card, .silhouette-drift, .photo-ring{ animation:none !important; }
-    .cred-panel, .cred-toggle .chev{ transition:none !important; }
+    .officer-card, .light-sweep, .photo-ring, .photo-loading svg{ animation:none !important; }
+    .cred-panel, .cred-toggle .chev, .officer-card{ transition:none !important; }
   }
 </style>
 </head>
@@ -374,9 +418,37 @@ const FALLBACK_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:
 
 function avatarInner(officer){
   if(officer && officer.photo){
-    return `<img src="${officer.photo}" alt="">`;
+    const posX = officer.photoPosX ?? 50;
+    const posY = officer.photoPosY ?? 50;
+    return `<img src="${officer.photo}" alt="" style="object-position:${posX}% ${posY}%;">`;
   }
   return `<div class="fallback">${FALLBACK_SVG}</div>`;
+}
+
+/* Small badge icons hinting at each role — matched by keyword so any
+   position text still gets a sensible icon rather than nothing. */
+const ROLE_ICONS = {
+  crown: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8zm2 13h14v2H5v-2z"/></svg>`,
+  quill: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20l8-16-4-2-8 14 4 4z"/><path d="M4 22l4-6"/></svg>`,
+  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.2c0 2.8-6 1.3-6 4.1 0 1.2 1.3 2.2 3 2.2s3-1.1 3-2.5"/></svg>`,
+  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>`,
+  megaphone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a2 2 0 002 2h1l3 5V6l-3 5H5a2 2 0 00-2 2z"/><path d="M12 8a5 5 0 010 8m3-11a9 9 0 010 14"/></svg>`,
+  shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/></svg>`,
+  star: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>`,
+  diamond: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 9-9 9-9-9 9-9z"/></svg>`,
+};
+
+function roleIcon(position){
+  // strip punctuation/spacing so "P.I.O." and "PIO" both match the same keyword
+  const p = String(position || '').toLowerCase().replace(/[^a-z]/g, '');
+  if(p.includes('vice')) return ROLE_ICONS.star;
+  if(p.includes('mayor')) return ROLE_ICONS.crown;
+  if(p.includes('secretary')) return ROLE_ICONS.quill;
+  if(p.includes('treasurer')) return ROLE_ICONS.coin;
+  if(p.includes('auditor')) return ROLE_ICONS.check;
+  if(p.includes('pio') || p.includes('information')) return ROLE_ICONS.megaphone;
+  if(p.includes('marshall') || p.includes('marshal')) return ROLE_ICONS.shield;
+  return ROLE_ICONS.diamond;
 }
 
 /* ============ Rendering ============ */
@@ -415,6 +487,7 @@ function renderTopbar(){
 }
 
 const CHEVRON_SVG = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
+const SPINNER_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M12 3a9 9 0 106.4 2.6"/></svg>`;
 
 function renderDirectory(app){
   const editing = !!state.session;
@@ -427,11 +500,12 @@ function renderDirectory(app){
           <button class="icon-btn" data-edit="${o.id}" title="Edit">${ICONS.pen}</button>
           <button class="icon-btn danger" data-remove="${o.id}" title="Remove">${ICONS.trash}</button>
         </div>` : ''}
-      <div class="photo-square">
+      <div class="photo-square ${editing ? 'editable' : ''}" ${editing ? `data-photo-edit="${o.id}"` : ''} title="${editing ? 'Tap to change photo' : ''}">
         ${avatarInner(o)}
-        <div class="silhouette-drift"></div>
+        <div class="light-sweep"></div>
         <div class="photo-gradient"></div>
         <div class="photo-ring"></div>
+        <div class="role-badge" title="${escapeHtml(o.position || '')}">${roleIcon(o.position)}</div>
       </div>
       <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
       <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
@@ -484,6 +558,12 @@ function renderDirectory(app){
       render();
     });
   });
+  app.querySelectorAll('[data-photo-edit]').forEach(el => {
+    el.addEventListener('click', () => {
+      const o = state.officers.find(x => x.id === el.dataset.photoEdit);
+      openOfficerModal(o);
+    });
+  });
   const addTileEl = document.getElementById('addOfficerTile');
   if(addTileEl) addTileEl.onclick = () => openOfficerModal(null);
 }
@@ -501,7 +581,8 @@ function toggleCredentials(id){
 function openOfficerModal(officer){
   state.modal = {
     type:'officer',
-    data: officer ? {...officer} : { id:null, name:'', position:'', credentials:'', photo:'' }
+    data: officer ? {...officer, photoPosX: officer.photoPosX ?? 50, photoPosY: officer.photoPosY ?? 50}
+                  : { id:null, name:'', position:'', credentials:'', photo:'', photoPosX:50, photoPosY:50 }
   };
   render();
 }
@@ -534,13 +615,16 @@ function officerModalHTML(d){
   <div class="modal">
     <h2>${isNew ? 'Add Officer' : 'Edit Officer'}</h2>
     <div class="photo-picker">
-      <div class="preview" id="photoPreview">${avatarInner(d)}</div>
+      <div class="reposition-frame" id="repositionFrame">
+        ${avatarInner(d)}
+        ${d.photo ? `<span class="reposition-hint">Drag to reposition</span>` : ''}
+      </div>
       <div class="photo-actions">
         <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
-          ${ICONS.camera || ''} Upload Photo
+          ${ICONS.camera || ''} ${d.photo ? 'Change Photo' : 'Upload Photo'}
           <input type="file" id="photoInput" accept="image/*" style="display:none;">
         </label>
-        ${d.photo ? `<button class="btn btn-ghost btn-sm" id="removePhotoBtn">Remove</button>` : ''}
+        ${d.photo ? `<button class="btn btn-ghost btn-sm" id="removePhotoBtn" data-armed="0">Remove</button>` : ''}
       </div>
     </div>
     <div class="field"><label>Full Name</label><input id="m_off_name" value="${escapeHtml(d.name)}" placeholder="e.g. Keanu Makipig Tugonon"></div>
@@ -623,23 +707,8 @@ function wireModal(){
   const cancelBtn = document.getElementById('modalCancel');
   if(cancelBtn) cancelBtn.onclick = () => { state.modal = null; render(); };
 
-  // Officer add/edit
-  const photoInput = document.getElementById('photoInput');
-  if(photoInput){
-    photoInput.onchange = async () => {
-      const file = photoInput.files[0];
-      if(!file) return;
-      try{
-        const dataUrl = await resizeImageFile(file, 500);
-        state.modal.data.photo = dataUrl;
-        document.getElementById('photoPreview').innerHTML = `<img src="${dataUrl}" alt="">`;
-        const removeBtn = document.getElementById('removePhotoBtn');
-        if(!removeBtn){ render(); }
-      }catch(e){ showToast('Could not load that image'); }
-    };
-  }
-  const removePhotoBtn = document.getElementById('removePhotoBtn');
-  if(removePhotoBtn) removePhotoBtn.onclick = () => { state.modal.data.photo = ''; render(); };
+  // Officer add/edit — photo block (upload, drag-to-reposition, remove)
+  wirePhotoBlock();
 
   const saveBtn = document.getElementById('modalSave');
   if(saveBtn){
@@ -650,11 +719,13 @@ function wireModal(){
       if(!name || !position){ showToast('Name and position are required'); return; }
       const d = state.modal.data;
       const isNew = !d.id;
+      const photoPosX = d.photoPosX ?? 50;
+      const photoPosY = d.photoPosY ?? 50;
       await mutateShared('officers_roster', (list) => {
         if(isNew){
-          return [...list, { id:'off_'+Date.now(), name, position, credentials, photo:d.photo||'' }];
+          return [...list, { id:'off_'+Date.now(), name, position, credentials, photo:d.photo||'', photoPosX, photoPosY }];
         }
-        return list.map(o => o.id === d.id ? {...o, name, position, credentials, photo:d.photo||''} : o);
+        return list.map(o => o.id === d.id ? {...o, name, position, credentials, photo:d.photo||'', photoPosX, photoPosY} : o);
       });
       state.modal = null;
       showToast(isNew ? 'Officer added' : 'Officer updated');
@@ -724,6 +795,114 @@ function wireModal(){
       render();
     };
   }
+}
+
+/* Wires the photo block (upload / drag-to-reposition / remove) inside the
+   officer modal. Split out from wireModal so a photo change can refresh
+   just this block via refreshPhotoBlock() without a full modal re-render
+   that would wipe whatever the user has typed into the other fields. */
+function wirePhotoBlock(){
+  const photoInput = document.getElementById('photoInput');
+  if(photoInput){
+    photoInput.onchange = async () => {
+      const file = photoInput.files[0];
+      if(!file) return;
+      const frame = document.getElementById('repositionFrame');
+      if(frame) frame.insertAdjacentHTML('beforeend', `<div class="photo-loading" id="photoLoadingOverlay">${SPINNER_SVG}</div>`);
+      try{
+        const dataUrl = await resizeImageFile(file, 500);
+        state.modal.data.photo = dataUrl;
+        state.modal.data.photoPosX = 50;
+        state.modal.data.photoPosY = 50;
+        refreshPhotoBlock();
+      }catch(e){
+        showToast('Could not load that image');
+        const overlay = document.getElementById('photoLoadingOverlay');
+        if(overlay) overlay.remove();
+      }
+    };
+  }
+
+  const removePhotoBtn = document.getElementById('removePhotoBtn');
+  if(removePhotoBtn){
+    removePhotoBtn.onclick = () => {
+      const armed = removePhotoBtn.dataset.armed === '1';
+      if(!armed){
+        removePhotoBtn.dataset.armed = '1';
+        removePhotoBtn.textContent = 'Confirm Remove?';
+        removePhotoBtn.style.color = 'var(--danger)';
+        removePhotoBtn.style.borderColor = 'var(--danger)';
+        clearTimeout(removePhotoBtn._armTimer);
+        removePhotoBtn._armTimer = setTimeout(() => {
+          if(!document.body.contains(removePhotoBtn)) return;
+          removePhotoBtn.dataset.armed = '0';
+          removePhotoBtn.textContent = 'Remove';
+          removePhotoBtn.style.color = '';
+          removePhotoBtn.style.borderColor = '';
+        }, 3000);
+      } else {
+        clearTimeout(removePhotoBtn._armTimer);
+        state.modal.data.photo = '';
+        state.modal.data.photoPosX = 50;
+        state.modal.data.photoPosY = 50;
+        refreshPhotoBlock();
+      }
+    };
+  }
+
+  wireRepositionDrag(document.getElementById('repositionFrame'));
+}
+
+function refreshPhotoBlock(){
+  const d = state.modal.data;
+  const pickerRoot = document.querySelector('.photo-picker');
+  if(!pickerRoot) return;
+  pickerRoot.innerHTML = `
+    <div class="reposition-frame" id="repositionFrame">
+      ${avatarInner(d)}
+      ${d.photo ? `<span class="reposition-hint">Drag to reposition</span>` : ''}
+    </div>
+    <div class="photo-actions">
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer;">
+        ${ICONS.camera || ''} ${d.photo ? 'Change Photo' : 'Upload Photo'}
+        <input type="file" id="photoInput" accept="image/*" style="display:none;">
+      </label>
+      ${d.photo ? `<button class="btn btn-ghost btn-sm" id="removePhotoBtn" data-armed="0">Remove</button>` : ''}
+    </div>
+  `;
+  wirePhotoBlock();
+}
+
+function wireRepositionDrag(frame){
+  if(!frame) return;
+  let dragging = false;
+  let startX = 0, startY = 0, startPosX = 50, startPosY = 50;
+  const getImg = () => frame.querySelector('img');
+
+  frame.addEventListener('pointerdown', (e) => {
+    if(!getImg()) return;
+    dragging = true;
+    try{ frame.setPointerCapture(e.pointerId); }catch(err){}
+    startX = e.clientX; startY = e.clientY;
+    startPosX = state.modal.data.photoPosX ?? 50;
+    startPosY = state.modal.data.photoPosY ?? 50;
+  });
+  frame.addEventListener('pointermove', (e) => {
+    if(!dragging) return;
+    const rect = frame.getBoundingClientRect();
+    const dxPct = ((e.clientX - startX) / rect.width) * 100;
+    const dyPct = ((e.clientY - startY) / rect.height) * 100;
+    const newX = Math.max(0, Math.min(100, startPosX - dxPct));
+    const newY = Math.max(0, Math.min(100, startPosY - dyPct));
+    state.modal.data.photoPosX = newX;
+    state.modal.data.photoPosY = newY;
+    const img = getImg();
+    if(img) img.style.objectPosition = `${newX}% ${newY}%`;
+  });
+  const endDrag = () => { dragging = false; };
+  frame.addEventListener('pointerup', endDrag);
+  frame.addEventListener('pointercancel', endDrag);
+  frame.addEventListener('pointerleave', endDrag);
 }
 
 /* ============ Gate: setup / login ============ */
