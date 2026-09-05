@@ -277,10 +277,57 @@
 
   footer.tag{ text-align:center; margin-top:50px; font-size:11px; letter-spacing:1.2px; text-transform:uppercase; color:#b8b3a4; }
 
+  /* ===== accessibility: focus-visible ===== */
+  .cred-toggle:focus-visible,
+  .icon-btn:focus-visible,
+  .add-tile:focus-visible,
+  .officer-card:focus-visible,
+  .reposition-frame:focus-visible,
+  .btn:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible{
+    outline:2px solid var(--royal); outline-offset:2px;
+  }
 
+  /* ===== last-updated caption in edit modal ===== */
+  .last-updated{ font-size:11px; color:var(--ink-soft); margin:-6px 0 14px; font-style:italic; }
+
+  /* ===== loading skeleton ===== */
+  .skeleton-card{ pointer-events:none; }
+  .skeleton-shimmer, .skeleton-line{
+    position:relative; overflow:hidden; background:var(--line); border-radius:8px;
+  }
+  .skeleton-shimmer::after, .skeleton-line::after{
+    content:""; position:absolute; inset:0;
+    background:linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent);
+    animation:shimmer 1.5s ease-in-out infinite;
+  }
+  @keyframes shimmer{
+    0%{ transform:translateX(-100%); } 100%{ transform:translateX(100%); }
+  }
+
+  /* ===== print / export roster ===== */
+  @media print{
+    .topbar, .add-tile, .edit-tools, .cred-toggle, footer.tag, .modal-back{ display:none !important; }
+    body{ background:#fff !important; }
+    .hero-head p{ display:none; }
+    .grid{ display:block; }
+    .officer-card{
+      break-inside:avoid; box-shadow:none !important; border:1px solid #ccc !important;
+      display:flex; align-items:flex-start; gap:14px; padding:12px 0; margin-bottom:10px;
+      transform:none !important;
+    }
+    .photo-square{ width:70px; height:70px; flex-shrink:0; margin-bottom:0; }
+    .off-info{ flex:1; min-width:0; }
+    .light-sweep, .photo-ring{ display:none; }
+    .off-name, .off-role{ text-align:left; margin:0 0 4px; }
+    .cred-panel{ max-height:none !important; opacity:1 !important; overflow:visible; }
+    .cred-inner{ border-top:none; padding-top:2px; }
+  }
 
   @media (prefers-reduced-motion: reduce){
-    .officer-card, .light-sweep, .photo-ring, .photo-loading svg{ animation:none !important; }
+    .officer-card, .light-sweep, .photo-ring, .photo-loading svg, .skeleton-shimmer::after, .skeleton-line::after{ animation:none !important; }
     .cred-panel, .cred-toggle .chev, .officer-card{ transition:none !important; }
   }
 </style>
@@ -316,6 +363,7 @@ const state = {
   loginError: '',
   setupError: '',
   expandedIds: new Set(), // officer ids whose credentials panel is open
+  loadError: false,
 };
 
 function showToastSafe(msg){ showToast(msg); }
@@ -420,7 +468,8 @@ function avatarInner(officer){
   if(officer && officer.photo){
     const posX = officer.photoPosX ?? 50;
     const posY = officer.photoPosY ?? 50;
-    return `<img src="${officer.photo}" alt="" style="object-position:${posX}% ${posY}%;">`;
+    const alt = officer.name ? `Photo of ${officer.name}` : 'Officer photo';
+    return `<img src="${officer.photo}" alt="${escapeHtml(alt)}" style="object-position:${posX}% ${posY}%;">`;
   }
   return `<div class="fallback">${FALLBACK_SVG}</div>`;
 }
@@ -451,12 +500,52 @@ function roleIcon(position){
   return ROLE_ICONS.diamond;
 }
 
+// Org-chart order for display, independent of the order officers were
+// added in. Unrecognized positions sort after all known ranks but keep
+// their relative order (Array.sort is stable).
+function roleRank(position){
+  const p = String(position || '').toLowerCase().replace(/[^a-z]/g, '');
+  if(p.includes('vice')) return 1;
+  if(p.includes('mayor')) return 0;
+  if(p.includes('secretary')) return 2;
+  if(p.includes('treasurer')) return 3;
+  if(p.includes('auditor')) return 4;
+  if(p.includes('pio') || p.includes('information')) return 5;
+  if(p.includes('marshall') || p.includes('marshal')) return 6;
+  return 99;
+}
+
 /* ============ Rendering ============ */
 
 function render(){
   renderTopbar();
   const app = document.getElementById('app');
-  if(state.loading){ app.innerHTML = `<div class="empty-state">Loading officers…</div>`; return; }
+  if(state.loadError){
+    app.innerHTML = `
+      <div class="empty-state">
+        <p style="margin-bottom:14px;">Couldn't connect to load the officer directory. Check your connection and try again.</p>
+        <button class="btn btn-gold btn-sm" id="retryBootBtn">Retry</button>
+      </div>`;
+    const retryBtn = document.getElementById('retryBootBtn');
+    if(retryBtn) retryBtn.onclick = () => boot();
+    return;
+  }
+  if(state.loading){
+    const skeletons = Array.from({length:4}).map(() => `
+      <div class="officer-card skeleton-card">
+        <div class="photo-square skeleton-shimmer"></div>
+        <div class="skeleton-line" style="width:60%;height:14px;margin:0 auto 8px;"></div>
+        <div class="skeleton-line" style="width:40%;height:18px;margin:0 auto;"></div>
+      </div>`).join('');
+    app.innerHTML = `
+      <div class="hero-head">
+        <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
+        <h1>MEET THE OFFICERS</h1>
+        <div class="rule"></div>
+      </div>
+      <div class="grid">${skeletons}</div>`;
+    return;
+  }
 
   if(state.screen === 'gate-login') return renderLogin(app);
   if(state.screen === 'gate-setup') return renderSetup(app);
@@ -466,10 +555,12 @@ function render(){
 
 function renderTopbar(){
   const right = document.getElementById('topbarRight');
+  const printBtn = `<button class="btn btn-ghost btn-sm" id="printRosterBtn" title="Print or save the roster as PDF">${ICONS.download || ''} Export</button>`;
   if(state.session){
     right.innerHTML = `
       <span class="who">Signed in as <b>${escapeHtml(state.session.name)}</b> · ${roleLabel(state.session.role)}</span>
       ${state.session.role === 'mayor' ? `<button class="btn btn-ghost btn-sm" id="manageAccBtn">${ICONS.users}Accounts</button>` : ''}
+      ${printBtn}
       <button class="btn btn-ghost btn-sm" id="signOutBtn">Sign Out</button>
     `;
     const manageBtn = document.getElementById('manageAccBtn');
@@ -478,12 +569,14 @@ function renderTopbar(){
       state.session = null; savePersonal('session', null); state.screen = 'public'; render();
     };
   } else {
-    right.innerHTML = `<button class="btn btn-gold btn-sm" id="loginBtn">${ICONS.key}Officer Login</button>`;
+    right.innerHTML = `${printBtn}<button class="btn btn-gold btn-sm" id="loginBtn">${ICONS.key}Officer Login</button>`;
     document.getElementById('loginBtn').onclick = () => {
       state.screen = state.accounts.length ? 'gate-login' : 'gate-setup';
       render();
     };
   }
+  const printRosterBtn = document.getElementById('printRosterBtn');
+  if(printRosterBtn) printRosterBtn.onclick = () => window.print();
 }
 
 const CHEVRON_SVG = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
@@ -491,7 +584,8 @@ const SPINNER_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" 
 
 function renderDirectory(app){
   const editing = !!state.session;
-  const cards = state.officers.map(o => {
+  const sortedOfficers = [...state.officers].sort((a, b) => roleRank(a.position) - roleRank(b.position));
+  const cards = sortedOfficers.map(o => {
     const expanded = state.expandedIds.has(o.id);
     return `
     <div class="officer-card ${expanded ? 'expanded' : ''}" data-id="${o.id}">
@@ -500,23 +594,25 @@ function renderDirectory(app){
           <button class="icon-btn" data-edit="${o.id}" title="Edit">${ICONS.pen}</button>
           <button class="icon-btn danger" data-remove="${o.id}" title="Remove">${ICONS.trash}</button>
         </div>` : ''}
-      <div class="photo-square ${editing ? 'editable' : ''}" ${editing ? `data-photo-edit="${o.id}"` : ''} title="${editing ? 'Tap to change photo' : ''}">
+      <div class="photo-square ${editing ? 'editable' : ''}" ${editing ? `data-photo-edit="${o.id}" tabindex="0" role="button" aria-label="Change photo for ${escapeHtml(o.name || 'this officer')}"` : ''} title="${editing ? 'Tap to change photo' : ''}">
         ${avatarInner(o)}
         <div class="light-sweep"></div>
         <div class="photo-gradient"></div>
         <div class="photo-ring"></div>
         <div class="role-badge" title="${escapeHtml(o.position || '')}">${roleIcon(o.position)}</div>
       </div>
-      <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
-      <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
-      <button class="cred-toggle" data-toggle="${o.id}">
-        <span>${expanded ? 'Hide Credentials' : 'Leadership Credentials'}</span>
-        ${CHEVRON_SVG}
-      </button>
-      <div class="cred-panel">
-        <div class="cred-inner">
-          <div class="cred-label">Leadership Credentials</div>
-          ${o.credentials ? `<p>${escapeHtml(o.credentials)}</p>` : `<p class="empty">No credentials added yet.</p>`}
+      <div class="off-info">
+        <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
+        <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
+        <button class="cred-toggle" data-toggle="${o.id}">
+          <span>${expanded ? 'Hide Credentials' : 'Leadership Credentials'}</span>
+          ${CHEVRON_SVG}
+        </button>
+        <div class="cred-panel">
+          <div class="cred-inner">
+            <div class="cred-label">Leadership Credentials</div>
+            ${o.credentials ? `<p>${escapeHtml(o.credentials)}</p>` : `<p class="empty">No credentials added yet.</p>`}
+          </div>
         </div>
       </div>
     </div>
@@ -524,7 +620,7 @@ function renderDirectory(app){
   }).join('');
 
   const addTile = editing ? `
-    <div class="add-tile" id="addOfficerTile">
+    <div class="add-tile" id="addOfficerTile" tabindex="0" role="button" aria-label="Add officer">
       <div class="add-square">${ICONS.plus}</div>
       <span class="add-label">Add Officer</span>
     </div>` : '';
@@ -559,13 +655,22 @@ function renderDirectory(app){
     });
   });
   app.querySelectorAll('[data-photo-edit]').forEach(el => {
-    el.addEventListener('click', () => {
+    const activate = () => {
       const o = state.officers.find(x => x.id === el.dataset.photoEdit);
       openOfficerModal(o);
+    };
+    el.addEventListener('click', activate);
+    el.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); activate(); }
     });
   });
   const addTileEl = document.getElementById('addOfficerTile');
-  if(addTileEl) addTileEl.onclick = () => openOfficerModal(null);
+  if(addTileEl){
+    addTileEl.onclick = () => openOfficerModal(null);
+    addTileEl.addEventListener('keydown', (e) => {
+      if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); openOfficerModal(null); }
+    });
+  }
 }
 
 function toggleCredentials(id){
@@ -609,13 +714,26 @@ function renderModal(){
   wireModal();
 }
 
+const POSITION_OPTIONS = ['Mayor','Vice Mayor','Secretary','Treasurer','Auditor','P.I.O.','Marshall'];
+
+function formatUpdatedStamp(iso){
+  if(!iso) return '';
+  try{
+    const dt = new Date(iso);
+    return dt.toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) +
+      ' at ' + dt.toLocaleTimeString(undefined, {hour:'numeric', minute:'2-digit'});
+  }catch(e){ return ''; }
+}
+
 function officerModalHTML(d){
   const isNew = !d.id;
+  const knownMatch = POSITION_OPTIONS.find(opt => opt.toLowerCase() === String(d.position||'').toLowerCase());
+  const isOther = !!d.position && !knownMatch;
   return `
   <div class="modal">
     <h2>${isNew ? 'Add Officer' : 'Edit Officer'}</h2>
     <div class="photo-picker">
-      <div class="reposition-frame" id="repositionFrame">
+      <div class="reposition-frame" id="repositionFrame" tabindex="0" role="slider" aria-label="Drag or use arrow keys to reposition photo">
         ${avatarInner(d)}
         ${d.photo ? `<span class="reposition-hint">Drag to reposition</span>` : ''}
       </div>
@@ -628,8 +746,16 @@ function officerModalHTML(d){
       </div>
     </div>
     <div class="field"><label>Full Name</label><input id="m_off_name" value="${escapeHtml(d.name)}" placeholder="e.g. Keanu Makipig Tugonon"></div>
-    <div class="field"><label>Position</label><input id="m_off_position" value="${escapeHtml(d.position)}" placeholder="e.g. Mayor"></div>
+    <div class="field">
+      <label>Position</label>
+      <select id="m_off_position_select">
+        ${POSITION_OPTIONS.map(opt => `<option value="${opt}" ${knownMatch === opt ? 'selected' : ''}>${opt}</option>`).join('')}
+        <option value="__other__" ${isOther ? 'selected' : ''}>Other&hellip;</option>
+      </select>
+      <input id="m_off_position_other" style="margin-top:8px; display:${isOther ? 'block' : 'none'};" placeholder="Enter position" value="${isOther ? escapeHtml(d.position) : ''}">
+    </div>
     <div class="field"><label>Leadership Credentials</label><textarea id="m_off_credentials" placeholder="Achievements, training, leadership experience...">${escapeHtml(d.credentials)}</textarea></div>
+    ${d.updatedBy ? `<p class="last-updated">Last updated by ${escapeHtml(d.updatedBy)}${d.updatedAt ? ' on ' + formatUpdatedStamp(d.updatedAt) : ''}</p>` : ''}
     <div class="modal-actions">
       <button class="btn btn-ghost" id="modalCancel">Cancel</button>
       <button class="btn btn-gold" id="modalSave">${isNew ? 'Add Officer' : 'Save Changes'}</button>
@@ -710,22 +836,36 @@ function wireModal(){
   // Officer add/edit — photo block (upload, drag-to-reposition, remove)
   wirePhotoBlock();
 
+  const positionSelect = document.getElementById('m_off_position_select');
+  const positionOther = document.getElementById('m_off_position_other');
+  if(positionSelect && positionOther){
+    positionSelect.onchange = () => {
+      const isOther = positionSelect.value === '__other__';
+      positionOther.style.display = isOther ? 'block' : 'none';
+      if(isOther) positionOther.focus();
+    };
+  }
+
   const saveBtn = document.getElementById('modalSave');
   if(saveBtn){
     saveBtn.onclick = async () => {
       const name = document.getElementById('m_off_name').value.trim();
-      const position = document.getElementById('m_off_position').value.trim();
+      const selectEl = document.getElementById('m_off_position_select');
+      const otherEl = document.getElementById('m_off_position_other');
+      const position = selectEl.value === '__other__' ? otherEl.value.trim() : selectEl.value;
       const credentials = document.getElementById('m_off_credentials').value.trim();
       if(!name || !position){ showToast('Name and position are required'); return; }
       const d = state.modal.data;
       const isNew = !d.id;
       const photoPosX = d.photoPosX ?? 50;
       const photoPosY = d.photoPosY ?? 50;
+      const updatedBy = state.session ? state.session.name : undefined;
+      const updatedAt = new Date().toISOString();
       await mutateShared('officers_roster', (list) => {
         if(isNew){
-          return [...list, { id:'off_'+Date.now(), name, position, credentials, photo:d.photo||'', photoPosX, photoPosY }];
+          return [...list, { id:'off_'+Date.now(), name, position, credentials, photo:d.photo||'', photoPosX, photoPosY, updatedBy, updatedAt }];
         }
-        return list.map(o => o.id === d.id ? {...o, name, position, credentials, photo:d.photo||'', photoPosX, photoPosY} : o);
+        return list.map(o => o.id === d.id ? {...o, name, position, credentials, photo:d.photo||'', photoPosX, photoPosY, updatedBy, updatedAt} : o);
       });
       state.modal = null;
       showToast(isNew ? 'Officer added' : 'Officer updated');
@@ -776,6 +916,12 @@ function wireModal(){
   document.querySelectorAll('[data-delacc]').forEach(el => {
     el.onclick = async () => {
       const id = el.dataset.delacc;
+      const target = state.accounts.find(a => a.id === id);
+      const mayorCount = state.accounts.filter(a => a.role === 'mayor').length;
+      if(target && target.role === 'mayor' && mayorCount <= 1){
+        showToast("Can't remove the only Mayor account");
+        return;
+      }
       await mutateShared('officers_accounts', (list) => list.filter(a => a.id !== id));
       showToast('Account removed');
       render();
@@ -858,7 +1004,7 @@ function refreshPhotoBlock(){
   const pickerRoot = document.querySelector('.photo-picker');
   if(!pickerRoot) return;
   pickerRoot.innerHTML = `
-    <div class="reposition-frame" id="repositionFrame">
+    <div class="reposition-frame" id="repositionFrame" tabindex="0" role="slider" aria-label="Drag or use arrow keys to reposition photo">
       ${avatarInner(d)}
       ${d.photo ? `<span class="reposition-hint">Drag to reposition</span>` : ''}
     </div>
@@ -903,6 +1049,27 @@ function wireRepositionDrag(frame){
   frame.addEventListener('pointerup', endDrag);
   frame.addEventListener('pointercancel', endDrag);
   frame.addEventListener('pointerleave', endDrag);
+
+  // Keyboard fallback: arrow keys nudge the crop position in 5% steps.
+  frame.addEventListener('keydown', (e) => {
+    if(!getImg()) return;
+    const step = 5;
+    let dx = 0, dy = 0;
+    if(e.key === 'ArrowLeft') dx = -step;
+    else if(e.key === 'ArrowRight') dx = step;
+    else if(e.key === 'ArrowUp') dy = -step;
+    else if(e.key === 'ArrowDown') dy = step;
+    else return;
+    e.preventDefault();
+    const curX = state.modal.data.photoPosX ?? 50;
+    const curY = state.modal.data.photoPosY ?? 50;
+    const newX = Math.max(0, Math.min(100, curX + dx));
+    const newY = Math.max(0, Math.min(100, curY + dy));
+    state.modal.data.photoPosX = newX;
+    state.modal.data.photoPosY = newY;
+    const img = getImg();
+    if(img) img.style.objectPosition = `${newX}% ${newY}%`;
+  });
 }
 
 /* ============ Gate: setup / login ============ */
@@ -986,7 +1153,33 @@ function renderLogin(app){
 
 /* ============ Boot ============ */
 
+async function checkConnectivity(){
+  try{
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    await fetch(SUPABASE_URL + '/rest/v1/', { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal });
+    clearTimeout(timer);
+    return true; // reaching the server at all (even a 4xx) counts as "online"
+  }catch(e){
+    return false;
+  }
+}
+
+let liveSyncStarted = false;
+
 async function boot(){
+  state.loading = true;
+  state.loadError = false;
+  render();
+
+  const online = await checkConnectivity();
+  if(!online){
+    state.loading = false;
+    state.loadError = true;
+    render();
+    return;
+  }
+
   const [officers, accounts, session] = await Promise.all([
     loadShared('officers_roster', []),
     loadShared('officers_accounts', []),
@@ -1002,13 +1195,16 @@ async function boot(){
   state.loading = false;
   render();
 
-  subscribeRealtime((key, value) => applyRemoteUpdate(key, value));
-  startPolling(SYNC_KEYS, {
-    getLastRaw: (k) => lastSyncedRaw[k],
-    onChange: (key, value) => applyRemoteUpdate(key, value),
-    shouldPoll: () => true,
-    intervalMs: 20000,
-  });
+  if(!liveSyncStarted){
+    liveSyncStarted = true;
+    subscribeRealtime((key, value) => applyRemoteUpdate(key, value));
+    startPolling(SYNC_KEYS, {
+      getLastRaw: (k) => lastSyncedRaw[k],
+      onChange: (key, value) => applyRemoteUpdate(key, value),
+      shouldPoll: () => true,
+      intervalMs: 20000,
+    });
+  }
 }
 
 boot();
