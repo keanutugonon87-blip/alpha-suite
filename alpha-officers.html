@@ -69,11 +69,12 @@
   }
   .officer-card:active{ transform:translateY(-1px) scale(0.995); }
 
-  /* ---- square photo with live light sweep + bottom gradient ---- */
+  /* ---- naval-plaque photo: squared corners + brass corner brackets ---- */
   .photo-square{
-    position:relative; width:100%; aspect-ratio:1/1; border-radius:12px; overflow:hidden;
-    margin-bottom:14px;
+    position:relative; width:100%; aspect-ratio:1/1; border-radius:2px; overflow:hidden;
+    margin-bottom:0;
     background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
+    border:1px solid var(--navy-900);
   }
   .photo-square img{ position:absolute; inset:0; width:100%; height:100%; object-fit:cover; display:block; }
   .photo-square.editable{ cursor:pointer; }
@@ -104,25 +105,21 @@
     background:linear-gradient(to top, rgba(6,8,22,0.8) 0%, rgba(6,8,22,0.34) 38%, transparent 66%);
   }
 
-  /* breathing gold rim */
-  .photo-square .photo-ring{
-    position:absolute; inset:0; border-radius:inherit; pointer-events:none;
-    border:2px solid rgba(240,180,41,0.85);
-    animation:ringPulse 3.6s ease-in-out infinite;
+  /* brass corner brackets, like a mounted rank plaque — replaces the old
+     pulsing ring with a subtle glow instead */
+  .corner-bracket{
+    position:absolute; width:20px; height:20px; pointer-events:none;
+    border-color:var(--gold); filter:drop-shadow(0 0 0 rgba(240,180,41,0));
+    animation:bracketGlow 3.6s ease-in-out infinite;
   }
-  @keyframes ringPulse{
-    0%,100%{ box-shadow:0 0 0 0 rgba(240,180,41,0); border-color:rgba(240,180,41,0.75); }
-    50%{ box-shadow:0 0 16px 2px rgba(240,180,41,0.35); border-color:rgba(255,214,102,1); }
+  .corner-bracket.tl{ top:0; left:0; border-top:3px solid; border-left:3px solid; }
+  .corner-bracket.tr{ top:0; right:0; border-top:3px solid; border-right:3px solid; }
+  .corner-bracket.bl{ bottom:0; left:0; border-bottom:3px solid; border-left:3px solid; }
+  .corner-bracket.br{ bottom:0; right:0; border-bottom:3px solid; border-right:3px solid; }
+  @keyframes bracketGlow{
+    0%,100%{ filter:drop-shadow(0 0 0 rgba(240,180,41,0)); border-color:rgba(240,180,41,0.75); }
+    50%{ filter:drop-shadow(0 0 3px rgba(240,180,41,0.7)); border-color:rgba(255,214,102,1); }
   }
-
-  /* small role badge tucked in the corner of the photo */
-  .role-badge{
-    position:absolute; bottom:8px; left:8px; width:26px; height:26px; border-radius:50%;
-    background:rgba(9,11,26,0.72); border:1.5px solid var(--gold);
-    display:flex; align-items:center; justify-content:center; color:var(--gold);
-    backdrop-filter:blur(2px);
-  }
-  .role-badge svg{ width:14px; height:14px; }
 
   /* upload progress spinner overlay */
   .photo-loading{
@@ -132,12 +129,28 @@
   .photo-loading svg{ width:26px; height:26px; animation:spin .8s linear infinite; }
   @keyframes spin{ to{ transform:rotate(360deg); } }
 
-  .off-name{ font-family:'Cinzel',serif; color:var(--navy-900); font-size:14.5px; margin:0 0 6px; line-height:1.3; text-align:center; }
+  /* engraved brass nameplate bar beneath the photo */
+  .nameplate{
+    background:linear-gradient(180deg,var(--navy-800),var(--navy-950));
+    border-top:2px solid var(--gold); border-bottom:2px solid var(--gold);
+    padding:9px 8px; margin-top:12px;
+  }
+  .nameplate-name{
+    font-family:'Cinzel',serif; color:#F3EFE3; font-size:13.5px; letter-spacing:1px;
+    text-transform:uppercase; text-align:center; line-height:1.3;
+    text-shadow:0 1px 0 rgba(0,0,0,0.6), 0 -1px 0 rgba(255,255,255,0.12);
+  }
+
+  /* rank chevrons — seniority at a glance, like officer insignia */
+  .rank-row{ display:flex; gap:4px; justify-content:center; margin:8px 0 6px; }
+  .chevron{
+    width:0; height:0; border-left:7px solid transparent; border-right:7px solid transparent;
+    border-top:6px solid var(--gold);
+  }
+
   .off-role{
-    display:block; width:fit-content; margin:0 auto;
-    font-size:10.5px; letter-spacing:1.1px; text-transform:uppercase;
-    color:var(--gold-dim); background:rgba(240,180,41,0.14); border:1px solid rgba(240,180,41,0.4);
-    border-radius:20px; padding:4px 12px;
+    display:block; text-align:center; margin:0 auto 4px;
+    font-size:10px; letter-spacing:1.4px; text-transform:uppercase; color:var(--gold-dim);
   }
 
   /* ---- collapsible credentials ---- */
@@ -309,7 +322,7 @@
 
   /* ===== print / export roster ===== */
   @media (prefers-reduced-motion: reduce){
-    .officer-card, .light-sweep, .photo-ring, .photo-loading svg, .skeleton-shimmer::after, .skeleton-line::after{ animation:none !important; }
+    .officer-card, .light-sweep, .corner-bracket, .photo-loading svg, .skeleton-shimmer::after, .skeleton-line::after{ animation:none !important; }
     .cred-panel, .cred-toggle .chev, .officer-card{ transition:none !important; }
   }
 </style>
@@ -456,32 +469,6 @@ function avatarInner(officer){
   return `<div class="fallback">${FALLBACK_SVG}</div>`;
 }
 
-/* Small badge icons hinting at each role — matched by keyword so any
-   position text still gets a sensible icon rather than nothing. */
-const ROLE_ICONS = {
-  crown: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M3 8l4 3 5-6 5 6 4-3-2 11H5L3 8zm2 13h14v2H5v-2z"/></svg>`,
-  quill: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20l8-16-4-2-8 14 4 4z"/><path d="M4 22l4-6"/></svg>`,
-  coin: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v10M9 9.5c0-1.4 1.3-2.5 3-2.5s3 1.1 3 2.2c0 2.8-6 1.3-6 4.1 0 1.2 1.3 2.2 3 2.2s3-1.1 3-2.5"/></svg>`,
-  check: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 12l2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>`,
-  megaphone: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11v2a2 2 0 002 2h1l3 5V6l-3 5H5a2 2 0 00-2 2z"/><path d="M12 8a5 5 0 010 8m3-11a9 9 0 010 14"/></svg>`,
-  shield: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v6c0 4.5-3 7.5-7 9-4-1.5-7-4.5-7-9V6l7-3z"/></svg>`,
-  star: `<svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l3 6.5 7 .9-5.1 4.9 1.3 7-6.2-3.4-6.2 3.4 1.3-7L2 9.4l7-.9z"/></svg>`,
-  diamond: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M12 3l9 9-9 9-9-9 9-9z"/></svg>`,
-};
-
-function roleIcon(position){
-  // strip punctuation/spacing so "P.I.O." and "PIO" both match the same keyword
-  const p = String(position || '').toLowerCase().replace(/[^a-z]/g, '');
-  if(p.includes('vice')) return ROLE_ICONS.star;
-  if(p.includes('mayor')) return ROLE_ICONS.crown;
-  if(p.includes('secretary')) return ROLE_ICONS.quill;
-  if(p.includes('treasurer')) return ROLE_ICONS.coin;
-  if(p.includes('auditor')) return ROLE_ICONS.check;
-  if(p.includes('pio') || p.includes('information')) return ROLE_ICONS.megaphone;
-  if(p.includes('marshall') || p.includes('marshal')) return ROLE_ICONS.shield;
-  return ROLE_ICONS.diamond;
-}
-
 // Org-chart order for display, independent of the order officers were
 // added in. Unrecognized positions sort after all known ranks but keep
 // their relative order (Array.sort is stable).
@@ -495,6 +482,16 @@ function roleRank(position){
   if(p.includes('pio') || p.includes('information')) return 5;
   if(p.includes('marshall') || p.includes('marshal')) return 6;
   return 99;
+}
+
+// Rank chevrons for the naval-plaque card: seniority shown as stripes,
+// like officer insignia — Mayor gets the most, department heads and staff
+// roles get one, unrecognized titles still get a baseline stripe.
+function rankChevrons(position){
+  const rank = roleRank(position);
+  if(rank === 0) return 3;
+  if(rank === 1) return 2;
+  return 1;
 }
 
 /* ============ Rendering ============ */
@@ -576,11 +573,18 @@ function renderDirectory(app){
         ${avatarInner(o)}
         <div class="light-sweep"></div>
         <div class="photo-gradient"></div>
-        <div class="photo-ring"></div>
-        <div class="role-badge" title="${escapeHtml(o.position || '')}">${roleIcon(o.position)}</div>
+        <span class="corner-bracket tl"></span>
+        <span class="corner-bracket tr"></span>
+        <span class="corner-bracket bl"></span>
+        <span class="corner-bracket br"></span>
+      </div>
+      <div class="nameplate">
+        <div class="nameplate-name">${escapeHtml(o.name || 'Full Name')}</div>
+      </div>
+      <div class="rank-row" title="${escapeHtml(o.position || '')}">
+        ${Array.from({length: rankChevrons(o.position)}).map(() => `<span class="chevron"></span>`).join('')}
       </div>
       <div class="off-info">
-        <div class="off-name">${escapeHtml(o.name || 'Full Name')}</div>
         <span class="off-role">${escapeHtml(o.position || 'Officer')}</span>
         <button class="cred-toggle" data-toggle="${o.id}">
           <span>${expanded ? 'Hide Credentials' : 'Leadership Credentials'}</span>
