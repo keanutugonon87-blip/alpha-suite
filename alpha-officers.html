@@ -308,24 +308,6 @@
   }
 
   /* ===== print / export roster ===== */
-  @media print{
-    .topbar, .add-tile, .edit-tools, .cred-toggle, footer.tag, .modal-back{ display:none !important; }
-    body{ background:#fff !important; }
-    .hero-head p{ display:none; }
-    .grid{ display:block; }
-    .officer-card{
-      break-inside:avoid; box-shadow:none !important; border:1px solid #ccc !important;
-      display:flex; align-items:flex-start; gap:14px; padding:12px 0; margin-bottom:10px;
-      transform:none !important;
-    }
-    .photo-square{ width:70px; height:70px; flex-shrink:0; margin-bottom:0; }
-    .off-info{ flex:1; min-width:0; }
-    .light-sweep, .photo-ring{ display:none; }
-    .off-name, .off-role{ text-align:left; margin:0 0 4px; }
-    .cred-panel{ max-height:none !important; opacity:1 !important; overflow:visible; }
-    .cred-inner{ border-top:none; padding-top:2px; }
-  }
-
   @media (prefers-reduced-motion: reduce){
     .officer-card, .light-sweep, .photo-ring, .photo-loading svg, .skeleton-shimmer::after, .skeleton-line::after{ animation:none !important; }
     .cred-panel, .cred-toggle .chev, .officer-card{ transition:none !important; }
@@ -555,12 +537,10 @@ function render(){
 
 function renderTopbar(){
   const right = document.getElementById('topbarRight');
-  const printBtn = `<button class="btn btn-ghost btn-sm" id="printRosterBtn" title="Print or save the roster as PDF">${ICONS.download || ''} Export</button>`;
   if(state.session){
     right.innerHTML = `
       <span class="who">Signed in as <b>${escapeHtml(state.session.name)}</b> · ${roleLabel(state.session.role)}</span>
       ${state.session.role === 'mayor' ? `<button class="btn btn-ghost btn-sm" id="manageAccBtn">${ICONS.users}Accounts</button>` : ''}
-      ${printBtn}
       <button class="btn btn-ghost btn-sm" id="signOutBtn">Sign Out</button>
     `;
     const manageBtn = document.getElementById('manageAccBtn');
@@ -569,14 +549,12 @@ function renderTopbar(){
       state.session = null; savePersonal('session', null); state.screen = 'public'; render();
     };
   } else {
-    right.innerHTML = `${printBtn}<button class="btn btn-gold btn-sm" id="loginBtn">${ICONS.key}Officer Login</button>`;
+    right.innerHTML = `<button class="btn btn-gold btn-sm" id="loginBtn">${ICONS.key}Officer Login</button>`;
     document.getElementById('loginBtn').onclick = () => {
       state.screen = state.accounts.length ? 'gate-login' : 'gate-setup';
       render();
     };
   }
-  const printRosterBtn = document.getElementById('printRosterBtn');
-  if(printRosterBtn) printRosterBtn.onclick = () => window.print();
 }
 
 const CHEVRON_SVG = `<svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>`;
