@@ -75,7 +75,8 @@ export function initials(name){ return (name||'').split(' ').filter(Boolean).sli
 export function avatarHTML(person, extraStyle){
   const style = extraStyle ? ` style="${extraStyle}"` : '';
   if(person && person.photo){
-    return `<div class="avatar"${style}><img src="${person.photo}" alt=""/></div>`;
+    const alt = person.name ? `Photo of ${escapeHtml(person.name)}` : 'Photo';
+    return `<div class="avatar"${style}><img src="${person.photo}" alt="${alt}"/></div>`;
   }
   return `<div class="avatar"${style}>${escapeHtml(initials(person?person.name:'?'))}</div>`;
 }

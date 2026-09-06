@@ -653,6 +653,35 @@ export function attachViceMayorDashboardEvents(){
 
 
 /* ===================== roster ===================== */
+// Minimal CSV parser: handles quoted fields (with escaped "" inside quotes)
+// and a comma delimiter. Good enough for a simple Name,Section export from
+// Sheets/Excel — not a full RFC-4180 implementation.
+function parseRosterCSV(text){
+  const lines = text.split(/\r\n|\n|\r/).map(l=>l.trim()).filter(l=>l.length>0);
+  const rows = lines.map(line=>{
+    const cells = [];
+    let cur = '', inQuotes = false;
+    for(let i=0;i<line.length;i++){
+      const ch = line[i];
+      if(ch==='"'){
+        if(inQuotes && line[i+1]==='"'){ cur+='"'; i++; }
+        else inQuotes = !inQuotes;
+      } else if(ch===',' && !inQuotes){
+        cells.push(cur); cur='';
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur);
+    return cells.map(c=>c.trim());
+  });
+  // Skip a header row if the first cell looks like a label rather than a name.
+  const dataRows = rows.length && /^name$/i.test(rows[0][0]||'') ? rows.slice(1) : rows;
+  return dataRows
+    .map(cells=>({ name:(cells[0]||'').trim(), section:(cells[1]||'').trim() }))
+    .filter(r=>r.name);
+}
+
 export function rosterHTML(){
   const isMayor = state.session.role==='mayor';
   const isMarshall = state.session.role==='marshall';
@@ -665,7 +694,9 @@ export function rosterHTML(){
     <p class="subtext">${isMarshall?'View students and run inspection checklists.':`Every student under watch. ${isMayor?'Add, edit, or remove profiles.':'You can add new profiles here.'}`}</p>
     <div class="fab-row">
       <div class="search" style="flex:1;margin-bottom:0;">${ICON.search}<input id="rosterSearch" placeholder="Search name…" value="${escapeHtml(state.search)}"/></div>
-      ${canAdd?`<button class="btn-sm gold" id="addStudentBtn">${ICON.plus}Add</button>`:''}
+      ${canAdd?`<button class="btn-sm gold" id="addStudentBtn">${ICON.plus}Add</button>
+      <button class="btn-sm ghost" id="importCsvBtn">Import CSV</button>
+      <input type="file" id="csvFileInput" accept=".csv,text/csv" style="display:none;">`:''}
     </div>
     <div class="card">
       ${filtered.length===0? emptyState('No students found', isMarshall?'Ask the Mayor or Secretary to add students.':'Add your first student to start tracking.', ICON.users) :
@@ -690,6 +721,25 @@ export function attachRosterEvents(){
   if(search) search.oninput = ()=>{ state.search = search.value; render(); document.getElementById('rosterSearch').focus(); document.getElementById('rosterSearch').selectionStart = document.getElementById('rosterSearch').value.length; };
   const addBtn = document.getElementById('addStudentBtn');
   if(addBtn) addBtn.onclick = ()=>{ state.modal={type:'student', data:{name:''}}; render(); };
+  const importBtn = document.getElementById('importCsvBtn');
+  const fileInput = document.getElementById('csvFileInput');
+  if(importBtn && fileInput){
+    importBtn.onclick = ()=> fileInput.click();
+    fileInput.onchange = async ()=>{
+      const file = fileInput.files[0];
+      fileInput.value = ''; // allow re-selecting the same file later
+      if(!file) return;
+      try{
+        const text = await file.text();
+        const rows = parseRosterCSV(text);
+        if(rows.length===0){ showToast('No valid rows found — expected Name (and optional Section) columns'); return; }
+        state.modal = {type:'csvImport', data:{rows}};
+        render();
+      }catch(e){
+        showToast('Could not read that file');
+      }
+    };
+  }
   document.querySelectorAll('[data-view-history]').forEach(el=>{
     el.onclick = ()=>{ state.modal={type:'studentHistory', data:{studentId:el.dataset.viewHistory}}; render(); };
   });
@@ -697,13 +747,19 @@ export function attachRosterEvents(){
     b.onclick = ()=>{ const s = state.roster.find(x=>x.id===b.dataset.editStudent); state.modal={type:'student', data:{...s}}; render(); };
   });
   document.querySelectorAll('[data-del-student]').forEach(b=>{
-    b.onclick = async ()=>{
-      if(!confirm('Remove this student and all their violation records?')) return;
+    b.onclick = ()=>{
       const id = b.dataset.delStudent;
-      await mutateShared('roster', latest=>latest.filter(s=>s.id!==id));
-      await mutateShared('ledger', latest=>latest.filter(v=>v.studentId!==id));
-      showToast('Student removed');
-      render();
+      const s = state.roster.find(x=>x.id===id);
+      openConfirm({
+        title:'Remove Student',
+        message:`Remove ${s?s.name:'this student'} and all their violation records? This can't be undone.`,
+        confirmLabel:'Remove',
+        onConfirm: async ()=>{
+          await mutateShared('roster', latest=>latest.filter(s=>s.id!==id));
+          await mutateShared('ledger', latest=>latest.filter(v=>v.studentId!==id));
+          showToast('Student removed');
+        }
+      });
     };
   });
   document.querySelectorAll('[data-inspect-student]').forEach(b=>{
@@ -756,11 +812,17 @@ export function attachStandardEvents(){
     b.onclick = ()=>{ const c = state.standard.find(x=>x.id===b.dataset.editStd); state.modal={type:'standard', data:{...c}}; render(); };
   });
   document.querySelectorAll('[data-del-std]').forEach(b=>{
-    b.onclick = async ()=>{
-      if(!confirm('Remove this checkpoint from The Standard?')) return;
-      await mutateShared('standard', latest=>latest.filter(c=>c.id!==b.dataset.delStd));
-      showToast('Checkpoint removed');
-      render();
+    b.onclick = ()=>{
+      const id = b.dataset.delStd;
+      openConfirm({
+        title:'Remove Checkpoint',
+        message:'Remove this checkpoint from The Standard? Past violation records for it are kept.',
+        confirmLabel:'Remove',
+        onConfirm: async ()=>{
+          await mutateShared('standard', latest=>latest.filter(c=>c.id!==id));
+          showToast('Checkpoint removed');
+        }
+      });
     };
   });
 }
@@ -975,11 +1037,17 @@ export function attachLedgerEvents(){
   if(filt) filt.onchange = ()=>{ state.statusFilter = filt.value; render(); };
   attachViolationWorkflowEvents();
   document.querySelectorAll('[data-del-violation]').forEach(b=>{
-    b.onclick = async ()=>{
-      if(!confirm('Delete this violation record?')) return;
-      await mutateShared('ledger', latest=>latest.filter(v=>v.id!==b.dataset.delViolation));
-      showToast('Record deleted');
-      render();
+    b.onclick = ()=>{
+      const id = b.dataset.delViolation;
+      openConfirm({
+        title:'Delete Violation Record',
+        message:"Delete this violation record? This can't be undone.",
+        confirmLabel:'Delete',
+        onConfirm: async ()=>{
+          await mutateShared('ledger', latest=>latest.filter(v=>v.id!==id));
+          showToast('Record deleted');
+        }
+      });
     };
   });
 }
@@ -1007,11 +1075,17 @@ export function attachViolationWorkflowEvents(){
     };
   });
   document.querySelectorAll('[data-decline-violation]').forEach(b=>{
-    b.onclick = async ()=>{
-      if(!confirm('Decline and remove this submitted violation?')) return;
-      await mutateShared('ledger', latest=>latest.filter(v=>v.id!==b.dataset.declineViolation));
-      showToast('Violation declined');
-      render();
+    b.onclick = ()=>{
+      const id = b.dataset.declineViolation;
+      openConfirm({
+        title:'Decline Violation',
+        message:'Decline and remove this submitted violation? This can\'t be undone.',
+        confirmLabel:'Decline',
+        onConfirm: async ()=>{
+          await mutateShared('ledger', latest=>latest.filter(v=>v.id!==id));
+          showToast('Violation declined');
+        }
+      });
     };
   });
   document.querySelectorAll('[data-request-resolve]').forEach(b=>{
@@ -1124,18 +1198,22 @@ export function attachAccountsEvents(){
     };
   });
   document.querySelectorAll('[data-del-account]').forEach(b=>{
-    b.onclick = async ()=>{
+    b.onclick = ()=>{
       const target = state.accounts.find(a=>a.id===b.dataset.delAccount);
-      if(!confirm(`Remove the account for "${target.name}"?`)) return;
-      let blocked = false;
-      await mutateShared('accounts', latest=>{
-        const mayorCount = latest.filter(a=>a.role==='mayor').length;
-        if(target.role==='mayor' && mayorCount<=1){ blocked=true; return latest; }
-        return latest.filter(a=>a.id!==target.id);
+      openConfirm({
+        title:'Remove Account',
+        message:`Remove the account for "${target.name}"?`,
+        confirmLabel:'Remove',
+        onConfirm: async ()=>{
+          let blocked = false;
+          await mutateShared('accounts', latest=>{
+            const mayorCount = latest.filter(a=>a.role==='mayor').length;
+            if(target.role==='mayor' && mayorCount<=1){ blocked=true; return latest; }
+            return latest.filter(a=>a.id!==target.id);
+          });
+          showToast(blocked ? "Can't remove the only Mayor account" : 'Account removed');
+        }
       });
-      if(blocked){ showToast("Can't remove the only Mayor account"); return; }
-      showToast('Account removed');
-      render();
     };
   });
 }
@@ -1352,6 +1430,34 @@ export function renderModal(){
         <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
         <button class="btn-primary" id="modalSave">Update Password</button>
       </div>`;
+  } else if(state.modal.type==='confirm'){
+    const d = state.modal.data;
+    inner = `
+      <button class="close-x" id="modalClose">✕</button>
+      <h2 class="section-title">${escapeHtml(d.title||'Are you sure?')}</h2>
+      <p style="color:var(--ink-soft);font-size:13.5px;line-height:1.55;margin:0 0 20px;">${escapeHtml(d.message||'')}</p>
+      <div class="modal-actions">
+        <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
+        <button class="btn-primary${d.danger===false?'':' danger'}" id="modalSave">${escapeHtml(d.confirmLabel||'Confirm')}</button>
+      </div>`;
+  } else if(state.modal.type==='csvImport'){
+    const d = state.modal.data;
+    inner = `
+      <button class="close-x" id="modalClose">✕</button>
+      <h2 class="section-title">${ICON.users}Import Students</h2>
+      <p class="subtext" style="margin-bottom:14px;">${d.rows.length} student${d.rows.length===1?'':'s'} found. Uncheck any you don't want to add.</p>
+      <div class="inspect-list" style="max-height:340px;overflow-y:auto;">
+        ${d.rows.map((r,i)=>`
+          <label class="list-item" style="cursor:pointer;">
+            <input type="checkbox" data-csv-row="${i}" checked style="width:18px;height:18px;flex-shrink:0;">
+            <div class="li-main"><b>${escapeHtml(r.name)}</b>${r.section?`<span>${escapeHtml(r.section)}</span>`:''}</div>
+          </label>
+        `).join('')}
+      </div>
+      <div class="modal-actions">
+        <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
+        <button class="btn-primary" id="modalSave">Import Selected</button>
+      </div>`;
   }
   back.innerHTML = `<div class="modal">${inner}</div>`;
   document.getElementById('root').appendChild(back);
@@ -1418,9 +1524,36 @@ export function renderModal(){
   }
 }
 export function closeModal(){ state.modal=null; render(); }
+export function openConfirm({title, message, confirmLabel, danger=true, onConfirm}){
+  state.modal = {type:'confirm', data:{title, message, confirmLabel, danger, onConfirm}};
+  render();
+}
 export async function saveModal(){
   const type = state.modal.type;
   const d = state.modal.data;
+  if(type==='confirm'){
+    const onConfirm = d.onConfirm;
+    state.modal = null;
+    if(onConfirm) await onConfirm();
+    render();
+    return;
+  }
+  if(type==='csvImport'){
+    const checked = Array.from(document.querySelectorAll('[data-csv-row]'))
+      .filter(cb=>cb.checked)
+      .map(cb=>parseInt(cb.dataset.csvRow,10));
+    const toAdd = checked.map(i=>d.rows[i]).filter(Boolean);
+    state.modal = null;
+    if(toAdd.length===0){ showToast('No students selected'); render(); return; }
+    await mutateShared('roster', latest=>{
+      const now = Date.now();
+      toAdd.forEach((r,i)=> latest.push({id:'st_'+now+'_'+i, name:r.name, section:r.section||'', photo:null}));
+      return latest;
+    });
+    showToast(`${toAdd.length} student${toAdd.length===1?'':'s'} imported`);
+    render();
+    return;
+  }
   if(type==='studentHistory' || type==='finesBreakdown'){
     state.modal = null;
     render();

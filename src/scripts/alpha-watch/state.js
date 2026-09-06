@@ -4,7 +4,8 @@
 import { REPEAT_OFFENSE_FINE, offenseSanctionLabel, DEFAULT_STANDARD } from './constants.js';
 
 export const state = {
-  screen:'loading', // loading | setup | gate | app | public
+  screen:'loading', // loading | load-error | setup | gate | app | public
+  onRetryLoad:null, // set by main.js so router.js's retry button can re-run init() without a circular import
   tab:'dashboard',
   session:null, // {name, role, username, accountId}
   roster:[],

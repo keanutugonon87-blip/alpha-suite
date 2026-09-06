@@ -5,9 +5,22 @@
 import { state } from './state.js';
 import { DEFAULT_STANDARD } from './constants.js';
 import { render } from './router.js';
-import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw } from './sync.js';
+import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js';
+
+let liveSyncStarted = false;
 
 async function init(){
+  state.screen = 'loading';
+  render();
+
+  const online = await checkConnectivity();
+  if(!online){
+    state.screen = 'load-error';
+    state.onRetryLoad = init;
+    render();
+    return;
+  }
+
   const [roster, standard, ledger, accounts, session] = await Promise.all([
     loadShared('roster', []),
     loadShared('standard', DEFAULT_STANDARD),
@@ -26,8 +39,11 @@ async function init(){
     accounts: JSON.stringify(state.accounts),
   });
   if(!standard || !standard.length) await saveShared('standard', DEFAULT_STANDARD);
-  subscribeRealtime();
-  startSyncPolling();
+  if(!liveSyncStarted){
+    liveSyncStarted = true;
+    subscribeRealtime();
+    startSyncPolling();
+  }
 
   if(!accounts || accounts.length===0){
     state.screen = 'setup';

@@ -101,3 +101,21 @@ export function startSyncPolling(){
 
 export function setLastSyncedRaw(obj) { lastSyncedRaw = obj; }
 export { showToastSafe };
+
+// A quick reachability probe before the real load — loadShared() silently
+// falls back to an empty default on any error (by design, so a save
+// failure mid-session doesn't crash the app), which means a genuine
+// connectivity problem at boot would otherwise look identical to "this is
+// a brand new class with no data yet". Checking first lets main.js show a
+// clear "couldn't connect" screen instead of a misleadingly empty app.
+export async function checkConnectivity(){
+  try{
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 6000);
+    await fetch(SUPABASE_URL + '/rest/v1/', { headers: { apikey: SUPABASE_ANON_KEY }, signal: ctrl.signal });
+    clearTimeout(timer);
+    return true; // reaching the server at all (even a 4xx) counts as "online"
+  }catch(e){
+    return false;
+  }
+}

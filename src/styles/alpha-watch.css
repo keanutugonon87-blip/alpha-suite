@@ -135,6 +135,11 @@
   }
   .btn-primary svg{width:15px;height:15px;flex-shrink:0;}
   .btn-primary:disabled{opacity:0.45;cursor:not-allowed;box-shadow:none;}
+  .btn-primary.danger{
+    background:linear-gradient(120deg,#8a2323,var(--danger));
+    box-shadow:0 8px 20px rgba(194,59,59,0.35);
+  }
+  .btn-primary.danger:hover:not(:disabled){box-shadow:0 10px 26px rgba(194,59,59,0.42);}
   .gate-note{font-size:11px;color:var(--ink-soft);margin-top:14px;line-height:1.5;}
 
   /* ---------- Public standing board ---------- */

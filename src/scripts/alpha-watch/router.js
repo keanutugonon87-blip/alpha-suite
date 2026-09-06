@@ -17,6 +17,16 @@ export function render(){
     </div>`;
     return;
   }
+  if(state.screen==='load-error'){
+    root.innerHTML = `<div class="loading">
+      <div class="loading-crest">${ICON.wolf}</div>
+      <span>Couldn't connect. Check your connection and try again.</span>
+      <button class="btn-sm gold" id="retryLoadBtn" style="margin-top:14px;">${ICON.refresh||''}Retry</button>
+    </div>`;
+    const retryBtn = document.getElementById('retryLoadBtn');
+    if(retryBtn) retryBtn.onclick = () => state.onRetryLoad && state.onRetryLoad();
+    return;
+  }
   if(state.screen==='setup'){ root.innerHTML = setupHTML(); attachSetupEvents(); return; }
   if(state.screen==='gate'){ root.innerHTML = gateHTML(); attachGateEvents(); return; }
   if(state.screen==='public'){ root.innerHTML = publicHTML(); attachPublicEvents(); return; }
