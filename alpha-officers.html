@@ -45,43 +45,53 @@
   /* ============ Leadership hero banner ============ */
   .leader-hero{
     background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
-    box-shadow:var(--shadow); padding:36px 32px 0; margin-bottom:40px; overflow:hidden;
+    box-shadow:var(--shadow); padding:40px 32px 0; margin-bottom:40px; overflow:hidden;
   }
-  .leader-hero-grid{
-    display:grid; grid-template-columns:1.1fr 1fr; gap:36px; align-items:center;
-    padding-bottom:30px;
-  }
+  .leader-hero-copy{ text-align:center; max-width:560px; margin:0 auto; }
   .leader-hero-copy h2{
-    font-family:'Cinzel',serif; color:var(--navy-950); font-size:26px; line-height:1.35;
+    font-family:'Cinzel',serif; color:var(--navy-950); font-size:27px; line-height:1.35;
     margin:0 0 14px;
   }
   .leader-hero-copy h2 .accent{ color:var(--gold-dim); }
-  .leader-hero-copy p{ color:var(--ink-soft); font-size:13.5px; line-height:1.6; margin:0 0 20px; max-width:42ch; }
-  .hero-cta{ font-size:13px; padding:11px 20px; }
+  .leader-hero-copy p{ color:var(--ink-soft); font-size:13.5px; line-height:1.6; margin:0 auto 20px; max-width:42ch; }
+  .hero-cta{ font-size:13px; padding:11px 22px; border-radius:30px; }
   .hero-cta svg{ width:14px; height:14px; }
 
-  .leader-hero-art{ position:relative; display:flex; align-items:center; justify-content:center; min-height:150px; }
-  .placeholder-tag{
-    position:absolute; top:-6px; left:50%; transform:translateX(-50%);
-    font-size:9.5px; letter-spacing:.5px; color:#8a7b52; background:rgba(240,180,41,0.14);
-    border:1px dashed var(--gold-dim); border-radius:20px; padding:3px 10px; white-space:nowrap; z-index:2;
+  /* ---- standing-figure lineup, large and centered like a real group photo ---- */
+  .leader-hero-art{
+    position:relative; display:flex; align-items:flex-end; justify-content:center;
+    min-height:170px; margin-top:28px; z-index:1;
   }
-  .silhouette-group{ display:flex; align-items:flex-end; justify-content:center; flex-wrap:nowrap; }
-  .silhouette-person{
+  .placeholder-tag{
+    position:absolute; top:-2px; left:50%; transform:translateX(-50%);
+    font-size:9.5px; letter-spacing:.5px; color:#8a7b52; background:rgba(240,180,41,0.14);
+    border:1px dashed var(--gold-dim); border-radius:20px; padding:3px 10px; white-space:nowrap; z-index:3;
+  }
+  .figure-lineup{ display:flex; align-items:flex-end; justify-content:center; flex-wrap:nowrap; padding-top:26px; }
+  .figure{ display:flex; flex-direction:column; align-items:center; flex-shrink:0; }
+  .figure-head{
     position:relative; border-radius:50%; overflow:hidden; flex-shrink:0;
     background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
     border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
-    color:var(--gold); box-shadow:0 4px 10px rgba(0,0,0,0.15);
-    transition:width .3s ease, height .3s ease;
+    color:var(--gold); box-shadow:0 3px 8px rgba(0,0,0,0.18); z-index:2;
   }
-  .silhouette-person:first-child{ margin-left:0 !important; }
-  .silhouette-person img{ width:100%; height:100%; object-fit:cover; display:block; }
-  .silhouette-person .fallback{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
-  .silhouette-person .fallback svg{ width:52%; height:52%; }
+  .figure-head img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .figure-head .fallback{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .figure-head .fallback svg{ width:52%; height:52%; }
+  .figure-body{
+    margin-top:-10px; border-radius:50% 50% 0 0;
+    background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
+    border:2px solid var(--gold); border-bottom:none;
+    box-shadow:0 3px 8px rgba(0,0,0,0.14); z-index:1;
+  }
 
+  /* the stats bar sits above/over the lineup's lower edge, like the
+     reference photo being cropped by the stat strip beneath it */
   .leader-stats{
+    position:relative; z-index:2; background:var(--paper);
     display:flex; align-items:center; justify-content:center; gap:26px;
     border-top:1px solid var(--line); padding:18px 0; flex-wrap:wrap;
+    margin-top:-22px;
   }
   .stat{ text-align:center; }
   .stat b{ display:block; font-family:'Cinzel',serif; font-size:22px; color:var(--gold-dim); line-height:1.1; }
@@ -89,10 +99,7 @@
   .stat-divider{ width:1px; height:32px; background:var(--line); }
 
   @media (max-width:700px){
-    .leader-hero-grid{ grid-template-columns:1fr; text-align:center; }
-    .leader-hero-copy p{ margin-left:auto; margin-right:auto; }
-    .leader-hero-art{ order:-1; min-height:120px; }
-    .silhouette-group{ transform:scale(0.82); }
+    .figure-lineup{ transform:scale(0.78); transform-origin:bottom center; }
   }
 
   .hero-head{ text-align:center; margin-bottom:8px; }
@@ -511,6 +518,19 @@ function showToast(msg){
 }
 
 const FALLBACK_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:100%;height:100%;"><path d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12zm0 2.2c-3.3 0-9.8 1.6-9.8 4.9V21h19.6v-1.9c0-3.3-6.5-4.9-9.8-4.9z"/></svg>`;
+// Head only (no shoulders) — used in the hero figure lineup where the
+// body silhouette is drawn as its own separate shape underneath.
+const HEAD_ONLY_SVG = `<svg viewBox="0 0 24 24" fill="currentColor" style="width:100%;height:100%;"><circle cx="12" cy="10" r="5.3"/></svg>`;
+
+function headOnlyInner(officer){
+  if(officer && officer.photo){
+    const posX = officer.photoPosX ?? 50;
+    const posY = officer.photoPosY ?? 50;
+    const alt = officer.name ? `Photo of ${officer.name}` : 'Officer photo';
+    return `<img src="${officer.photo}" alt="${escapeHtml(alt)}" style="object-position:${posX}% ${posY}%;">`;
+  }
+  return `<div class="fallback">${HEAD_ONLY_SVG}</div>`;
+}
 
 function avatarInner(officer){
   if(officer && officer.photo){
@@ -676,28 +696,32 @@ function renderDirectory(app){
 
   app.innerHTML = `
     <section class="leader-hero">
-      <div class="leader-hero-grid">
-        <div class="leader-hero-copy">
-          <h2>Charting the Course.<br>Leading <span class="accent">BSMT 1-Alpha</span> Forward.</h2>
-          <p>At the helm of Batch 28, our officers steer daily operations, uphold our standards, and keep the class moving forward together.</p>
-          <button class="btn btn-gold hero-cta" id="scrollToOfficersBtn">Meet the Team ${ICONS.down || ''}</button>
-        </div>
-        <div class="leader-hero-art">
-          <span class="placeholder-tag">Placeholder — auto-built from officer photos</span>
-          <div class="silhouette-group">
-            ${(() => {
-              const lineup = arrangeCenterOut(sortedOfficers.length ? sortedOfficers : [{name:'', position:'', photo:''}]);
-              const n = lineup.length;
-              const centerIdx = Math.floor((n - 1) / 2);
-              return lineup.map((o, i) => {
-                const dist = Math.abs(i - centerIdx);
-                const size = Math.max(42, 90 - dist * 12);
-                const z = n - dist;
-                const overlap = i === 0 ? 0 : -Math.round(size * 0.28);
-                return `<div class="silhouette-person" style="width:${size}px;height:${size}px;z-index:${z};margin-left:${overlap}px;" title="${escapeHtml(o.name || '')}">${avatarInner(o)}</div>`;
-              }).join('');
-            })()}
-          </div>
+      <div class="leader-hero-copy">
+        <h2>Charting the Course.<br>Leading <span class="accent">BSMT 1-Alpha</span> Forward.</h2>
+        <p>At the helm of Batch 28, our officers steer daily operations, uphold our standards, and keep the class moving forward together.</p>
+        <button class="btn btn-gold hero-cta" id="scrollToOfficersBtn">Meet the Team ${ICONS.down || ''}</button>
+      </div>
+      <div class="leader-hero-art">
+        <span class="placeholder-tag">Placeholder — auto-built from officer photos</span>
+        <div class="figure-lineup">
+          ${(() => {
+            const lineup = arrangeCenterOut(sortedOfficers.length ? sortedOfficers : [{name:'', position:'', photo:''}]);
+            const n = lineup.length;
+            const centerIdx = Math.floor((n - 1) / 2);
+            return lineup.map((o, i) => {
+              const dist = Math.abs(i - centerIdx);
+              const headSize = Math.max(34, 60 - dist * 7);
+              const bodyWidth = Math.round(headSize * 1.7);
+              const bodyHeight = Math.round(headSize * 1.55);
+              const z = n - dist;
+              const overlap = i === 0 ? 0 : -Math.round(bodyWidth * 0.32);
+              return `
+                <div class="figure" style="z-index:${z};margin-left:${overlap}px;" title="${escapeHtml(o.name || '')}">
+                  <div class="figure-head" style="width:${headSize}px;height:${headSize}px;">${headOnlyInner(o)}</div>
+                  <div class="figure-body" style="width:${bodyWidth}px;height:${bodyHeight}px;"></div>
+                </div>`;
+            }).join('');
+          })()}
         </div>
       </div>
       <div class="leader-stats">
