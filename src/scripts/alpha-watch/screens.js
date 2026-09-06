@@ -189,13 +189,73 @@ export function publicHTML(){
     .map(s=>{
       const history = getStudentOffenseTimeline(s.id).filter(v=>v.status!=='awaiting_approval');
       const items = history.filter(v=>PUBLIC_OUTSTANDING_STATUSES.includes(v.status));
-      return { ...s, items, history };
+      const maxOffense = history.reduce((m,v)=> Math.max(m, v.offenseNumber||0), 0);
+      // Tier reflects the worst offense ever reached — permanent, doesn't
+      // improve even once a fine is paid/resolved or a violation waived.
+      const tier = maxOffense===0 ? 1 : maxOffense===1 ? 2 : 3;
+      return { ...s, items, history, tier };
     });
   const withOutstanding = withItems.filter(s=>s.items.length>0).length;
   const clear = totalStudents - withOutstanding;
-  const rows = withItems
+  const filtered = withItems
     .filter(s=> !q || s.name.toLowerCase().includes(q) || (s.section||'').toLowerCase().includes(q))
     .sort((a,b)=> (b.items.length - a.items.length) || (b.history.length - a.history.length) || a.name.localeCompare(b.name));
+
+  const TIERS = [
+    {n:1, heading:'Clear — Mabait na Bata', emoji:'😇', cls:'tier-clear'},
+    {n:2, heading:'Magiging Good Student Na', emoji:'😅', cls:'tier-warn'},
+    {n:3, heading:'Aray Mo', emoji:'😖', cls:'tier-danger'},
+  ];
+
+  function studentRowHTML(s){
+    const hasItems = s.items.length>0;
+    const hasHistory = s.history.length>0;
+    const fine = getStudentTotalFines(s.id);
+    const summaryRow = `
+        <div class="list-item" style="pointer-events:none;">
+          ${avatarHTML(s)}
+          <div class="li-main">
+            <b>${escapeHtml(s.name)}</b>
+            <span>${escapeHtml(s.section||'—')}${fine>0?` · ${formatPeso(fine)} total fines`:''}</span>
+          </div>
+          <span class="status-chip ${hasItems?'pending':'resolved'}">${hasItems?ICON.clock:ICON.check}${hasItems? s.items.length+' pending' : 'clear'}</span>
+        </div>`;
+    const historyHTML = `
+        <div class="public-detail">
+          ${s.history.slice().reverse().map(v=>{
+            const cat = state.standard.find(c=>c.id===v.categoryId);
+            return `<div class="public-detail-row">
+              <div class="pd-top">
+                ${statusChipHTML(v)}
+                <span class="pd-date">${formatDateTime(v.date, v.time)}</span>
+              </div>
+              <span class="pd-check">${escapeHtml(cat?cat.title:'Unknown checkpoint')}</span>
+              <span class="pd-sanction">${escapeHtml(getViolationSanction(v))}</span>
+            </div>`;
+          }).join('')}
+        </div>`;
+    // Students with zero official violations ever stay a plain, non-expandable
+    // "clear" row — no caret, nothing to drill into.
+    if(!hasHistory) return `<div class="public-row public-row-flat">${summaryRow}</div>`;
+    return `
+    <details class="public-row">
+      <summary>${summaryRow}</summary>
+      ${historyHTML}
+    </details>`;
+  }
+
+  const sectionsHTML = TIERS.map(t=>{
+    const group = filtered.filter(s=>s.tier===t.n);
+    if(group.length===0) return '';
+    return `
+      <div class="tier-heading ${t.cls}">
+        <span>${t.emoji} ${escapeHtml(t.heading)}</span>
+        <span class="tier-count">${group.length}</span>
+      </div>
+      <div class="card" style="max-width:680px;margin:0 auto 22px;">
+        ${group.map(studentRowHTML).join('')}
+      </div>`;
+  }).join('');
 
   return `
   <div class="public-wrap">
@@ -216,46 +276,7 @@ export function publicHTML(){
       ${ICON.search}<input id="publicSearch" placeholder="Search name or section…" value="${escapeHtml(state.search||'')}"/>
     </div>
 
-    <div class="card" style="max-width:680px;margin:0 auto;">
-      ${rows.length===0? emptyState('No students found','Try a different search.', ICON.users) :
-        rows.map(s=>{
-          const hasItems = s.items.length>0;
-          const hasHistory = s.history.length>0;
-          const fine = getStudentTotalFines(s.id);
-          const summaryRow = `
-              <div class="list-item" style="pointer-events:none;">
-                ${avatarHTML(s)}
-                <div class="li-main">
-                  <b>${escapeHtml(s.name)}</b>
-                  <span>${escapeHtml(s.section||'—')}${fine>0?` · ${formatPeso(fine)} total fines`:''}</span>
-                </div>
-                <span class="status-chip ${hasItems?'pending':'resolved'}">${hasItems?ICON.clock:ICON.check}${hasItems? s.items.length+' pending' : 'clear'}</span>
-              </div>`;
-          const historyHTML = `
-              <div class="public-detail">
-                ${s.history.slice().reverse().map(v=>{
-                  const cat = state.standard.find(c=>c.id===v.categoryId);
-                  return `<div class="public-detail-row">
-                    <div class="pd-top">
-                      ${statusChipHTML(v)}
-                      <span class="pd-date">${formatDateTime(v.date, v.time)}</span>
-                    </div>
-                    <span class="pd-check">${escapeHtml(cat?cat.title:'Unknown checkpoint')}</span>
-                    <span class="pd-sanction">${escapeHtml(getViolationSanction(v))}</span>
-                  </div>`;
-                }).join('')}
-              </div>`;
-          // Students with zero official violations ever stay a plain, non-expandable
-          // "clear" row — no caret, nothing to drill into.
-          if(!hasHistory) return `<div class="public-row public-row-flat">${summaryRow}</div>`;
-          return `
-          <details class="public-row">
-            <summary>${summaryRow}</summary>
-            ${historyHTML}
-          </details>`;
-        }).join('')
-      }
-    </div>
+    ${filtered.length===0 ? `<div class="card" style="max-width:680px;margin:0 auto;">${emptyState('No students found','Try a different search.', ICON.users)}</div>` : sectionsHTML}
 
     <div style="text-align:center;margin-top:20px;">
       <button class="btn-sm ghost" id="publicBackBtn">${ICON.key}Officer Sign In</button>
