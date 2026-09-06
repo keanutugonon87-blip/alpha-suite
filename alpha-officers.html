@@ -42,6 +42,61 @@
 
   main{ max-width:1080px; margin:0 auto; padding:36px 20px 80px; }
 
+  /* ============ Leadership hero banner ============ */
+  .leader-hero{
+    background:var(--paper); border:1px solid var(--line); border-radius:var(--radius);
+    box-shadow:var(--shadow); padding:36px 32px 0; margin-bottom:40px; overflow:hidden;
+  }
+  .leader-hero-grid{
+    display:grid; grid-template-columns:1.1fr 1fr; gap:36px; align-items:center;
+    padding-bottom:30px;
+  }
+  .leader-hero-copy h2{
+    font-family:'Cinzel',serif; color:var(--navy-950); font-size:26px; line-height:1.35;
+    margin:0 0 14px;
+  }
+  .leader-hero-copy h2 .accent{ color:var(--gold-dim); }
+  .leader-hero-copy p{ color:var(--ink-soft); font-size:13.5px; line-height:1.6; margin:0 0 20px; max-width:42ch; }
+  .hero-cta{ font-size:13px; padding:11px 20px; }
+  .hero-cta svg{ width:14px; height:14px; }
+
+  .leader-hero-art{ position:relative; display:flex; align-items:center; justify-content:center; min-height:150px; }
+  .placeholder-tag{
+    position:absolute; top:-6px; left:50%; transform:translateX(-50%);
+    font-size:9.5px; letter-spacing:.5px; color:#8a7b52; background:rgba(240,180,41,0.14);
+    border:1px dashed var(--gold-dim); border-radius:20px; padding:3px 10px; white-space:nowrap; z-index:2;
+  }
+  .silhouette-group{ display:flex; align-items:flex-end; justify-content:center; }
+  .silhouette-person{
+    width:64px; height:64px; border-radius:50%; flex-shrink:0;
+    background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
+    border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
+    color:var(--gold); margin-left:-16px; box-shadow:0 4px 10px rgba(0,0,0,0.15);
+  }
+  .silhouette-person svg{ width:52%; height:52%; }
+  .silhouette-person:first-child{ margin-left:0; }
+  .silhouette-person.p3{ width:88px; height:88px; z-index:2; }
+  .silhouette-person.p2, .silhouette-person.p4{ width:74px; height:74px; z-index:1; margin-bottom:-4px; }
+  .silhouette-person.p1, .silhouette-person.p5{ margin-bottom:-10px; opacity:.9; }
+
+  .leader-stats{
+    display:flex; align-items:center; justify-content:center; gap:26px;
+    border-top:1px solid var(--line); padding:18px 0; flex-wrap:wrap;
+  }
+  .stat{ text-align:center; }
+  .stat b{ display:block; font-family:'Cinzel',serif; font-size:22px; color:var(--gold-dim); line-height:1.1; }
+  .stat span{ display:block; font-size:10px; letter-spacing:1.2px; text-transform:uppercase; color:var(--ink-soft); margin-top:4px; }
+  .stat-divider{ width:1px; height:32px; background:var(--line); }
+
+  @media (max-width:700px){
+    .leader-hero-grid{ grid-template-columns:1fr; text-align:center; }
+    .leader-hero-copy p{ margin-left:auto; margin-right:auto; }
+    .leader-hero-art{ order:-1; min-height:120px; }
+    .silhouette-person{ width:52px; height:52px; }
+    .silhouette-person.p3{ width:70px; height:70px; }
+    .silhouette-person.p2, .silhouette-person.p4{ width:60px; height:60px; }
+  }
+
   .hero-head{ text-align:center; margin-bottom:8px; }
   .hero-head .crest{ width:76px; height:76px; margin:0 auto 12px; }
   .hero-head .crest img{ width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 4px 14px rgba(15,15,74,0.25)); }
@@ -608,7 +663,29 @@ function renderDirectory(app){
     </div>` : '';
 
   app.innerHTML = `
-    <div class="hero-head">
+    <section class="leader-hero">
+      <div class="leader-hero-grid">
+        <div class="leader-hero-copy">
+          <h2>Charting the Course.<br>Leading <span class="accent">BSMT 1-Alpha</span> Forward.</h2>
+          <p>At the helm of Batch 28, our officers steer daily operations, uphold our standards, and keep the class moving forward together.</p>
+          <button class="btn btn-gold hero-cta" id="scrollToOfficersBtn">Meet the Team ${ICONS.down || ''}</button>
+        </div>
+        <div class="leader-hero-art">
+          <span class="placeholder-tag">Placeholder — swap in a real group photo</span>
+          <div class="silhouette-group">
+            ${[1,2,3,4,5].map(i => `<div class="silhouette-person p${i}">${FALLBACK_SVG}</div>`).join('')}
+          </div>
+        </div>
+      </div>
+      <div class="leader-stats">
+        <div class="stat"><b>9</b><span>Officers</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><b>28</b><span>Batch</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat"><b>BSMT</b><span>1-Alpha</span></div>
+      </div>
+    </section>
+    <div class="hero-head" id="officersSectionAnchor">
       <div class="crest"><img src="assets/wolf-crest.png" alt="Alpha logo"></div>
       <h1>MEET THE OFFICERS</h1>
       <div class="rule"></div>
@@ -617,6 +694,11 @@ function renderDirectory(app){
     <div class="grid">${cards}${addTile}</div>
     <footer class="tag">Batch 28 &middot; Palompon Institute of Technology</footer>
   `;
+
+  const scrollBtn = document.getElementById('scrollToOfficersBtn');
+  if(scrollBtn) scrollBtn.onclick = () => {
+    document.getElementById('officersSectionAnchor').scrollIntoView({behavior:'smooth', block:'start'});
+  };
 
   app.querySelectorAll('[data-toggle]').forEach(el => {
     el.addEventListener('click', () => toggleCredentials(el.dataset.toggle));
