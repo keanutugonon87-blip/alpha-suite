@@ -66,18 +66,18 @@
     font-size:9.5px; letter-spacing:.5px; color:#8a7b52; background:rgba(240,180,41,0.14);
     border:1px dashed var(--gold-dim); border-radius:20px; padding:3px 10px; white-space:nowrap; z-index:2;
   }
-  .silhouette-group{ display:flex; align-items:flex-end; justify-content:center; }
+  .silhouette-group{ display:flex; align-items:flex-end; justify-content:center; flex-wrap:nowrap; }
   .silhouette-person{
-    width:64px; height:64px; border-radius:50%; flex-shrink:0;
+    position:relative; border-radius:50%; overflow:hidden; flex-shrink:0;
     background:linear-gradient(160deg,var(--navy-800),var(--navy-950));
     border:2px solid var(--gold); display:flex; align-items:center; justify-content:center;
-    color:var(--gold); margin-left:-16px; box-shadow:0 4px 10px rgba(0,0,0,0.15);
+    color:var(--gold); box-shadow:0 4px 10px rgba(0,0,0,0.15);
+    transition:width .3s ease, height .3s ease;
   }
-  .silhouette-person svg{ width:52%; height:52%; }
-  .silhouette-person:first-child{ margin-left:0; }
-  .silhouette-person.p3{ width:88px; height:88px; z-index:2; }
-  .silhouette-person.p2, .silhouette-person.p4{ width:74px; height:74px; z-index:1; margin-bottom:-4px; }
-  .silhouette-person.p1, .silhouette-person.p5{ margin-bottom:-10px; opacity:.9; }
+  .silhouette-person:first-child{ margin-left:0 !important; }
+  .silhouette-person img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .silhouette-person .fallback{ width:100%; height:100%; display:flex; align-items:center; justify-content:center; }
+  .silhouette-person .fallback svg{ width:52%; height:52%; }
 
   .leader-stats{
     display:flex; align-items:center; justify-content:center; gap:26px;
@@ -92,9 +92,7 @@
     .leader-hero-grid{ grid-template-columns:1fr; text-align:center; }
     .leader-hero-copy p{ margin-left:auto; margin-right:auto; }
     .leader-hero-art{ order:-1; min-height:120px; }
-    .silhouette-person{ width:52px; height:52px; }
-    .silhouette-person.p3{ width:70px; height:70px; }
-    .silhouette-person.p2, .silhouette-person.p4{ width:60px; height:60px; }
+    .silhouette-group{ transform:scale(0.82); }
   }
 
   .hero-head{ text-align:center; margin-bottom:8px; }
@@ -549,6 +547,20 @@ function rankChevrons(position){
   return 1;
 }
 
+// Arranges a rank-sorted list so the highest-ranked (e.g. Mayor) lands in
+// the middle of the lineup, alternating the rest outward left/right —
+// mimicking a "leader front and center" group photo composition.
+function arrangeCenterOut(sortedArr){
+  const result = [];
+  let placeLeft = true;
+  sortedArr.forEach((item, i) => {
+    if(i === 0){ result.push(item); return; }
+    if(placeLeft) result.unshift(item); else result.push(item);
+    placeLeft = !placeLeft;
+  });
+  return result;
+}
+
 /* ============ Rendering ============ */
 
 function render(){
@@ -671,9 +683,20 @@ function renderDirectory(app){
           <button class="btn btn-gold hero-cta" id="scrollToOfficersBtn">Meet the Team ${ICONS.down || ''}</button>
         </div>
         <div class="leader-hero-art">
-          <span class="placeholder-tag">Placeholder — swap in a real group photo</span>
+          <span class="placeholder-tag">Placeholder — auto-built from officer photos</span>
           <div class="silhouette-group">
-            ${[1,2,3,4,5].map(i => `<div class="silhouette-person p${i}">${FALLBACK_SVG}</div>`).join('')}
+            ${(() => {
+              const lineup = arrangeCenterOut(sortedOfficers.length ? sortedOfficers : [{name:'', position:'', photo:''}]);
+              const n = lineup.length;
+              const centerIdx = Math.floor((n - 1) / 2);
+              return lineup.map((o, i) => {
+                const dist = Math.abs(i - centerIdx);
+                const size = Math.max(42, 90 - dist * 12);
+                const z = n - dist;
+                const overlap = i === 0 ? 0 : -Math.round(size * 0.28);
+                return `<div class="silhouette-person" style="width:${size}px;height:${size}px;z-index:${z};margin-left:${overlap}px;" title="${escapeHtml(o.name || '')}">${avatarInner(o)}</div>`;
+              }).join('');
+            })()}
           </div>
         </div>
       </div>
