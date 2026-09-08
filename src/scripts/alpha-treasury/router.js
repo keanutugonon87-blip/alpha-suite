@@ -8,13 +8,23 @@
    runtime once the whole module graph has finished loading. */
 import { ICONS as ICON } from '../shared/icons.js';
 import { state } from './state.js';
+import { MAINTENANCE_MODE } from './constants.js';
 import { setupHTML, attachSetupEvents, gateHTML, attachGateEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js';
 
 export function render() {
   const root = document.getElementById('root');
+  if (MAINTENANCE_MODE) {
+    root.innerHTML = `<div class="loading">
+      <div class="loading-crest"><img src="assets/wolf-crest.png" alt="Alpha Suite crest" style="width:100%;height:100%;object-fit:contain;"/></div>
+      <span style="font-family:'Cinzel',serif;font-weight:700;font-size:1.05rem;letter-spacing:.04em;">ALPHA TREASURY</span>
+      <span>Temporarily closed for maintenance.</span>
+      <span style="opacity:.7;font-size:.85rem;">We'll be back soon — thanks for your patience.</span>
+    </div>`;
+    return;
+  }
   if (state.screen === 'loading') {
     root.innerHTML = `<div class="loading">
-      <div class="loading-crest">${ICON.chest}</div>
+      <div class="loading-crest"><img src="assets/wolf-crest.png" alt="Alpha Suite crest" style="width:100%;height:100%;object-fit:contain;"/></div>
       <div class="loading-ring"></div>
       <span>Loading ALPHA TREASURY…</span>
     </div>`;
