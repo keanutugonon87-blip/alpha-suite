@@ -7,8 +7,9 @@ import { ICONS as ICON } from '../shared/icons.js';
 import {
   state, loginLockout,
   approvedOf, totalCollections, totalExpenses, currentBalance, pendingCount, unverifiedApprovedCount,
-  getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus,
-  getExpenseGroups, GENERAL_PURPOSE_LABEL, purposeLabelOf,
+  getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus, getStudentPeriodHistory,
+  getExpenseGroups, groupExpensesByPurpose, GENERAL_PURPOSE_LABEL, purposeLabelOf,
+  buildPeriodPreview, buildClosedPeriodRecord,
 } from './state.js';
 import {
   COLLECTION_CATEGORIES, EXPENSE_CATEGORIES, ROLES, roleLabel,
@@ -134,6 +135,7 @@ export function publicHTML(){
   let body;
   if(tab==='liquidation') body = liquidationReportHTML(false);
   else if(tab==='contributions') body = publicContributionsHTML();
+  else if(tab==='periods') body = periodsHTML(false);
   else body = publicOverviewHTML();
 
   return `
@@ -149,6 +151,7 @@ export function publicHTML(){
       <button type="button" data-public-tab="overview" class="${tab==='overview'?'sel':''}">${ICON.chest}Overview</button>
       <button type="button" data-public-tab="liquidation" class="${tab==='liquidation'?'sel':''}">${ICON.checklist}Liquidation Report</button>
       <button type="button" data-public-tab="contributions" class="${tab==='contributions'?'sel':''}">${ICON.users}Contributions</button>
+      <button type="button" data-public-tab="periods" class="${tab==='periods'?'sel':''}">${ICON.clipboard}Past Periods</button>
     </div>
 
     <div style="max-width:680px;margin:0 auto;">${body}</div>
@@ -221,13 +224,22 @@ export function publicContributionsHTML(){
                     </div>
                     <span class="pd-sanction">${formatPeso(t.amount)}${t.note?` — ${escapeHtml(t.note)}`:''}</span>
                   </div>`).join('')}
-              </div>` : ''
+                <button type="button" class="btn-sm ghost" data-student-history="${s.id}" style="margin-top:8px;">${ICON.clipboard}View Full History</button>
+              </div>` : `
+              <div class="public-detail">
+                <button type="button" class="btn-sm ghost" data-student-history="${s.id}">${ICON.clipboard}View Full History</button>
+              </div>`
             }
           </details>`;
         }).join('')
       }
     </div>
   `;
+}
+export function attachStudentHistoryButtons(){
+  document.querySelectorAll('[data-student-history]').forEach(b=>{
+    b.onclick = (e)=>{ e.preventDefault(); state.modal={type:'studenthistory', data:{studentId:b.dataset.studentHistory}}; render(); };
+  });
 }
 export function attachPublicEvents(){
   document.querySelectorAll('[data-public-tab]').forEach(b=>{
@@ -240,6 +252,8 @@ export function attachPublicEvents(){
     if(el){ el.focus(); el.selectionStart=el.value.length; }
   };
   if(state.publicTab==='liquidation') attachLiquidationEvents(false);
+  if(state.publicTab==='periods') attachPeriodsEvents();
+  if(state.publicTab==='contributions') attachStudentHistoryButtons();
   const back = document.getElementById('publicBackBtn');
   if(back) back.onclick = ()=>{
     state.search='';
@@ -259,6 +273,7 @@ export function navForRole(role){
   if(role==='mayor' || role==='treasurer') tabs.push(navBtn('log','Log Entry',ICON.plus));
   tabs.push(navBtn('ledger','Ledger',ICON.list));
   tabs.push(navBtn('liquidation','Liquidation',ICON.checklist));
+  tabs.push(navBtn('periods','Past Periods',ICON.clipboard));
   if(role==='mayor') tabs.push(navBtn('accounts','Accounts',ICON.key));
   return tabs.join('');
 }
@@ -269,6 +284,7 @@ export function appHTML(){
   else if(state.tab==='log' && (role==='mayor'||role==='treasurer')) body = logHTML();
   else if(state.tab==='ledger') body = ledgerHTML();
   else if(state.tab==='liquidation') body = liquidationReportHTML(true);
+  else if(state.tab==='periods') body = periodsHTML(true);
   else if(state.tab==='accounts' && role==='mayor') body = accountsHTML();
   else body = currentDashboardHTML();
 
@@ -319,6 +335,7 @@ export function attachAppEvents(){
   if(state.tab==='log') attachLogEvents();
   if(state.tab==='ledger') attachLedgerEvents();
   if(state.tab==='liquidation') attachLiquidationEvents(true);
+  if(state.tab==='periods') attachPeriodsEvents();
   if(state.tab==='accounts' && state.session.role==='mayor') attachAccountsEvents();
   if(state.tab==='dashboard') attachDashboardEvents();
 }
@@ -417,7 +434,11 @@ export function attachApprovalQueueEvents(){
     };
   });
 }
-export function attachDashboardEvents(){ attachApprovalQueueEvents(); }
+export function attachDashboardEvents(){
+  attachApprovalQueueEvents();
+  const closeBtn = document.getElementById('closePeriodBtn');
+  if(closeBtn) closeBtn.onclick = ()=>{ state.modal={type:'closeperiod', data:{name:'', confirmText:''}}; render(); };
+}
 
 /* ============== DASHBOARDS ============== */
 export function currentDashboardHTML(){
@@ -429,6 +450,7 @@ export function currentDashboardHTML(){
 }
 export function balanceHeroHTML(){
   const bal = currentBalance();
+  const bb = state.beginningBalance;
   return `
     <div class="balance-hero">
       <div class="bh-label">Current Fund Balance</div>
@@ -437,6 +459,7 @@ export function balanceHeroHTML(){
         <div>Collections<br/><b>${formatPeso(totalCollections())}</b></div>
         <div>Expenses<br/><b>${formatPeso(totalExpenses())}</b></div>
       </div>
+      ${bb && bb.amount ? `<p class="subtext" style="margin:10px 0 0;text-align:center;opacity:0.85;">Includes ${formatPeso(bb.amount)} beginning balance carried from <b>${escapeHtml(bb.fromPeriodName||'the previous period')}</b></p>` : ''}
     </div>`;
 }
 export function recentActivityHTML(limit){
@@ -471,6 +494,14 @@ export function mayorDashboardHTML(){
         <button class="btn-sm danger" data-reject-tx="${t.id}">${ICON.x}Reject</button>
       `)).join('')
     }
+    <div class="card" style="margin:16px 0;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+      <div class="icon-box" style="width:40px;height:40px;flex-shrink:0;color:var(--gold);">${ICON.checklist}</div>
+      <div style="flex:1;min-width:200px;">
+        <b style="font-size:14px;display:block;">Close this collection period</b>
+        <span style="font-size:12px;color:var(--ink-soft);">Archive all approved collections and expenses, record each student's totals, and start the next period fresh. Pending items carry forward untouched.</span>
+      </div>
+      <button class="btn-sm danger" id="closePeriodBtn">${ICON.checklist}Close Period</button>
+    </div>
     ${recentActivityHTML()}
   `;
 }
@@ -866,6 +897,69 @@ export function attachLiquidationEvents(editable){
   });
 }
 
+/* ============== PAST PERIODS (closed collection-period archive) ==============
+   A closed period is a frozen snapshot: its own transaction list, its own
+   liquidation narratives, its own per-student totals — exactly as they
+   stood the moment the Mayor closed it. Shown to officers and, read-only,
+   on the Public Dashboard. */
+
+/* ===================== periods ===================== */
+export function periodsHTML(forApp){
+  const periods = state.periods.slice().sort((a,b)=> b.closedAt.localeCompare(a.closedAt));
+  const headingStyle = forApp ? '' : ' style="color:#fff;"';
+  const subStyle = forApp ? '' : ' style="color:rgba(255,255,255,0.75);"';
+  return `
+    <h2 class="section-title"${headingStyle}>${ICON.clipboard}Past Collection Periods</h2>
+    <p class="subtext"${subStyle}>Every closed period, frozen exactly as it stood when the Mayor closed it.</p>
+    ${periods.length===0 ? `<div class="card">${emptyState('No periods closed yet','When the Mayor closes a collection period, it will be archived here.', ICON.clipboard)}</div>` :
+      periods.map(p=>periodCardHTML(p)).join('')
+    }
+  `;
+}
+export function periodCardHTML(p){
+  const groups = groupExpensesByPurpose(p.transactions.filter(t=>t.status==='approved' && t.type==='expense'));
+  const collectionsList = p.transactions.filter(t=>t.status==='approved' && t.type==='collection').sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  return `
+  <details class="public-row" style="margin-bottom:12px;">
+    <summary>
+      <div class="list-item" style="pointer-events:none;">
+        <div class="tx-icon">${ICON.clipboard}</div>
+        <div class="li-main">
+          <b>${escapeHtml(p.name)}</b>
+          <span>Closed ${formatDate(p.closedAt.slice(0,10))} by ${escapeHtml(p.closedBy)}</span>
+        </div>
+        <span class="amt pos" style="font-size:14px;">${formatPeso(p.endingBalance)}</span>
+      </div>
+    </summary>
+    <div class="public-detail">
+      <div class="grid-stats" style="margin:10px 0;">
+        <div class="stat"><div class="stat-icon">${ICON.chest}</div><b>${formatPeso(p.beginningBalance)}</b><span>Beginning Balance</span></div>
+        <div class="stat gold"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(p.collectionsTotal)}</b><span>Collections</span></div>
+        <div class="stat danger"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(p.expensesTotal)}</b><span>Expenses</span></div>
+        <div class="stat res"><div class="stat-icon">${ICON.check}</div><b>${formatPeso(p.endingBalance)}</b><span>Ending Balance</span></div>
+      </div>
+      <h3 style="font-size:13.5px;margin:12px 0 6px;">${ICON.checklist} Liquidation — by purpose</h3>
+      ${groups.length===0 ? `<p class="subtext" style="font-style:italic;">No expenses recorded this period.</p>` :
+        groups.map(g=>`
+          <div style="margin-bottom:10px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;"><span>${escapeHtml(g.label)}</span><span>${formatPeso(g.total)}</span></div>
+            ${p.liquidationNotes && p.liquidationNotes[g.key] ? `<p class="liq-narrative-text" style="margin:2px 0;">${escapeHtml(p.liquidationNotes[g.key])}</p>` : ''}
+          </div>
+        `).join('')
+      }
+      <h3 style="font-size:13.5px;margin:12px 0 6px;">${ICON.cash} Collections</h3>
+      ${collectionsList.length===0 ? `<p class="subtext" style="font-style:italic;">No collections recorded this period.</p>` :
+        `<div class="liq-entries">${collectionsList.map(t=>`
+          <div class="public-detail-row">
+            <div class="pd-top"><span class="pd-check">${escapeHtml(t.category)}</span><span class="pd-date">${formatDateTime(t.date,t.time)}</span></div>
+            <span class="pd-sanction">${formatPeso(t.amount)}${t.payer?` — ${escapeHtml(t.payer)}`:''}</span>
+          </div>`).join('')}</div>`
+      }
+    </div>
+  </details>`;
+}
+export function attachPeriodsEvents(){ /* plain expand/collapse via native <details> — nothing dynamic to wire yet */ }
+
 /* ============== ACCOUNTS (Mayor only) ============== */
 
 /* ===================== accounts ===================== */
@@ -980,6 +1074,46 @@ export function renderModal(){
         <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
         <button class="btn-primary" id="modalSave">Update Password</button>
       </div>`;
+  } else if(state.modal.type==='closeperiod'){
+    const preview = buildPeriodPreview();
+    inner = `
+      <button class="close-x" id="modalClose">${ICON.x}</button>
+      <h2 class="section-title">${ICON.checklist}Close Collection Period</h2>
+      <p class="subtext">This archives every approved collection and expense, records each student's totals, and starts the next period fresh. Pending items (${preview.pendingCount}) carry forward untouched.</p>
+      <div class="grid-stats" style="margin-bottom:14px;">
+        <div class="stat"><div class="stat-icon">${ICON.chest}</div><b>${formatPeso(preview.beginningBalance)}</b><span>Beginning Balance</span></div>
+        <div class="stat gold"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(preview.collectionsTotal)}</b><span>Collections</span></div>
+        <div class="stat danger"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(preview.expensesTotal)}</b><span>Expenses</span></div>
+        <div class="stat res"><div class="stat-icon">${ICON.check}</div><b>${formatPeso(preview.endingBalance)}</b><span>Ending Balance</span></div>
+      </div>
+      <p class="subtext" style="margin-top:-6px;">The ending balance above carries forward as the new period's beginning balance.</p>
+      <div class="field"><label>Name this period</label><input id="m_period_name" placeholder="e.g. 1st Semester Dues"/></div>
+      <div class="field"><label>Type the period name above to confirm</label><input id="m_period_confirm" placeholder="Retype the name exactly"/></div>
+      <p style="color:var(--danger);font-size:12px;font-weight:700;margin:0 0 12px;">Approved records are archived, not deleted — you can still view them under Past Periods. This cannot be undone.</p>
+      <div class="modal-actions">
+        <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
+        <button class="btn-primary" id="modalSave">Close Period</button>
+      </div>`;
+  } else if(state.modal.type==='studenthistory'){
+    const d = state.modal.data;
+    const student = state.roster.find(s=>s.id===d.studentId);
+    const history = getStudentPeriodHistory(d.studentId);
+    inner = `
+      <button class="close-x" id="modalClose">${ICON.x}</button>
+      <h2 class="section-title">${ICON.clipboard}Contribution History</h2>
+      <p class="subtext">${escapeHtml(student ? student.name : 'Student')} — totals from every closed period.</p>
+      ${history.length===0 ? `<p class="subtext" style="font-style:italic;">No closed periods include this student yet.</p>` :
+        `<div class="card">${history.map(h=>`
+          <div class="list-item">
+            <div class="tx-icon">${ICON.clipboard}</div>
+            <div class="li-main"><b>${escapeHtml(h.name)}</b><span>Closed ${formatDate(h.closedAt.slice(0,10))}${h.other>0?` · ${formatPeso(h.other)} other`:''}</span></div>
+            <span class="amt pos">${formatPeso(h.total)}</span>
+          </div>
+        `).join('')}</div>`
+      }
+      <div class="modal-actions">
+        <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Close</button>
+      </div>`;
   }
   back.innerHTML = `<div class="modal">${inner}</div>`;
   document.getElementById('root').appendChild(back);
@@ -987,7 +1121,8 @@ export function renderModal(){
   const modalCancelBtn = document.getElementById('modalCancel');
   if(modalCancelBtn) modalCancelBtn.onclick = closeModal;
   back.onclick = (e)=>{ if(e.target===back) closeModal(); };
-  document.getElementById('modalSave').onclick = saveModal;
+  const modalSaveBtn = document.getElementById('modalSave');
+  if(modalSaveBtn) modalSaveBtn.onclick = saveModal;
 }
 export function closeModal(){ state.modal=null; render(); }
 async function saveModal(){
@@ -1040,6 +1175,20 @@ async function saveModal(){
     });
     showToast('Password updated');
     state.modal=null;
+    render();
+  } else if(type==='closeperiod'){
+    const name = document.getElementById('m_period_name').value.trim();
+    const confirmText = document.getElementById('m_period_confirm').value.trim();
+    if(!name){ showToast('Enter a name for this period'); return; }
+    if(confirmText !== name){ showToast('Type the period name exactly to confirm'); return; }
+    const record = buildClosedPeriodRecord(name, state.session.name);
+    await mutateShared('treasury_periods', latest=>{ latest.push(record); return latest; });
+    await mutateShared('treasury_transactions', latest=> latest.filter(t=>t.status==='pending'));
+    await mutateShared('treasury_beginning_balance', ()=> ({ amount: record.endingBalance, fromPeriodName: record.name }));
+    await mutateShared('treasury_liquidation_notes', ()=> ({}));
+    showToast(`"${name}" closed and archived`);
+    state.modal=null;
+    state.tab='dashboard';
     render();
   }
 }

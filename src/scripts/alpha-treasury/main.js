@@ -13,12 +13,14 @@ document.addEventListener('click', (e) => {
 });
 
 async function init() {
-  const [accounts, transactions, roster, duesAmount, liquidationNotes, session] = await Promise.all([
+  const [accounts, transactions, roster, duesAmount, liquidationNotes, periods, beginningBalance, session] = await Promise.all([
     loadShared('treasury_accounts', []),
     loadShared('treasury_transactions', []),
     loadShared('roster', []),
     loadShared('treasury_dues_amount', 100),
     loadShared('treasury_liquidation_notes', {}),
+    loadShared('treasury_periods', []),
+    loadShared('treasury_beginning_balance', { amount: 0, fromPeriodName: null }),
     loadPersonal('session', null),
   ]);
   state.accounts = accounts;
@@ -26,12 +28,16 @@ async function init() {
   state.roster = roster || [];
   state.duesAmount = (typeof duesAmount === 'number') ? duesAmount : 100;
   state.liquidationNotes = liquidationNotes || {};
+  state.periods = periods || [];
+  state.beginningBalance = beginningBalance && typeof beginningBalance === 'object' ? beginningBalance : { amount: 0, fromPeriodName: null };
   setLastSyncedRaw({
     treasury_accounts: JSON.stringify(state.accounts),
     treasury_transactions: JSON.stringify(state.transactions),
     roster: JSON.stringify(state.roster),
     treasury_dues_amount: JSON.stringify(state.duesAmount),
     treasury_liquidation_notes: JSON.stringify(state.liquidationNotes),
+    treasury_periods: JSON.stringify(state.periods),
+    treasury_beginning_balance: JSON.stringify(state.beginningBalance),
   });
   subscribeRealtime();
   startSyncPolling();

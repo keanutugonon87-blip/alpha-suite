@@ -13,12 +13,14 @@ export const state = {
   roster: [], // read-only here — owned by Alpha Watch
   duesAmount: 100,
   liquidationNotes: {}, // {purposeKey: narrative text} — written reports of fund use, per expense purpose
+  periods: [], // closed collection periods — see closeCurrentPeriod() below
+  beginningBalance: { amount: 0, fromPeriodName: null }, // carried forward from the most recently closed period
   toast: null,
-  modal: null, // {type:'account'|'resetpass'|'selfpass', data:{...}}
+  modal: null, // {type:'account'|'resetpass'|'selfpass'|'closeperiod'|'studenthistory', data:{...}}
   search: '',
   typeFilter: 'all',
   statusFilter: 'all',
-  publicTab: 'overview', // overview | liquidation | contributions
+  publicTab: 'overview', // overview | liquidation | contributions | periods
   liqView: 'grouped', // grouped | full
   _setupError: null,
   _loginError: null,
@@ -36,15 +38,17 @@ export const STATE_KEY_FOR = {
   roster: 'roster',
   treasury_dues_amount: 'duesAmount',
   treasury_liquidation_notes: 'liquidationNotes',
+  treasury_periods: 'periods',
+  treasury_beginning_balance: 'beginningBalance',
 };
 
-export const SYNC_KEYS = ['treasury_accounts', 'treasury_transactions', 'roster', 'treasury_dues_amount', 'treasury_liquidation_notes'];
+export const SYNC_KEYS = ['treasury_accounts', 'treasury_transactions', 'roster', 'treasury_dues_amount', 'treasury_liquidation_notes', 'treasury_periods', 'treasury_beginning_balance'];
 
 /* ---- Derived totals ---- */
 export function approvedOf(type) { return state.transactions.filter(t => t.status === 'approved' && t.type === type); }
 export function totalCollections() { return approvedOf('collection').reduce((s, t) => s + t.amount, 0); }
 export function totalExpenses() { return approvedOf('expense').reduce((s, t) => s + t.amount, 0); }
-export function currentBalance() { return totalCollections() - totalExpenses(); }
+export function currentBalance() { return (state.beginningBalance?.amount || 0) + totalCollections() - totalExpenses(); }
 export function pendingCount() { return state.transactions.filter(t => t.status === 'pending').length; }
 export function unverifiedApprovedCount() { return state.transactions.filter(t => t.status === 'approved' && !t.verified).length; }
 
@@ -66,12 +70,15 @@ export function getStudentDuesStatus(studentId) {
   return 'partial';
 }
 
-/* ---- Liquidation report: group approved expenses by purpose/event ---- */
+/* ---- Liquidation report: group approved expenses by purpose/event ----
+   groupExpensesByPurpose() takes an explicit transaction list so it can be
+   reused for both the live ledger (getExpenseGroups) and an archived
+   period's frozen transaction snapshot (see periodsHTML in screens.js). */
 export const GENERAL_PURPOSE_LABEL = 'General / Unspecified Expenses';
 export function purposeLabelOf(t) { const p = (t.purpose || '').trim(); return p || GENERAL_PURPOSE_LABEL; }
-export function getExpenseGroups() {
+export function groupExpensesByPurpose(expenseList) {
   const map = new Map();
-  approvedOf('expense').forEach(t => {
+  expenseList.forEach(t => {
     const label = purposeLabelOf(t);
     const key = label.toLowerCase();
     if (!map.has(key)) map.set(key, { key, label, entries: [], total: 0 });
@@ -82,4 +89,59 @@ export function getExpenseGroups() {
   return Array.from(map.values())
     .map(g => ({ ...g, entries: g.entries.slice().sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)) }))
     .sort((a, b) => (a.label === GENERAL_PURPOSE_LABEL) - (b.label === GENERAL_PURPOSE_LABEL) || b.total - a.total);
+}
+export function getExpenseGroups() { return groupExpensesByPurpose(approvedOf('expense')); }
+
+/* ---- Collection periods ----
+   A "period" is a frozen snapshot of everything approved so far: the full
+   transaction list, the totals, each student's dues/other contribution
+   totals, and the liquidation narratives as they stood. Pending items are
+   NOT included — they carry forward untouched into the new active period. */
+export function buildPeriodPreview() {
+  const collections = approvedOf('collection');
+  const expenses = approvedOf('expense');
+  const collectionsTotal = collections.reduce((s, t) => s + t.amount, 0);
+  const expensesTotal = expenses.reduce((s, t) => s + t.amount, 0);
+  const beginning = state.beginningBalance?.amount || 0;
+  return {
+    beginningBalance: beginning,
+    collectionsTotal,
+    expensesTotal,
+    endingBalance: beginning + collectionsTotal - expensesTotal,
+    approvedCount: collections.length + expenses.length,
+    rejectedCount: state.transactions.filter(t => t.status === 'rejected').length,
+    pendingCount: pendingCount(),
+  };
+}
+export function getStudentPeriodHistory(studentId) {
+  return state.periods
+    .filter(p => p.perStudent && p.perStudent[studentId])
+    .map(p => ({ periodId: p.id, name: p.name, closedAt: p.closedAt, ...p.perStudent[studentId] }));
+}
+export function buildClosedPeriodRecord(name, closedByName) {
+  const collections = approvedOf('collection');
+  const expenses = approvedOf('expense');
+  const rejected = state.transactions.filter(t => t.status === 'rejected');
+  const collectionsTotal = collections.reduce((s, t) => s + t.amount, 0);
+  const expensesTotal = expenses.reduce((s, t) => s + t.amount, 0);
+  const beginningBalance = state.beginningBalance?.amount || 0;
+  const perStudent = {};
+  state.roster.forEach(s => {
+    const dues = getStudentDuesPaid(s.id);
+    const other = getStudentOtherContributions(s.id);
+    if (dues + other > 0) perStudent[s.id] = { dues, other, total: dues + other };
+  });
+  return {
+    id: 'period_' + Date.now(),
+    name,
+    closedAt: new Date().toISOString(),
+    closedBy: closedByName,
+    beginningBalance,
+    collectionsTotal,
+    expensesTotal,
+    endingBalance: beginningBalance + collectionsTotal - expensesTotal,
+    transactions: collections.concat(expenses, rejected),
+    perStudent,
+    liquidationNotes: { ...(state.liquidationNotes || {}) },
+  };
 }
