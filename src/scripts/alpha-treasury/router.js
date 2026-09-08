@@ -15,10 +15,10 @@ export function render() {
   const root = document.getElementById('root');
   if (MAINTENANCE_MODE) {
     root.innerHTML = `<div class="loading">
-      <div class="loading-crest"><img src="assets/wolf-crest.png" alt="Alpha Suite crest" style="width:100%;height:100%;object-fit:contain;"/></div>
-      <span style="font-family:'Cinzel',serif;font-weight:700;font-size:1.05rem;letter-spacing:.04em;">ALPHA TREASURY</span>
-      <span>Temporarily closed for maintenance.</span>
-      <span style="opacity:.7;font-size:.85rem;">We'll be back soon — thanks for your patience.</span>
+      <div class="loading-crest" style="width:150px;height:150px;"><img src="assets/wolf-crest.png" alt="Alpha Suite crest" style="width:100%;height:100%;object-fit:contain;"/></div>
+      <span style="font-family:'Cinzel',serif;font-weight:700;font-size:2rem;letter-spacing:.05em;">ALPHA TREASURY</span>
+      <span style="font-size:1.15rem;letter-spacing:.5px;">Temporarily closed for maintenance.</span>
+      <span style="opacity:.7;font-size:1rem;letter-spacing:.5px;">We'll be back soon — thanks for your patience.</span>
     </div>`;
     return;
   }
