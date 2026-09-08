@@ -196,6 +196,25 @@
     opacity:0; animation:fadeUp .7s ease forwards; animation-delay:.78s;
   }
 
+  /* ============ Featured Facebook post ============ */
+  .fb-section{
+    margin-top:34px;
+    opacity:0; transform:translateY(18px);
+    animation:fadeUp .7s ease forwards; animation-delay:.7s;
+  }
+  .fb-label{
+    font-family:'Cinzel',serif; color:rgba(230,228,220,0.75); font-size:12.5px;
+    letter-spacing:1.6px; text-transform:uppercase; margin-bottom:12px;
+  }
+  .fb-frame{
+    max-width:500px; margin:0 auto; overflow-x:auto; overflow-y:hidden;
+    background:linear-gradient(180deg, rgba(251,247,238,0.98), rgba(245,240,227,0.96));
+    border:1.5px solid rgba(201,162,39,0.28); border-radius:var(--radius, 14px);
+    box-shadow:0 10px 30px -12px rgba(0,0,0,0.55);
+    padding:8px;
+  }
+  .fb-frame iframe{ display:block; margin:0 auto; max-width:100%; }
+
   @media (prefers-reduced-motion: reduce){
     *{ animation:none !important; transition:none !important; }
   }
@@ -229,6 +248,12 @@
           <b>ALPHA OFFICERS <span class="arrow">&#8250;</span></b>
           <span>Meet the officers &mdash; roles and leadership credentials</span>
         </a>
+      </div>
+      <div class="fb-section">
+        <div class="fb-label">Latest from our Facebook Page</div>
+        <div class="fb-frame">
+          <iframe src="https://www.facebook.com/plugins/post.php?href=https%3A%2F%2Fwww.facebook.com%2Fphoto%2F%3Ffbid%3D122094867327452584%26set%3Da.122094623049452584&show_text=true&width=500" width="500" height="489" style="border:none;overflow:hidden" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>
+        </div>
       </div>
       <footer class="tag">Batch 28 &middot; Palompon Institute of Technology</footer>
     </div>
