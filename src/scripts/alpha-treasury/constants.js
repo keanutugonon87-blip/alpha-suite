@@ -6,7 +6,7 @@
    Set to true to lock the app down (blocks sign-in, the app itself, and
    the Public dashboard) and show a generic "back soon" notice instead.
    Set back to false to reopen. */
-export const MAINTENANCE_MODE = true;
+export const MAINTENANCE_MODE = false;
 
 export const COLLECTION_CATEGORIES = ['Class Dues', 'Contribution', 'Fundraising', 'Donation', 'Other'];
 export const EXPENSE_CATEGORIES = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
