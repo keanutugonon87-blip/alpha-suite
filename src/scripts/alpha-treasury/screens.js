@@ -941,7 +941,7 @@ export function periodCardHTML(p, forApp){
         <div class="stat danger"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(p.expensesTotal)}</b><span>Expenses</span></div>
         <div class="stat res"><div class="stat-icon">${ICON.check}</div><b>${formatPeso(p.endingBalance)}</b><span>Ending Balance</span></div>
       </div>
-      <h3 style="font-size:13.5px;margin:12px 0 6px;">Liquidation — by purpose</h3>
+      <h3 style="font-size:13.5px;margin:12px 0 6px;${folderLabelStyle}">Liquidation — by purpose</h3>
       ${groups.length===0 ? `<p class="subtext" style="font-style:italic;">No expenses recorded this period.</p>` :
         groups.map(g=>`
           <details class="public-row" style="margin-bottom:8px;">
@@ -962,7 +962,7 @@ export function periodCardHTML(p, forApp){
           </details>
         `).join('')
       }
-      <h3 style="font-size:13.5px;margin:16px 0 6px;">Collections — by category</h3>
+      <h3 style="font-size:13.5px;margin:16px 0 6px;${folderLabelStyle}">Collections — by category</h3>
       ${collectionGroups.length===0 ? `<p class="subtext" style="font-style:italic;">No collections recorded this period.</p>` :
         collectionGroups.map(g=>`
           <details class="public-row" style="margin-bottom:8px;">
