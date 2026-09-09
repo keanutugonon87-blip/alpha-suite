@@ -906,10 +906,12 @@ export function attachLiquidationEvents(editable){
 /* ===================== periods ===================== */
 export function periodsHTML(forApp){
   const periods = state.periods.slice().sort((a,b)=> b.closedAt.localeCompare(a.closedAt));
+  const headingStyle = forApp ? '' : ' style="color:#fff;"';
+  const subStyle = forApp ? '' : ' style="color:rgba(255,255,255,0.75);"';
   return `
-    <div class="periods-view${forApp ? '' : ' periods-view-dark'}">
-      <h2 class="section-title">Past Collection Periods</h2>
-      <p class="subtext">Every closed period, frozen exactly as it stood when the Mayor closed it.</p>
+    <div class="periods-view">
+      <h2 class="section-title"${headingStyle}>Past Collection Periods</h2>
+      <p class="subtext"${subStyle}>Every closed period, frozen exactly as it stood when the Mayor closed it.</p>
       ${periods.length===0 ? `<div class="card">${emptyState('No periods closed yet','When the Mayor closes a collection period, it will be archived here.', ICON.clipboard)}</div>` :
         periods.map(p=>periodCardHTML(p)).join('')
       }
