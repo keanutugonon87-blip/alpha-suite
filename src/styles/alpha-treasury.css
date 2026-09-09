@@ -225,3 +225,9 @@
   .public-tabs button{flex:1;min-width:100px;padding:10px 8px;border-radius:12px;border:1.5px solid rgba(255,255,255,0.18);background:rgba(255,255,255,0.06);cursor:pointer;font-family:'Manrope',sans-serif;font-weight:700;font-size:12px;color:#c9c9ea;display:flex;align-items:center;justify-content:center;gap:6px;}
   .public-tabs button svg{width:15px;height:15px;}
   .public-tabs button.sel{border-color:var(--gold);background:rgba(240,180,41,0.14);color:var(--gold-light);}
+
+  /* ---------- Past Periods: solid white card so text is always readable
+     regardless of what background it sits on (officer app or public dashboard) ---------- */
+  .periods-view{ background:var(--paper); border-radius:16px; padding:18px 16px 6px; }
+  .periods-view h2.section-title, .periods-view p.subtext{ color:var(--navy-950); }
+  .periods-view p.subtext{ color:var(--ink-soft); }
