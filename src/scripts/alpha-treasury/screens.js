@@ -938,13 +938,13 @@ export function periodCardHTML(p){
         <div class="stat danger"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(p.expensesTotal)}</b><span>Expenses</span></div>
         <div class="stat res"><div class="stat-icon">${ICON.check}</div><b>${formatPeso(p.endingBalance)}</b><span>Ending Balance</span></div>
       </div>
-      <h3 style="font-size:13.5px;margin:12px 0 6px;">${ICON.checklist} Liquidation — by purpose</h3>
+      <h3 style="font-size:13.5px;margin:12px 0 6px;">Liquidation — by purpose</h3>
       ${groups.length===0 ? `<p class="subtext" style="font-style:italic;">No expenses recorded this period.</p>` :
         groups.map(g=>`
           <details class="public-row" style="margin-bottom:8px;">
             <summary>
               <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none;padding:2px 0;">
-                <span style="font-size:13px;font-weight:700;">${ICON.checklist} ${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
+                <span style="font-size:13px;font-weight:700;">${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
                 <span style="font-size:13px;font-weight:700;">${formatPeso(g.total)}</span>
               </div>
             </summary>
@@ -959,13 +959,13 @@ export function periodCardHTML(p){
           </details>
         `).join('')
       }
-      <h3 style="font-size:13.5px;margin:16px 0 6px;">${ICON.cash} Collections — by category</h3>
+      <h3 style="font-size:13.5px;margin:16px 0 6px;">Collections — by category</h3>
       ${collectionGroups.length===0 ? `<p class="subtext" style="font-style:italic;">No collections recorded this period.</p>` :
         collectionGroups.map(g=>`
           <details class="public-row" style="margin-bottom:8px;">
             <summary>
               <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none;padding:2px 0;">
-                <span style="font-size:13px;font-weight:700;">${ICON.cash} ${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
+                <span style="font-size:13px;font-weight:700;">${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
                 <span style="font-size:13px;font-weight:700;">${formatPeso(g.total)}</span>
               </div>
             </summary>
@@ -1146,7 +1146,12 @@ export function renderModal(){
   if(modalCancelBtn) modalCancelBtn.onclick = closeModal;
   back.onclick = (e)=>{ if(e.target===back) closeModal(); };
   const modalSaveBtn = document.getElementById('modalSave');
-  if(modalSaveBtn) modalSaveBtn.onclick = saveModal;
+  if(modalSaveBtn) modalSaveBtn.onclick = async ()=>{
+    if(modalSaveBtn.disabled) return;
+    modalSaveBtn.disabled = true;
+    try{ await saveModal(); }
+    finally{ if(modalSaveBtn) modalSaveBtn.disabled = false; }
+  };
 }
 export function closeModal(){ state.modal=null; render(); }
 async function saveModal(){
