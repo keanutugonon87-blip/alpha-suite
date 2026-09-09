@@ -92,6 +92,24 @@ export function groupExpensesByPurpose(expenseList) {
 }
 export function getExpenseGroups() { return groupExpensesByPurpose(approvedOf('expense')); }
 
+/* ---- Collections, folder-grouped by category (Class Dues, Contribution, etc.) ----
+   Used for a closed period's archived collections list so it reads as
+   organized folders rather than one long flat chronological list. */
+export function groupCollectionsByCategory(collectionList) {
+  const map = new Map();
+  collectionList.forEach(t => {
+    const label = t.category || 'Other';
+    const key = label.toLowerCase();
+    if (!map.has(key)) map.set(key, { key, label, entries: [], total: 0 });
+    const g = map.get(key);
+    g.entries.push(t);
+    g.total += t.amount;
+  });
+  return Array.from(map.values())
+    .map(g => ({ ...g, entries: g.entries.slice().sort((a, b) => (b.date + b.time).localeCompare(a.date + a.time)) }))
+    .sort((a, b) => b.total - a.total);
+}
+
 /* ---- Collection periods ----
    A "period" is a frozen snapshot of everything approved so far: the full
    transaction list, the totals, each student's dues/other contribution

@@ -8,7 +8,7 @@ import {
   state, loginLockout,
   approvedOf, totalCollections, totalExpenses, currentBalance, pendingCount, unverifiedApprovedCount,
   getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus, getStudentPeriodHistory,
-  getExpenseGroups, groupExpensesByPurpose, GENERAL_PURPOSE_LABEL, purposeLabelOf,
+  getExpenseGroups, groupExpensesByPurpose, groupCollectionsByCategory, GENERAL_PURPOSE_LABEL, purposeLabelOf,
   buildPeriodPreview, buildClosedPeriodRecord,
 } from './state.js';
 import {
@@ -918,7 +918,7 @@ export function periodsHTML(forApp){
 }
 export function periodCardHTML(p){
   const groups = groupExpensesByPurpose(p.transactions.filter(t=>t.status==='approved' && t.type==='expense'));
-  const collectionsList = p.transactions.filter(t=>t.status==='approved' && t.type==='collection').sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  const collectionGroups = groupCollectionsByCategory(p.transactions.filter(t=>t.status==='approved' && t.type==='collection'));
   return `
   <details class="public-row" style="margin-bottom:12px;">
     <summary>
@@ -941,19 +941,43 @@ export function periodCardHTML(p){
       <h3 style="font-size:13.5px;margin:12px 0 6px;">${ICON.checklist} Liquidation — by purpose</h3>
       ${groups.length===0 ? `<p class="subtext" style="font-style:italic;">No expenses recorded this period.</p>` :
         groups.map(g=>`
-          <div style="margin-bottom:10px;">
-            <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;"><span>${escapeHtml(g.label)}</span><span>${formatPeso(g.total)}</span></div>
-            ${p.liquidationNotes && p.liquidationNotes[g.key] ? `<p class="liq-narrative-text" style="margin:2px 0;">${escapeHtml(p.liquidationNotes[g.key])}</p>` : ''}
-          </div>
+          <details class="public-row" style="margin-bottom:8px;">
+            <summary>
+              <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none;padding:2px 0;">
+                <span style="font-size:13px;font-weight:700;">${ICON.checklist} ${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
+                <span style="font-size:13px;font-weight:700;">${formatPeso(g.total)}</span>
+              </div>
+            </summary>
+            <div class="public-detail">
+              ${p.liquidationNotes && p.liquidationNotes[g.key] ? `<p class="liq-narrative-text" style="margin:2px 0 8px;">${escapeHtml(p.liquidationNotes[g.key])}</p>` : ''}
+              <div class="liq-entries">${g.entries.map(t=>`
+                <div class="public-detail-row">
+                  <div class="pd-top"><span class="pd-check">${escapeHtml(t.category)}</span><span class="pd-date">${formatDateTime(t.date,t.time)}</span></div>
+                  <span class="pd-sanction">${formatPeso(t.amount)}${t.payer?` — Paid to ${escapeHtml(t.payer)}`:''}${t.note?` · ${escapeHtml(t.note)}`:''}</span>
+                </div>`).join('')}</div>
+            </div>
+          </details>
         `).join('')
       }
-      <h3 style="font-size:13.5px;margin:12px 0 6px;">${ICON.cash} Collections</h3>
-      ${collectionsList.length===0 ? `<p class="subtext" style="font-style:italic;">No collections recorded this period.</p>` :
-        `<div class="liq-entries">${collectionsList.map(t=>`
-          <div class="public-detail-row">
-            <div class="pd-top"><span class="pd-check">${escapeHtml(t.category)}</span><span class="pd-date">${formatDateTime(t.date,t.time)}</span></div>
-            <span class="pd-sanction">${formatPeso(t.amount)}${t.payer?` — ${escapeHtml(t.payer)}`:''}</span>
-          </div>`).join('')}</div>`
+      <h3 style="font-size:13.5px;margin:16px 0 6px;">${ICON.cash} Collections — by category</h3>
+      ${collectionGroups.length===0 ? `<p class="subtext" style="font-style:italic;">No collections recorded this period.</p>` :
+        collectionGroups.map(g=>`
+          <details class="public-row" style="margin-bottom:8px;">
+            <summary>
+              <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none;padding:2px 0;">
+                <span style="font-size:13px;font-weight:700;">${ICON.cash} ${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
+                <span style="font-size:13px;font-weight:700;">${formatPeso(g.total)}</span>
+              </div>
+            </summary>
+            <div class="public-detail">
+              <div class="liq-entries">${g.entries.map(t=>`
+                <div class="public-detail-row">
+                  <div class="pd-top"><span class="pd-check">${escapeHtml(t.payer||'—')}</span><span class="pd-date">${formatDateTime(t.date,t.time)}</span></div>
+                  <span class="pd-sanction">${formatPeso(t.amount)}${t.note?` · ${escapeHtml(t.note)}`:''}</span>
+                </div>`).join('')}</div>
+            </div>
+          </details>
+        `).join('')
       }
     </div>
   </details>`;
