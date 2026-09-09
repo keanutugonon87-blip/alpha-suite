@@ -913,14 +913,15 @@ export function periodsHTML(forApp){
       <h2 class="section-title"${headingStyle}>Past Collection Periods</h2>
       <p class="subtext"${subStyle}>Every closed period, frozen exactly as it stood when the Mayor closed it.</p>
       ${periods.length===0 ? `<div class="card">${emptyState('No periods closed yet','When the Mayor closes a collection period, it will be archived here.', ICON.clipboard)}</div>` :
-        periods.map(p=>periodCardHTML(p)).join('')
+        periods.map(p=>periodCardHTML(p, forApp)).join('')
       }
     </div>
   `;
 }
-export function periodCardHTML(p){
+export function periodCardHTML(p, forApp){
   const groups = groupExpensesByPurpose(p.transactions.filter(t=>t.status==='approved' && t.type==='expense'));
   const collectionGroups = groupCollectionsByCategory(p.transactions.filter(t=>t.status==='approved' && t.type==='collection'));
+  const folderLabelStyle = forApp ? '' : 'color:#fff;';
   return `
   <details class="public-row" style="margin-bottom:12px;">
     <summary>
@@ -946,7 +947,7 @@ export function periodCardHTML(p){
           <details class="public-row" style="margin-bottom:8px;">
             <summary>
               <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none;padding:2px 0;">
-                <span style="font-size:13px;font-weight:700;">${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
+                <span style="font-size:13px;font-weight:700;${folderLabelStyle}">${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
                 <span style="font-size:13px;font-weight:700;">${formatPeso(g.total)}</span>
               </div>
             </summary>
@@ -967,7 +968,7 @@ export function periodCardHTML(p){
           <details class="public-row" style="margin-bottom:8px;">
             <summary>
               <div style="display:flex;justify-content:space-between;align-items:center;pointer-events:none;padding:2px 0;">
-                <span style="font-size:13px;font-weight:700;">${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
+                <span style="font-size:13px;font-weight:700;${folderLabelStyle}">${escapeHtml(g.label)}<span style="font-weight:500;color:var(--ink-soft);"> · ${g.entries.length} item${g.entries.length===1?'':'s'}</span></span>
                 <span style="font-size:13px;font-weight:700;">${formatPeso(g.total)}</span>
               </div>
             </summary>
