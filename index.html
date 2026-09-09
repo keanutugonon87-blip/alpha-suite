@@ -144,14 +144,14 @@
   }
   .bulletin-board{
     position:relative;
-    width:700px; max-width:100%; margin:0 auto;
+    width:900px; max-width:100%; margin:0 auto;
     transform:rotate(-0.6deg);
     background:linear-gradient(180deg, rgba(251,247,238,0.98), rgba(245,240,227,0.96));
     border:1px solid rgba(201,162,39,0.35);
     border-radius:4px;
     box-shadow:0 14px 32px -16px rgba(0,0,0,0.6);
     padding:14px 10px 10px;
-    overflow:hidden;
+    overflow-x:auto; overflow-y:hidden;
   }
   .bulletin-pin{
     position:absolute; top:-7px; left:50%; transform:translateX(-50%);
@@ -159,7 +159,7 @@
     background:radial-gradient(circle at 35% 30%, var(--gold-light,#ffd868), var(--gold-dim,#c98f16) 75%);
     box-shadow:0 2px 5px rgba(0,0,0,0.5);
   }
-  .bulletin-board iframe{ display:block; margin:0 auto; width:100%; max-width:700px; }
+  .bulletin-board iframe{ display:block; margin:0 auto; width:900px; }
 
   footer.tag{
     margin-top:34px; font-size:11px; letter-spacing:.8px;
@@ -241,7 +241,7 @@
         <div class="bulletin-head">From the class Facebook Page</div>
         <div class="bulletin-board">
           <div class="bulletin-pin"></div>
-          <iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=700&height=500&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false&colorscheme=dark" width="700" height="500" style="border:none;" scrolling="yes" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>
+          <iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=900&height=500&small_header=false&adapt_container_width=false&hide_cover=false&show_facepile=false&colorscheme=dark" width="900" height="500" style="border:none;" scrolling="yes" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>
         </div>
       </section>
 
