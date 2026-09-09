@@ -32,7 +32,12 @@ export function render() {
   }
   if (state.screen === 'setup') { root.innerHTML = setupHTML(); attachSetupEvents(); return; }
   if (state.screen === 'gate') { root.innerHTML = gateHTML(); attachGateEvents(); return; }
-  if (state.screen === 'public') { root.innerHTML = publicHTML(); attachPublicEvents(); return; }
+  if (state.screen === 'public') {
+    root.innerHTML = publicHTML();
+    attachPublicEvents();
+    if (state.modal) renderModal();
+    return;
+  }
   root.innerHTML = appHTML();
   attachAppEvents();
   if (state.modal) renderModal();
