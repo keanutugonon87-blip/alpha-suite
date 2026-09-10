@@ -1,0 +1,200 @@
+/* =====================================================================
+   ALPHA TREASURY — shared theme
+   A registrar's-ledger aesthetic: this is a record of money changing
+   hands, so it should read like an official log book, not a SaaS
+   dashboard. Deep navy + brass, one serif for headings (institutional,
+   naval-academy feel matching the wolf crest), a plain sans for UI
+   text, and a monospace for anything tabular/numeric (amounts, receipt
+   numbers, student IDs) because those need to line up in columns.
+   ===================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  --navy:        #132A3A;
+  --navy-deep:   #0B1C28;
+  --brass:       #B8862F;
+  --brass-light: #D8AE6A;
+  --parchment:   #F6F2E9;
+  --ink:         #24333B;
+  --ink-soft:    #5B6B72;
+  --line:        #D8D0BE;
+  --moss:        #4F7942;
+  --rust:        #A8462B;
+
+  --font-display: 'Fraunces', serif;
+  --font-body:    'Inter', -apple-system, sans-serif;
+  --font-mono:    'JetBrains Mono', monospace;
+
+  --radius: 3px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--parchment);
+  color: var(--ink);
+  font-family: var(--font-body);
+  line-height: 1.5;
+}
+
+.at-shell {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.at-masthead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  border-bottom: 2px solid var(--navy);
+  padding-bottom: 14px;
+  margin-bottom: 32px;
+}
+
+.at-masthead .at-org {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+
+.at-masthead h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 26px;
+  margin: 2px 0 0;
+  color: var(--navy);
+}
+
+.at-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 24px;
+  margin-bottom: 20px;
+}
+
+.at-card h2 {
+  font-family: var(--font-display);
+  font-size: 19px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  color: var(--navy);
+}
+
+.at-field { margin-bottom: 16px; }
+
+.at-field label {
+  display: block;
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-bottom: 6px;
+}
+
+.at-field input,
+.at-field select,
+.at-field textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-size: 15px;
+  background: var(--parchment);
+  color: var(--ink);
+}
+
+.at-field input:focus,
+.at-field select:focus,
+.at-field textarea:focus {
+  outline: 2px solid var(--brass);
+  outline-offset: 1px;
+}
+
+.at-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 20px;
+  border: none;
+  border-radius: var(--radius);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  background: var(--navy);
+  color: var(--parchment);
+}
+.at-btn:hover { background: var(--navy-deep); }
+.at-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.at-btn--brass { background: var(--brass); color: var(--navy-deep); }
+.at-btn--brass:hover { background: var(--brass-light); }
+
+.at-btn--ghost {
+  background: transparent;
+  color: var(--navy);
+  border: 1px solid var(--navy);
+}
+.at-btn--ghost:hover { background: rgba(19,42,58,0.06); }
+
+.at-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+.at-status {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+}
+.at-status--paid    { background: rgba(79,121,66,0.12); color: var(--moss); }
+.at-status--pending { background: rgba(184,134,47,0.14); color: #8A6414; }
+.at-status--overdue { background: rgba(168,70,43,0.14); color: var(--rust); }
+.at-status--exempt  { background: rgba(91,107,114,0.14); color: var(--ink-soft); }
+
+.at-ledger-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.at-ledger-row:last-child { border-bottom: none; }
+
+.at-ledger-row .at-desc { font-size: 14px; }
+.at-ledger-row .at-meta { font-size: 12px; color: var(--ink-soft); }
+
+.at-error {
+  background: rgba(168,70,43,0.09);
+  border: 1px solid rgba(168,70,43,0.3);
+  color: var(--rust);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.at-success {
+  background: rgba(79,121,66,0.09);
+  border: 1px solid rgba(79,121,66,0.3);
+  color: var(--moss);
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  font-size: 14px;
+  margin-bottom: 16px;
+}
+
+.at-scan-frame {
+  border: 2px dashed var(--brass);
+  border-radius: var(--radius);
+  padding: 8px;
+  background: var(--navy-deep);
+}
+
+#qr-reader { width: 100%; }
+
+.at-hint { font-size: 12px; color: var(--ink-soft); margin-top: 6px; }

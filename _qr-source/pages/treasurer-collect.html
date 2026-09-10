@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Collect — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="at-shell">
+  <div class="at-masthead">
+    <div>
+      <div class="at-org">Treasurer · BSMT 1-Alpha</div>
+      <h1>Collect Dues</h1>
+    </div>
+    <a href="./treasurer-home.html" class="at-btn--ghost at-btn" style="padding:8px 14px; font-size:13px; text-decoration:none;">Back</a>
+  </div>
+
+  <div id="stage-scan" class="at-card">
+    <h2>Scan Student QR</h2>
+    <div id="scan-error"></div>
+    <div class="at-scan-frame">
+      <div id="qr-reader"></div>
+    </div>
+    <p class="at-hint">Point the camera at the student's QR code. It will scan automatically.</p>
+    <button id="cancel-scan" class="at-btn--ghost at-btn" style="margin-top:12px; display:none;">Cancel</button>
+  </div>
+
+  <div id="stage-confirm" class="at-card" style="display:none;"></div>
+
+  <div id="stage-receipt" class="at-card" style="display:none;"></div>
+</div>
+
+<script type="module">
+  import { startScanner, stopScanner, verifyScannedToken, submitCollection } from '../js/collect.js';
+  import { downloadReceiptPdf } from '../js/receipt.js';
+  import { supabase } from '../js/supabase-client.js';
+
+  const stageScan = document.getElementById('stage-scan');
+  const stageConfirm = document.getElementById('stage-confirm');
+  const stageReceipt = document.getElementById('stage-receipt');
+  const scanError = document.getElementById('scan-error');
+
+  let currentToken = null;
+
+  async function requireOfficer() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = '../pages/officer-login.html';
+      throw new Error('redirecting');
+    }
+  }
+
+  async function beginScan() {
+    scanError.innerHTML = '';
+    stageScan.style.display = 'block';
+    stageConfirm.style.display = 'none';
+    stageReceipt.style.display = 'none';
+
+    await startScanner(
+      'qr-reader',
+      async (decodedText) => {
+        currentToken = decodedText;
+        await handleScanResult(decodedText);
+      }
+    );
+  }
+
+  async function handleScanResult(token) {
+    scanError.innerHTML = '<p class="at-hint">Verifying…</p>';
+    try {
+      const result = await verifyScannedToken(token);
+      if (!result.valid) {
+        scanError.innerHTML = `<div class="at-error">${result.reason}</div>`;
+        setTimeout(beginScan, 1500);
+        return;
+      }
+      scanError.innerHTML = '';
+      showConfirmScreen(result.student, result.outstanding);
+    } catch (e) {
+      scanError.innerHTML = `<div class="at-error">${e.message}</div>`;
+      setTimeout(beginScan, 1500);
+    }
+  }
+
+  function showConfirmScreen(student, outstanding) {
+    stageScan.style.display = 'none';
+    stageConfirm.style.display = 'block';
+
+    const firstDue = outstanding[0];
+
+    stageConfirm.innerHTML = `
+      <h2>Confirm Collection</h2>
+      <div class="at-ledger-row">
+        <div>
+          <div class="at-desc"><strong>${student.full_name}</strong></div>
+          <div class="at-meta">${student.student_id} · ${student.year_section || '—'}</div>
+        </div>
+      </div>
+
+      <div class="at-field" style="margin-top:16px;">
+        <label>Applicable Due</label>
+        <select id="due-select">
+          <option value="">— Ad-hoc / not on schedule —</option>
+          ${outstanding
+            .map(
+              (d) =>
+                `<option value="${d.id}" data-amount="${d.amount_due}">${d.period_label || 'Due'} — ₱${Number(d.amount_due).toFixed(2)}</option>`
+            )
+            .join('')}
+        </select>
+      </div>
+
+      <div class="at-field">
+        <label>Amount (₱)</label>
+        <input id="amount" type="number" step="0.01" value="${firstDue ? firstDue.amount_due : ''}" />
+      </div>
+
+      <div class="at-field">
+        <label>Payment Mode</label>
+        <select id="payment-mode">
+          <option value="cash">Cash</option>
+          <option value="gcash">GCash</option>
+        </select>
+      </div>
+
+      <div class="at-field" id="gcash-field" style="display:none;">
+        <label>GCash Reference No.</label>
+        <input id="gcash-ref" type="text" placeholder="e.g. 1234567890123" />
+      </div>
+
+      <div class="at-field">
+        <label>Purpose</label>
+        <input id="purpose" type="text" value="${firstDue ? firstDue.period_label : 'One-time collection'}" />
+      </div>
+
+      <div class="at-field">
+        <label>Remarks (optional)</label>
+        <textarea id="remarks" rows="2"></textarea>
+      </div>
+
+      <div id="confirm-error"></div>
+
+      <div style="display:flex; gap:10px;">
+        <button id="confirm-btn" class="at-btn at-btn--brass">Confirm &amp; Log Payment</button>
+        <button id="rescan-btn" class="at-btn--ghost at-btn">Rescan</button>
+      </div>
+    `;
+
+    document.getElementById('due-select').addEventListener('change', (e) => {
+      const opt = e.target.selectedOptions[0];
+      if (opt.dataset.amount) document.getElementById('amount').value = opt.dataset.amount;
+    });
+
+    document.getElementById('payment-mode').addEventListener('change', (e) => {
+      document.getElementById('gcash-field').style.display = e.target.value === 'gcash' ? 'block' : 'none';
+    });
+
+    document.getElementById('rescan-btn').addEventListener('click', beginScan);
+
+    document.getElementById('confirm-btn').addEventListener('click', async () => {
+      const errBox = document.getElementById('confirm-error');
+      errBox.innerHTML = '';
+
+      const duesInstanceId = document.getElementById('due-select').value || null;
+      const amount = parseFloat(document.getElementById('amount').value);
+      const paymentMode = document.getElementById('payment-mode').value;
+      const gcashRef = document.getElementById('gcash-ref').value.trim();
+      const purpose = document.getElementById('purpose').value.trim();
+      const remarks = document.getElementById('remarks').value.trim();
+
+      if (!amount || amount <= 0) return (errBox.innerHTML = '<div class="at-error">Enter a valid amount.</div>');
+      if (!purpose) return (errBox.innerHTML = '<div class="at-error">Enter a purpose.</div>');
+      if (paymentMode === 'gcash' && !gcashRef)
+        return (errBox.innerHTML = '<div class="at-error">Enter the GCash reference number.</div>');
+
+      document.getElementById('confirm-btn').disabled = true;
+      document.getElementById('confirm-btn').textContent = 'Logging…';
+
+      try {
+        const result = await submitCollection({
+          token: currentToken,
+          duesInstanceId,
+          amount,
+          paymentMode,
+          gcashReference: gcashRef,
+          purpose,
+          remarks,
+          transactionType: duesInstanceId ? 'recurring' : 'one_time',
+        });
+        showReceiptScreen(result.transaction, result.student);
+      } catch (e) {
+        errBox.innerHTML = `<div class="at-error">${e.message}</div>`;
+        document.getElementById('confirm-btn').disabled = false;
+        document.getElementById('confirm-btn').textContent = 'Confirm & Log Payment';
+      }
+    });
+  }
+
+  function showReceiptScreen(transaction, student) {
+    stageConfirm.style.display = 'none';
+    stageReceipt.style.display = 'block';
+
+    stageReceipt.innerHTML = `
+      <div class="at-success">Payment logged successfully — ${transaction.receipt_number}</div>
+      <h2>Receipt Ready</h2>
+      <div class="at-ledger-row">
+        <div class="at-desc">${student.full_name}</div>
+        <div class="at-amount">₱${Number(transaction.amount).toFixed(2)}</div>
+      </div>
+      <div style="display:flex; gap:10px; margin-top:16px;">
+        <button id="download-receipt" class="at-btn at-btn--brass">Download Receipt PDF</button>
+        <button id="collect-next" class="at-btn">Collect Next</button>
+      </div>
+    `;
+
+    document.getElementById('download-receipt').addEventListener('click', async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      const treasurerName = session?.user?.user_metadata?.full_name || 'Alpha Treasury Office';
+      await downloadReceiptPdf({ transaction, student, treasurerName });
+    });
+
+    document.getElementById('collect-next').addEventListener('click', beginScan);
+  }
+
+  requireOfficer().then(beginScan).catch(() => {});
+  window.addEventListener('beforeunload', () => stopScanner());
+</script>
+</body>
+</html>

@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>My Dashboard — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="at-shell">
+  <div class="at-masthead">
+    <div>
+      <div class="at-org">BSMT 1-Alpha · Batch 28</div>
+      <h1>My Dashboard</h1>
+    </div>
+    <button id="logout-btn" class="at-btn--ghost at-btn" style="padding:8px 14px; font-size:13px;">Sign Out</button>
+  </div>
+
+  <div id="content">
+    <p class="at-hint">Loading your account…</p>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase, callQrTokenFunction } from '../js/supabase-client.js';
+  import { studentLogout } from '../js/auth.js';
+  import { renderQrToCanvas, qrToDataUrl } from '../js/qr-render.js';
+  import { getOutstandingDuesForStudent, getDuesHistoryForStudent, sweepOverdueInstances } from '../js/dues.js';
+  import { downloadReceiptPdf } from '../js/receipt.js';
+
+  const content = document.getElementById('content');
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await studentLogout();
+    window.location.href = './student-login.html';
+  });
+
+  async function loadDashboard() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = './student-login.html';
+      return;
+    }
+
+    const { data: student, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('auth_user_id', session.user.id)
+      .maybeSingle();
+
+    if (error || !student) {
+      content.innerHTML = `<div class="at-error">We couldn't find your student record. Contact your Treasurer.</div>`;
+      return;
+    }
+
+    await sweepOverdueInstances().catch(() => {});
+
+    const [outstanding, history, { data: transactions }] = await Promise.all([
+      getOutstandingDuesForStudent(student.id),
+      getDuesHistoryForStudent(student.id),
+      supabase.from('transactions').select('*').eq('student_id', student.id).order('collected_at', { ascending: false }),
+    ]);
+
+    let myToken = null;
+    try {
+      const res = await callQrTokenFunction('my_token');
+      myToken = res.token;
+    } catch (e) {
+      console.warn('Could not fetch QR token:', e.message);
+    }
+
+    render(student, outstanding, history, transactions || [], myToken);
+  }
+
+  function statusBadge(status) {
+    return `<span class="at-status at-status--${status}">${status}</span>`;
+  }
+
+  function render(student, outstanding, history, transactions, myToken) {
+    content.innerHTML = `
+      <div class="at-card">
+        <h2>${student.full_name}</h2>
+        <p class="at-hint">${student.student_id} · ${student.year_section || '—'} · ${student.enrollment_status}</p>
+        ${
+          myToken
+            ? `<canvas id="my-qr" style="display:block; margin:16px auto;"></canvas>
+               <div style="display:flex; gap:10px; justify-content:center;">
+                 <button id="download-qr" class="at-btn at-btn--brass">Download QR</button>
+                 <button id="print-qr" class="at-btn--ghost at-btn">Print</button>
+               </div>
+               <p class="at-hint" style="text-align:center; margin-top:10px;">
+                 Show this QR code to the Treasurer when paying dues.
+               </p>`
+            : `<div class="at-error">Your QR code isn't available right now — ask your Treasurer to check your account status.</div>`
+        }
+      </div>
+
+      <div class="at-card">
+        <h2>Dues Status</h2>
+        ${
+          outstanding.length === 0
+            ? `<p class="at-hint">You're all caught up — no pending dues.</p>`
+            : outstanding
+                .map(
+                  (d) => `
+              <div class="at-ledger-row">
+                <div>
+                  <div class="at-desc">${d.period_label || 'Due'}</div>
+                  <div class="at-meta">Due: ${d.due_date || '—'}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="at-amount">₱${Number(d.amount_due).toFixed(2)}</div>
+                  ${statusBadge(d.status)}
+                </div>
+              </div>`
+                )
+                .join('')
+        }
+      </div>
+
+      <div class="at-card">
+        <h2>Payment History &amp; Receipts</h2>
+        ${
+          transactions.length === 0
+            ? `<p class="at-hint">No payments recorded yet.</p>`
+            : transactions
+                .map(
+                  (t) => `
+              <div class="at-ledger-row">
+                <div>
+                  <div class="at-desc">${t.purpose}</div>
+                  <div class="at-meta">${new Date(t.collected_at).toLocaleString('en-PH')} · ${t.receipt_number}</div>
+                </div>
+                <div style="text-align:right;">
+                  <div class="at-amount">₱${Number(t.amount).toFixed(2)}</div>
+                  <button class="at-btn--ghost at-btn" style="padding:4px 10px; font-size:12px; margin-top:4px;" data-txn-id="${t.id}">
+                    Receipt
+                  </button>
+                </div>
+              </div>`
+                )
+                .join('')
+        }
+      </div>
+
+      <div class="at-card">
+        <h2>Full Dues History</h2>
+        ${history
+          .map(
+            (d) => `
+          <div class="at-ledger-row">
+            <div class="at-desc">${d.period_label || 'Due'}</div>
+            <div style="text-align:right;">
+              <span class="at-amount">₱${Number(d.amount_due).toFixed(2)}</span>
+              ${statusBadge(d.status)}
+            </div>
+          </div>`
+          )
+          .join('')}
+      </div>
+    `;
+
+    if (myToken) {
+      // The QR encodes the actual signed token — this is what the
+      // Treasurer's scanner reads and verifies server-side. It is NOT
+      // just the student's ID, so it can't be guessed or forged.
+      renderQrToCanvas(document.getElementById('my-qr'), myToken, 220);
+
+      document.getElementById('download-qr').addEventListener('click', async () => {
+        const dataUrl = await qrToDataUrl(myToken, 500);
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `${student.student_id}-qr.png`;
+        a.click();
+      });
+
+      document.getElementById('print-qr').addEventListener('click', () => window.print());
+    }
+
+    document.querySelectorAll('[data-txn-id]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        const txn = transactions.find((t) => t.id === btn.dataset.txnId);
+        await downloadReceiptPdf({ transaction: txn, student, treasurerName: 'Alpha Treasury Office' });
+      });
+    });
+  }
+
+  loadDashboard();
+</script>
+</body>
+</html>

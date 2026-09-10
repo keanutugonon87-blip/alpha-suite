@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Treasurer Office — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+</head>
+<body>
+<div class="at-shell">
+  <div class="at-masthead">
+    <div>
+      <div class="at-org">Treasurer · BSMT 1-Alpha</div>
+      <h1>Treasury Office</h1>
+    </div>
+    <button id="logout-btn" class="at-btn--ghost at-btn" style="padding:8px 14px; font-size:13px;">Sign Out</button>
+  </div>
+
+  <div id="fund-summary" class="at-card"></div>
+
+  <div class="at-card">
+    <h2>Actions</h2>
+    <div style="display:flex; flex-direction:column; gap:10px;">
+      <a href="./treasurer-collect.html" class="at-btn at-btn--brass" style="text-decoration:none; justify-content:center;">Collect Dues (Scan QR)</a>
+      <a href="./admin-dues.html" class="at-btn--ghost at-btn" style="text-decoration:none; justify-content:center;">Configure Dues</a>
+      <a href="./admin-bulk-qr.html" class="at-btn--ghost at-btn" style="text-decoration:none; justify-content:center;">Bulk QR Export</a>
+    </div>
+  </div>
+
+  <div class="at-card">
+    <h2>Recent Transactions</h2>
+    <div id="recent-txns"><p class="at-hint">Loading…</p></div>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase } from '../js/supabase-client.js';
+
+  async function requireOfficer() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+      window.location.href = './officer-login.html';
+      return null;
+    }
+    return session;
+  }
+
+  document.getElementById('logout-btn').addEventListener('click', async () => {
+    await supabase.auth.signOut();
+    window.location.href = './officer-login.html';
+  });
+
+  async function load() {
+    const session = await requireOfficer();
+    if (!session) return;
+
+    const { data: totals } = await supabase.from('fund_totals').select('*').single();
+    document.getElementById('fund-summary').innerHTML = `
+      <h2>Fund Overview</h2>
+      <div class="at-ledger-row">
+        <div class="at-desc">Total Collected</div>
+        <div class="at-amount" style="font-size:20px;">₱${Number(totals?.total_collected || 0).toFixed(2)}</div>
+      </div>
+      <div class="at-ledger-row">
+        <div class="at-desc">Total Transactions Logged</div>
+        <div class="at-amount">${totals?.total_transactions || 0}</div>
+      </div>
+    `;
+
+    const { data: txns } = await supabase
+      .from('transactions')
+      .select('receipt_number, amount, purpose, payment_mode, collected_at, students(full_name)')
+      .order('collected_at', { ascending: false })
+      .limit(10);
+
+    const container = document.getElementById('recent-txns');
+    if (!txns || txns.length === 0) {
+      container.innerHTML = '<p class="at-hint">No transactions yet.</p>';
+      return;
+    }
+    container.innerHTML = txns
+      .map(
+        (t) => `
+      <div class="at-ledger-row">
+        <div>
+          <div class="at-desc">${t.students?.full_name || 'Student'} — ${t.purpose}</div>
+          <div class="at-meta">${new Date(t.collected_at).toLocaleString('en-PH')} · ${t.receipt_number} · ${t.payment_mode.toUpperCase()}</div>
+        </div>
+        <div class="at-amount">₱${Number(t.amount).toFixed(2)}</div>
+      </div>`
+      )
+      .join('');
+  }
+
+  load();
+</script>
+</body>
+</html>

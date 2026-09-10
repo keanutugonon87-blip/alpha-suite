@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Officer Sign In — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+</head>
+<body>
+<div class="at-shell" style="max-width:420px; padding-top:96px;">
+  <div class="at-masthead" style="display:block; text-align:center; border:none;">
+    <div class="at-org">BSMT 1-Alpha · Batch 28</div>
+    <h1>Officer Sign In</h1>
+  </div>
+
+  <div class="at-card">
+    <div id="error-box"></div>
+    <div class="at-field">
+      <label for="email">Email</label>
+      <input id="email" type="email" autocomplete="username" />
+    </div>
+    <div class="at-field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+    </div>
+    <button id="login-btn" class="at-btn" style="width:100%; justify-content:center;">Sign In</button>
+    <p class="at-hint" style="margin-top:12px;">
+      Uses the same officer account as Alpha Watch. Access to Collect/Dues pages depends on your assigned role.
+    </p>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase } from '../js/supabase-client.js';
+
+  const errorBox = document.getElementById('error-box');
+
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    errorBox.innerHTML = '';
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      errorBox.innerHTML = `<div class="at-error">${error.message}</div>`;
+      return;
+    }
+    window.location.href = './treasurer-home.html';
+  });
+</script>
+</body>
+</html>

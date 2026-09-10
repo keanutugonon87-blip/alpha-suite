@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Bulk QR Export — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+<div class="at-shell">
+  <div class="at-masthead">
+    <div>
+      <div class="at-org">Treasurer · BSMT 1-Alpha</div>
+      <h1>Bulk QR Export</h1>
+    </div>
+    <a href="./treasurer-home.html" class="at-btn--ghost at-btn" style="padding:8px 14px; font-size:13px; text-decoration:none;">Back</a>
+  </div>
+
+  <div class="at-card">
+    <h2>Roster</h2>
+    <p class="at-hint" id="roster-count">Loading students…</p>
+    <p class="at-hint" style="margin-top:8px;">
+      This reissues a fresh signed QR token for every active student. Any previously printed QR (from an
+      earlier export) will stop working once this runs — reprint before distributing.
+    </p>
+    <button id="issue-btn" class="at-btn at-btn--brass" style="margin-top:12px;">Issue Tokens for All Active Students</button>
+    <div id="progress" class="at-hint" style="margin-top:10px;"></div>
+  </div>
+
+  <div class="at-card" id="download-card" style="display:none;">
+    <h2>Download</h2>
+    <div style="display:flex; gap:10px;">
+      <button id="download-csv" class="at-btn">Download CSV</button>
+      <button id="download-pdf" class="at-btn at-btn--brass">Download Printable QR Sheet (PDF)</button>
+    </div>
+    <p class="at-hint" style="margin-top:10px;">
+      The PDF sheet lays out 3×4 QR codes per page for cutting onto ID cards or handouts.
+    </p>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase } from '../js/supabase-client.js';
+  import { fetchActiveStudents, issueTokensForStudents, buildCsv, downloadCsv, downloadBulkQrPdf } from '../js/bulk-qr.js';
+
+  async function requireOfficer() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) window.location.href = './officer-login.html';
+  }
+
+  let issuedResults = [];
+
+  async function init() {
+    await requireOfficer();
+    const students = await fetchActiveStudents();
+    document.getElementById('roster-count').textContent = `${students.length} active student(s) found.`;
+
+    document.getElementById('issue-btn').addEventListener('click', async () => {
+      const progress = document.getElementById('progress');
+      document.getElementById('issue-btn').disabled = true;
+      try {
+        issuedResults = await issueTokensForStudents(students, (done, total) => {
+          progress.textContent = `Issuing tokens: ${done} / ${total}`;
+        });
+        progress.innerHTML = `<span class="at-success" style="display:inline-block;">Done — ${issuedResults.length} tokens issued.</span>`;
+        document.getElementById('download-card').style.display = 'block';
+      } catch (e) {
+        progress.innerHTML = `<div class="at-error">${e.message}</div>`;
+      } finally {
+        document.getElementById('issue-btn').disabled = false;
+      }
+    });
+
+    document.getElementById('download-csv').addEventListener('click', () => {
+      downloadCsv(buildCsv(issuedResults));
+    });
+
+    document.getElementById('download-pdf').addEventListener('click', async () => {
+      const btn = document.getElementById('download-pdf');
+      btn.disabled = true;
+      btn.textContent = 'Building PDF…';
+      try {
+        await downloadBulkQrPdf(issuedResults);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Download Printable QR Sheet (PDF)';
+      }
+    });
+  }
+
+  init();
+</script>
+</body>
+</html>

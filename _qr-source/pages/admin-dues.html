@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Configure Dues — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+</head>
+<body>
+<div class="at-shell">
+  <div class="at-masthead">
+    <div>
+      <div class="at-org">Treasurer · BSMT 1-Alpha</div>
+      <h1>Configure Dues</h1>
+    </div>
+    <a href="./treasurer-home.html" class="at-btn--ghost at-btn" style="padding:8px 14px; font-size:13px; text-decoration:none;">Back</a>
+  </div>
+
+  <div class="at-card">
+    <h2>New Recurring Due</h2>
+    <div id="recurring-error"></div>
+    <div class="at-field">
+      <label>Term Label</label>
+      <input id="term-label" type="text" placeholder="e.g. AY 2026-2027, 1st Sem" />
+    </div>
+    <div class="at-field">
+      <label>Amount (₱)</label>
+      <input id="rec-amount" type="number" step="0.01" placeholder="50.00" />
+    </div>
+    <div class="at-field">
+      <label>Frequency</label>
+      <select id="frequency">
+        <option value="weekly">Weekly</option>
+        <option value="monthly" selected>Monthly</option>
+        <option value="per_term">Per Term</option>
+      </select>
+    </div>
+    <div class="at-field">
+      <label>Starts On</label>
+      <input id="starts-on" type="date" />
+    </div>
+    <div class="at-field">
+      <label>Ends On (optional)</label>
+      <input id="ends-on" type="date" />
+    </div>
+    <button id="create-recurring" class="at-btn at-btn--brass">Save Recurring Due</button>
+  </div>
+
+  <div class="at-card">
+    <h2>Active Recurring Dues</h2>
+    <div id="recurring-list"><p class="at-hint">Loading…</p></div>
+  </div>
+
+  <div class="at-card">
+    <h2>Generate This Period's Dues</h2>
+    <p class="at-hint">Creates a due entry for every active student for the period you name (e.g. run this at the start of each month).</p>
+    <div class="at-field">
+      <label>Recurring Due</label>
+      <select id="gen-config-select"></select>
+    </div>
+    <div class="at-field">
+      <label>Period Label</label>
+      <input id="period-label" type="text" placeholder="e.g. September 2026" />
+    </div>
+    <button id="generate-btn" class="at-btn">Generate</button>
+    <div id="generate-result"></div>
+  </div>
+
+  <div class="at-card">
+    <h2>Per-Student Override</h2>
+    <div class="at-field">
+      <label>Recurring Due</label>
+      <select id="override-config-select"></select>
+    </div>
+    <div class="at-field">
+      <label>Student</label>
+      <select id="override-student-select"></select>
+    </div>
+    <div class="at-field">
+      <label>Override Type</label>
+      <select id="override-type">
+        <option value="exempt">Exempt</option>
+        <option value="custom_amount">Custom Amount</option>
+      </select>
+    </div>
+    <div class="at-field" id="custom-amount-field" style="display:none;">
+      <label>Custom Amount (₱)</label>
+      <input id="custom-amount" type="number" step="0.01" />
+    </div>
+    <div class="at-field">
+      <label>Reason</label>
+      <input id="override-reason" type="text" placeholder="e.g. Financial assistance" />
+    </div>
+    <button id="save-override" class="at-btn">Save Override</button>
+    <div id="override-result"></div>
+  </div>
+
+  <div class="at-card">
+    <h2>New One-Time Due / Fee</h2>
+    <div class="at-field">
+      <label>Title</label>
+      <input id="ot-title" type="text" placeholder="e.g. Acquaintance Party fee" />
+    </div>
+    <div class="at-field">
+      <label>Description (optional)</label>
+      <input id="ot-desc" type="text" />
+    </div>
+    <div class="at-field">
+      <label>Amount (₱)</label>
+      <input id="ot-amount" type="number" step="0.01" />
+    </div>
+    <div class="at-field">
+      <label>Due Date (optional)</label>
+      <input id="ot-due-date" type="date" />
+    </div>
+    <div class="at-field">
+      <label>Applies To</label>
+      <select id="ot-applies">
+        <option value="all">All active students</option>
+        <option value="selected">Selected students</option>
+      </select>
+    </div>
+    <div class="at-field" id="ot-selected-field" style="display:none;">
+      <label>Select Students</label>
+      <select id="ot-student-multi" multiple size="6"></select>
+      <p class="at-hint">Ctrl/Cmd-click to select multiple.</p>
+    </div>
+    <button id="create-one-time" class="at-btn at-btn--brass">Create One-Time Due</button>
+    <div id="one-time-result"></div>
+  </div>
+</div>
+
+<script type="module">
+  import { supabase } from '../js/supabase-client.js';
+  import {
+    createDuesConfig,
+    listDuesConfigs,
+    setStudentOverride,
+    createOneTimeDue,
+    generateRecurringInstancesForPeriod,
+  } from '../js/dues.js';
+
+  async function requireOfficer() {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) window.location.href = './officer-login.html';
+  }
+
+  async function loadStudentsIntoSelects() {
+    const { data: students } = await supabase
+      .from('students')
+      .select('id, full_name, student_id')
+      .eq('enrollment_status', 'active')
+      .order('full_name');
+
+    const opts = (students || [])
+      .map((s) => `<option value="${s.id}">${s.full_name} (${s.student_id})</option>`)
+      .join('');
+    document.getElementById('override-student-select').innerHTML = opts;
+    document.getElementById('ot-student-multi').innerHTML = opts;
+  }
+
+  async function loadDuesConfigsIntoSelects() {
+    const configs = await listDuesConfigs();
+    const opts = configs
+      .map((c) => `<option value="${c.id}">${c.term_label} — ₱${Number(c.amount).toFixed(2)}/${c.frequency}</option>`)
+      .join('');
+    document.getElementById('gen-config-select').innerHTML = opts;
+    document.getElementById('override-config-select').innerHTML = opts;
+
+    const list = document.getElementById('recurring-list');
+    list.innerHTML = configs.length
+      ? configs
+          .map(
+            (c) => `
+        <div class="at-ledger-row">
+          <div>
+            <div class="at-desc">${c.term_label}</div>
+            <div class="at-meta">${c.frequency} · starts ${c.starts_on}${c.ends_on ? ' · ends ' + c.ends_on : ''}</div>
+          </div>
+          <div class="at-amount">₱${Number(c.amount).toFixed(2)}</div>
+        </div>`
+          )
+          .join('')
+      : '<p class="at-hint">No recurring dues configured yet.</p>';
+  }
+
+  document.getElementById('create-recurring').addEventListener('click', async () => {
+    const errBox = document.getElementById('recurring-error');
+    errBox.innerHTML = '';
+    const termLabel = document.getElementById('term-label').value.trim();
+    const amount = parseFloat(document.getElementById('rec-amount').value);
+    const frequency = document.getElementById('frequency').value;
+    const startsOn = document.getElementById('starts-on').value;
+    const endsOn = document.getElementById('ends-on').value;
+
+    if (!termLabel || !amount || !startsOn) {
+      errBox.innerHTML = '<div class="at-error">Fill in term label, amount, and start date.</div>';
+      return;
+    }
+    try {
+      await createDuesConfig({ termLabel, amount, frequency, startsOn, endsOn });
+      document.getElementById('term-label').value = '';
+      document.getElementById('rec-amount').value = '';
+      await loadDuesConfigsIntoSelects();
+    } catch (e) {
+      errBox.innerHTML = `<div class="at-error">${e.message}</div>`;
+    }
+  });
+
+  document.getElementById('generate-btn').addEventListener('click', async () => {
+    const resultBox = document.getElementById('generate-result');
+    resultBox.innerHTML = '';
+    const configId = document.getElementById('gen-config-select').value;
+    const periodLabel = document.getElementById('period-label').value.trim();
+    if (!configId || !periodLabel) {
+      resultBox.innerHTML = '<div class="at-error">Choose a due and enter a period label.</div>';
+      return;
+    }
+    try {
+      const count = await generateRecurringInstancesForPeriod(configId, periodLabel);
+      resultBox.innerHTML = `<div class="at-success">Generated dues for ${count} student(s).</div>`;
+    } catch (e) {
+      resultBox.innerHTML = `<div class="at-error">${e.message}</div>`;
+    }
+  });
+
+  document.getElementById('override-type').addEventListener('change', (e) => {
+    document.getElementById('custom-amount-field').style.display =
+      e.target.value === 'custom_amount' ? 'block' : 'none';
+  });
+
+  document.getElementById('save-override').addEventListener('click', async () => {
+    const resultBox = document.getElementById('override-result');
+    resultBox.innerHTML = '';
+    const duesConfigId = document.getElementById('override-config-select').value;
+    const studentId = document.getElementById('override-student-select').value;
+    const overrideType = document.getElementById('override-type').value;
+    const customAmount = parseFloat(document.getElementById('custom-amount').value);
+    const reason = document.getElementById('override-reason').value.trim();
+
+    try {
+      await setStudentOverride({ duesConfigId, studentId, overrideType, customAmount, reason });
+      resultBox.innerHTML = '<div class="at-success">Override saved.</div>';
+    } catch (e) {
+      resultBox.innerHTML = `<div class="at-error">${e.message}</div>`;
+    }
+  });
+
+  document.getElementById('ot-applies').addEventListener('change', (e) => {
+    document.getElementById('ot-selected-field').style.display = e.target.value === 'selected' ? 'block' : 'none';
+  });
+
+  document.getElementById('create-one-time').addEventListener('click', async () => {
+    const resultBox = document.getElementById('one-time-result');
+    resultBox.innerHTML = '';
+    const title = document.getElementById('ot-title').value.trim();
+    const description = document.getElementById('ot-desc').value.trim();
+    const amount = parseFloat(document.getElementById('ot-amount').value);
+    const dueDate = document.getElementById('ot-due-date').value;
+    const appliesTo = document.getElementById('ot-applies').value;
+    const studentIds = Array.from(document.getElementById('ot-student-multi').selectedOptions).map((o) => o.value);
+
+    if (!title || !amount) {
+      resultBox.innerHTML = '<div class="at-error">Enter a title and amount.</div>';
+      return;
+    }
+    if (appliesTo === 'selected' && studentIds.length === 0) {
+      resultBox.innerHTML = '<div class="at-error">Select at least one student.</div>';
+      return;
+    }
+    try {
+      await createOneTimeDue({ title, description, amount, dueDate, appliesTo, studentIds });
+      resultBox.innerHTML = '<div class="at-success">One-time due created and applied.</div>';
+      document.getElementById('ot-title').value = '';
+      document.getElementById('ot-amount').value = '';
+    } catch (e) {
+      resultBox.innerHTML = `<div class="at-error">${e.message}</div>`;
+    }
+  });
+
+  requireOfficer().then(() => {
+    loadStudentsIntoSelects();
+    loadDuesConfigsIntoSelects();
+  });
+</script>
+</body>
+</html>

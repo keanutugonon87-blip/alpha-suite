@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Sign In — Alpha Treasury</title>
+<link rel="stylesheet" href="../js/theme.css" />
+</head>
+<body>
+<div class="at-shell" style="max-width:420px; padding-top:96px;">
+  <div class="at-masthead" style="display:block; text-align:center; border:none;">
+    <div class="at-org">BSMT 1-Alpha · Batch 28</div>
+    <h1>Alpha Treasury</h1>
+  </div>
+
+  <div class="at-card">
+    <h2>Student Sign In</h2>
+    <div id="error-box"></div>
+
+    <div class="at-field">
+      <label for="student-id">Student ID</label>
+      <input id="student-id" type="text" placeholder="e.g. 2024-00123" autocomplete="username" />
+    </div>
+    <div class="at-field">
+      <label for="password">Password</label>
+      <input id="password" type="password" autocomplete="current-password" />
+    </div>
+
+    <button id="login-btn" class="at-btn" style="width:100%; justify-content:center;">Sign In</button>
+
+    <p class="at-hint" style="text-align:center; margin-top:16px;">
+      First time here? <a href="#" id="show-signup">Set up your account</a>
+    </p>
+  </div>
+
+  <div class="at-card" id="signup-card" style="display:none;">
+    <h2>Set Up Your Account</h2>
+    <p class="at-hint">Your Treasurer must have already added you to the roster.</p>
+    <div class="at-field">
+      <label for="su-student-id">Student ID</label>
+      <input id="su-student-id" type="text" placeholder="e.g. 2024-00123" />
+    </div>
+    <div class="at-field">
+      <label for="su-full-name">Full Name</label>
+      <input id="su-full-name" type="text" placeholder="As it appears on the roster" />
+    </div>
+    <div class="at-field">
+      <label for="su-password">Create Password</label>
+      <input id="su-password" type="password" />
+    </div>
+    <button id="signup-btn" class="at-btn at-btn--brass" style="width:100%; justify-content:center;">Create Account</button>
+  </div>
+</div>
+
+<script type="module">
+  import { studentLogin, studentSelfSignup } from '../js/auth.js';
+
+  const errorBox = document.getElementById('error-box');
+  function showError(msg) {
+    errorBox.innerHTML = `<div class="at-error">${msg}</div>`;
+  }
+  function clearError() { errorBox.innerHTML = ''; }
+
+  document.getElementById('login-btn').addEventListener('click', async () => {
+    clearError();
+    const studentId = document.getElementById('student-id').value.trim();
+    const password = document.getElementById('password').value;
+    if (!studentId || !password) return showError('Enter your Student ID and password.');
+    try {
+      await studentLogin(studentId, password);
+      window.location.href = './student-dashboard.html';
+    } catch (e) {
+      showError(e.message);
+    }
+  });
+
+  document.getElementById('show-signup').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('signup-card').style.display = 'block';
+  });
+
+  document.getElementById('signup-btn').addEventListener('click', async () => {
+    clearError();
+    const studentId = document.getElementById('su-student-id').value.trim();
+    const fullName = document.getElementById('su-full-name').value.trim();
+    const password = document.getElementById('su-password').value;
+    if (!studentId || !fullName || !password) return showError('Fill in all fields.');
+    if (password.length < 8) return showError('Password must be at least 8 characters.');
+    try {
+      await studentSelfSignup({ studentId, password, fullName });
+      window.location.href = './student-dashboard.html';
+    } catch (e) {
+      showError(e.message);
+    }
+  });
+</script>
+</body>
+</html>
