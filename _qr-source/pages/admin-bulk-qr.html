@@ -79,10 +79,18 @@
 
     document.getElementById('download-pdf').addEventListener('click', async () => {
       const btn = document.getElementById('download-pdf');
+      const progress = document.getElementById('progress');
+      if (!issuedResults.length) {
+        progress.innerHTML = `<div class="at-error">No issued tokens in memory — click "Issue Tokens for All Active Students" again before downloading.</div>`;
+        return;
+      }
       btn.disabled = true;
       btn.textContent = 'Building PDF…';
       try {
         await downloadBulkQrPdf(issuedResults);
+      } catch (e) {
+        console.error('PDF build failed:', e);
+        progress.innerHTML = `<div class="at-error">PDF failed: ${e.message || e}</div>`;
       } finally {
         btn.disabled = false;
         btn.textContent = 'Download Printable QR Sheet (PDF)';
