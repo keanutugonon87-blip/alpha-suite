@@ -13,6 +13,7 @@
 :root {
   --navy:        #132A3A;
   --navy-deep:   #0B1C28;
+  --navy-950:    #060F18;
   --brass:       #B8862F;
   --brass-light: #D8AE6A;
   --parchment:   #F6F2E9;
@@ -140,6 +141,67 @@ body {
   border: 1px solid var(--navy);
 }
 .at-btn--ghost:hover { background: rgba(19,42,58,0.06); }
+
+/* -------------------------------------------------------------------
+   Crest letterhead — a dark, sealed-letter band for the pages that
+   should open under the class crest (currently: Treasury Office).
+   Sits full-bleed above .at-shell; the brass rule at its foot is the
+   seam between "sealed letter" and the ledger paper underneath.
+   ------------------------------------------------------------------- */
+.at-crestband {
+  background: linear-gradient(180deg, var(--navy-deep) 0%, var(--navy-950) 100%);
+  border-bottom: 3px solid var(--brass);
+  padding: 22px 24px;
+}
+.at-crestband__inner {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.at-crestband__crest {
+  width: 52px;
+  height: 70px;
+  object-fit: contain;
+  flex-shrink: 0;
+  filter: drop-shadow(0 0 8px rgba(184,134,47,0.5));
+}
+.at-crestband__text { flex: 1; min-width: 0; }
+.at-crestband__text .at-org {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--brass-light);
+  opacity: 0.85;
+}
+.at-crestband__text h1 {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 25px;
+  margin: 3px 0 0;
+  color: var(--parchment);
+}
+.at-btn--ghost-dark {
+  background: transparent;
+  border: 1px solid rgba(216,174,106,0.5);
+  color: var(--brass-light);
+}
+.at-btn--ghost-dark:hover { background: rgba(216,174,106,0.14); }
+
+.at-shell--under-band { padding-top: 32px; }
+
+/* A single hero figure gets a heavier rule + larger numerals — reserved
+   for the one number on a page that matters most (e.g. fund total). */
+.at-figure-hero {
+  border-top: 2px solid var(--brass);
+  padding-top: 10px;
+  margin-top: 4px;
+}
+.at-figure-hero .at-amount {
+  font-size: 30px;
+  color: var(--navy);
+}
 
 .at-amount { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 
