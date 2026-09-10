@@ -52,54 +52,61 @@ export function downloadCsv(csvText, filename = 'alpha-treasury-qr-tokens.csv') 
   URL.revokeObjectURL(url);
 }
 
-// Printable PDF sheet: a grid of QR codes, each labeled with name + ID,
-// sized for cutting onto ID cards (roughly business-card sized cells).
+// Printable PDF sheet: ONE student per full page (one QR code per page),
+// all pages combined into a single PDF for easy individual handout/printing.
 export async function buildBulkQrPdf(results) {
   // eslint-disable-next-line no-undef
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({ unit: 'pt', format: 'letter' }); // 612x792pt
 
-  const cols = 3;
-  const rows = 4;
-  const marginX = 36;
-  const marginY = 36;
-  const cellW = (612 - marginX * 2) / cols;
-  const cellH = (792 - marginY * 2) / rows;
-  const qrSize = Math.min(cellW, cellH) * 0.55;
-
-  let col = 0;
-  let row = 0;
+  const pageW = 612;
+  const pageH = 792;
+  const qrSize = 320;
+  const qrX = (pageW - qrSize) / 2;
+  const qrY = (pageH - qrSize) / 2 - 40;
 
   for (let i = 0; i < results.length; i++) {
     const { student, token } = results[i];
-    const x = marginX + col * cellW;
-    const y = marginY + row * cellH;
 
-    doc.setDrawColor('#D8D0BE');
-    doc.rect(x + 4, y + 4, cellW - 8, cellH - 8);
+    if (i > 0) doc.addPage();
 
-    const qrDataUrl = await qrToDataUrl(token, 220);
-    doc.addImage(qrDataUrl, 'PNG', x + (cellW - qrSize) / 2, y + 10, qrSize, qrSize);
-
+    // Header
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor('#132A3A');
-    doc.text(student.full_name, x + cellW / 2, y + qrSize + 24, { align: 'center', maxWidth: cellW - 12 });
-
-    doc.setFont('courier', 'normal');
-    doc.setFontSize(8);
+    doc.setFontSize(11);
     doc.setTextColor('#5B6B72');
-    doc.text(student.student_id, x + cellW / 2, y + qrSize + 36, { align: 'center' });
+    doc.text('BSMT 1-Alpha · Alpha Treasury', pageW / 2, 60, { align: 'center' });
 
-    col++;
-    if (col >= cols) {
-      col = 0;
-      row++;
-      if (row >= rows && i < results.length - 1) {
-        doc.addPage();
-        row = 0;
-      }
+    // Border frame around the QR for a clean cut/scan target
+    doc.setDrawColor('#D8D0BE');
+    doc.rect(qrX - 12, qrY - 12, qrSize + 24, qrSize + 24);
+
+    const qrDataUrl = await qrToDataUrl(token, 600);
+    doc.addImage(qrDataUrl, 'PNG', qrX, qrY, qrSize, qrSize);
+
+    // Name
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(20);
+    doc.setTextColor('#132A3A');
+    doc.text(student.full_name, pageW / 2, qrY + qrSize + 48, { align: 'center', maxWidth: pageW - 80 });
+
+    // Student ID
+    doc.setFont('courier', 'normal');
+    doc.setFontSize(13);
+    doc.setTextColor('#5B6B72');
+    doc.text(student.student_id, pageW / 2, qrY + qrSize + 70, { align: 'center' });
+
+    if (student.year_section) {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(10);
+      doc.setTextColor('#8A8578');
+      doc.text(student.year_section, pageW / 2, qrY + qrSize + 88, { align: 'center' });
     }
+
+    // Footer page counter
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor('#B8B2A0');
+    doc.text(`${i + 1} / ${results.length}`, pageW / 2, pageH - 36, { align: 'center' });
   }
 
   return doc;
