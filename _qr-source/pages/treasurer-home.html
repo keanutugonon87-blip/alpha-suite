@@ -7,15 +7,18 @@
 <link rel="stylesheet" href="../js/theme.css" />
 </head>
 <body>
-<div class="at-shell">
-  <div class="at-masthead">
-    <div>
+<div class="at-crestband">
+  <div class="at-crestband__inner">
+    <img src="../../assets/wolf-crest.png" alt="BSMT 1-Alpha crest" class="at-crestband__crest" />
+    <div class="at-crestband__text">
       <div class="at-org">Treasurer · BSMT 1-Alpha</div>
       <h1>Treasury Office</h1>
     </div>
-    <button id="logout-btn" class="at-btn--ghost at-btn" style="padding:8px 14px; font-size:13px;">Sign Out</button>
+    <button id="logout-btn" class="at-btn--ghost-dark at-btn" style="padding:8px 14px; font-size:13px;">Sign Out</button>
   </div>
+</div>
 
+<div class="at-shell at-shell--under-band">
   <div id="fund-summary" class="at-card"></div>
 
   <div class="at-card">
@@ -57,11 +60,11 @@
     const { data: totals } = await supabase.from('fund_totals').select('*').single();
     document.getElementById('fund-summary').innerHTML = `
       <h2>Fund Overview</h2>
-      <div class="at-ledger-row">
-        <div class="at-desc">Total Collected</div>
-        <div class="at-amount" style="font-size:20px;">₱${Number(totals?.total_collected || 0).toFixed(2)}</div>
+      <div class="at-figure-hero">
+        <div class="at-desc" style="margin-bottom:2px;">Total Collected</div>
+        <div class="at-amount">₱${Number(totals?.total_collected || 0).toFixed(2)}</div>
       </div>
-      <div class="at-ledger-row">
+      <div class="at-ledger-row" style="margin-top:12px;">
         <div class="at-desc">Total Transactions Logged</div>
         <div class="at-amount">${totals?.total_transactions || 0}</div>
       </div>
