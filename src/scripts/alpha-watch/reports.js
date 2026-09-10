@@ -2,8 +2,8 @@
    Ledger export: Excel (.xlsx, via the ExcelJS CDN global) and a print-ready
    HTML report. Both outputs share computeLedgerReportData() so they can
    never drift out of sync with each other. */
-import { state, getViolationOffenseNumber, getViolationSanction } from './state.js';
-import { roleLabel, formatDate, formatDateTime, todayISO, todayLongDate, ordinal, LOGO_PATH } from './constants.js';
+import { state, getViolationOffenseNumber, getViolationSanction } from './state.js?v=1';
+import { roleLabel, formatDate, formatDateTime, todayISO, todayLongDate, ordinal, LOGO_PATH } from './constants.js?v=1';
 
 // The xlsx export needs the logo as a base64 string (ExcelJS embeds images
 // by buffer, not URL) — fetched once from the real asset file and cached,
@@ -22,7 +22,7 @@ async function fetchLogoBase64(){
   _logoBase64Cache = dataUrl.split(',')[1];
   return _logoBase64Cache;
 }
-import { showToast } from './router.js';
+import { showToast } from './router.js?v=1';
 
 /* ===================== reports_calc ===================== */
 export const XLSX_THEME = {

@@ -3,10 +3,10 @@
    Has a circular import with screens.js — safe in ES modules since neither
    side calls the other's export at module-evaluation time, only later at
    runtime once the whole module graph has finished loading. */
-import { ICONS as ICON } from '../shared/icons.js';
-import { state } from './state.js';
-import { MAINTENANCE_MODE } from './constants.js';
-import { setupHTML, attachSetupEvents, gateHTML, attachGateEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal, runCountUps } from './screens.js';
+import { ICONS as ICON } from '../shared/icons.js?v=1';
+import { state } from './state.js?v=1';
+import { MAINTENANCE_MODE } from './constants.js?v=1';
+import { setupHTML, attachSetupEvents, gateHTML, attachGateEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal, runCountUps } from './screens.js?v=1';
 
 export function render(){
   const root = document.getElementById('root');

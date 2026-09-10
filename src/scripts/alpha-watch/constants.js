@@ -59,7 +59,7 @@ export function roleLabel(role){ return role==='mayor'?'Mayor':role==='marshall'
 
 /* Central status metadata so every screen renders workflow states consistently.
    Depends on ICON, so it's imported here rather than duplicated per screen. */
-import { ICONS as ICON } from '../shared/icons.js';
+import { ICONS as ICON } from '../shared/icons.js?v=1';
 export function statusMeta(status){
   switch(status){
     case 'resolved': return {label:'resolved', icon:ICON.check, cls:'resolved'};

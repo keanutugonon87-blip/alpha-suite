@@ -4,21 +4,21 @@
    modal, plus the Treasury tab's mount point. Mechanically split out of
    the original single-file index__1_.html — logic is unchanged, only
    wrapped in ES module imports/exports. */
-import { ICONS as ICON } from '../shared/icons.js';
+import { ICONS as ICON } from '../shared/icons.js?v=1';
 import {
   state, loginLockout, getStudentOffenseTimeline, getViolationSanction,
   getStudentTotalFines, getClassTotalFines,
-} from './state.js';
+} from './state.js?v=1';
 import {
   LOGO_PATH,
   PUBLIC_OUTSTANDING_STATUSES, REPEAT_OFFENSE_FINE, offenseSanctionLabel, hashPassword,
   roleLabel, statusChipHTML, formatPeso, initials, avatarHTML, resizeImageFile,
   escapeHtml, todayISO, nowTimeHHMM, formatDateTime, emptyState,
-} from './constants.js';
-import { saveShared, mutateShared, savePersonal } from './sync.js';
-import { render, showToast } from './router.js';
-import { exportLedgerCSV, printLedgerReport } from './reports.js';
-import { Treasury } from './treasury-embed.js';
+} from './constants.js?v=1';
+import { saveShared, mutateShared, savePersonal } from './sync.js?v=1';
+import { render, showToast } from './router.js?v=1';
+import { exportLedgerCSV, printLedgerReport } from './reports.js?v=1';
+import { Treasury } from './treasury-embed.js?v=1';
 
 /* ===================== current_dash ===================== */
 export function currentDashboardHTML(){

@@ -2,10 +2,10 @@
    Boot sequence: hydrate state from Supabase + localStorage, start live
    sync, decide which screen to land on, then do the first render. This is
    the entry point loaded by <script type="module"> in alpha-watch.html. */
-import { state } from './state.js';
-import { DEFAULT_STANDARD } from './constants.js';
-import { render } from './router.js';
-import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js';
+import { state } from './state.js?v=1';
+import { DEFAULT_STANDARD } from './constants.js?v=1';
+import { render } from './router.js?v=1';
+import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js?v=1';
 
 let liveSyncStarted = false;
 

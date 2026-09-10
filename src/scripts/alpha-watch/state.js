@@ -1,7 +1,7 @@
 /* Alpha Watch — state.js
    The single mutable state object (imported by reference everywhere) plus
    the derived/business-logic getters that read from it. */
-import { REPEAT_OFFENSE_FINE, offenseSanctionLabel, DEFAULT_STANDARD } from './constants.js';
+import { REPEAT_OFFENSE_FINE, offenseSanctionLabel, DEFAULT_STANDARD } from './constants.js?v=1';
 
 export const state = {
   screen:'loading', // loading | load-error | setup | gate | app | public
