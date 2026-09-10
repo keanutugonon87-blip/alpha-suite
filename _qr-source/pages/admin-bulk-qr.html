@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Bulk QR Export — Alpha Treasury</title>
 <link rel="stylesheet" href="../js/theme.css" />
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="../js/qrcode.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 </head>
 <body>
@@ -36,7 +36,8 @@
       <button id="download-pdf" class="at-btn at-btn--brass">Download Printable QR Sheet (PDF)</button>
     </div>
     <p class="at-hint" style="margin-top:10px;">
-      The PDF sheet lays out 3×4 QR codes per page for cutting onto ID cards or handouts.
+      The PDF gives each student their own full page with a large, easy-to-scan QR code —
+      one student per page, all combined into a single file.
     </p>
   </div>
 </div>
@@ -79,10 +80,18 @@
 
     document.getElementById('download-pdf').addEventListener('click', async () => {
       const btn = document.getElementById('download-pdf');
+      const progress = document.getElementById('progress');
+      if (!issuedResults.length) {
+        progress.innerHTML = `<div class="at-error">No issued tokens in memory — click "Issue Tokens for All Active Students" again before downloading.</div>`;
+        return;
+      }
       btn.disabled = true;
       btn.textContent = 'Building PDF…';
       try {
         await downloadBulkQrPdf(issuedResults);
+      } catch (e) {
+        console.error('PDF build failed:', e);
+        progress.innerHTML = `<div class="at-error">PDF failed: ${e.message || e}</div>`;
       } finally {
         btn.disabled = false;
         btn.textContent = 'Download Printable QR Sheet (PDF)';
