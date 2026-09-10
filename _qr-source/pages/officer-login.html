@@ -13,7 +13,8 @@
     <h1>Officer Sign In</h1>
   </div>
 
-  <div class="at-card">
+  <div class="at-card" id="login-card">
+    <h2>Sign In</h2>
     <div id="error-box"></div>
     <div class="at-field">
       <label for="email">Email</label>
@@ -24,27 +25,77 @@
       <input id="password" type="password" autocomplete="current-password" />
     </div>
     <button id="login-btn" class="at-btn" style="width:100%; justify-content:center;">Sign In</button>
-    <p class="at-hint" style="margin-top:12px;">
-      Uses the same officer account as Alpha Watch. Access to Collect/Dues pages depends on your assigned role.
+    <p class="at-hint" style="text-align:center; margin-top:16px;">
+      First time here? <a href="#" id="show-signup">Create your account</a>
     </p>
+  </div>
+
+  <div class="at-card" id="signup-card" style="display:none;">
+    <h2>Create Your Account</h2>
+    <p class="at-hint">Creating an account does not grant access by itself — the Mayor still has to assign your officer role afterward. Tell them once you've signed up.</p>
+    <div id="signup-error-box"></div>
+    <div class="at-field">
+      <label for="su-name">Full Name</label>
+      <input id="su-name" type="text" placeholder="As registered with the class" />
+    </div>
+    <div class="at-field">
+      <label for="su-email">Email</label>
+      <input id="su-email" type="email" autocomplete="username" />
+    </div>
+    <div class="at-field">
+      <label for="su-password">Create Password</label>
+      <input id="su-password" type="password" />
+    </div>
+    <button id="signup-btn" class="at-btn at-btn--brass" style="width:100%; justify-content:center;">Create Account</button>
+    <p class="at-hint" style="text-align:center; margin-top:12px;"><a href="#" id="show-login">Back to sign in</a></p>
   </div>
 </div>
 
 <script type="module">
-  import { supabase } from '../js/supabase-client.js';
+  import { officerLogin, officerSelfSignup } from '../js/auth.js';
 
   const errorBox = document.getElementById('error-box');
+  const signupErrorBox = document.getElementById('signup-error-box');
+  function showError(box, msg) { box.innerHTML = `<div class="at-error">${msg}</div>`; }
+  function clearErrors() { errorBox.innerHTML = ''; signupErrorBox.innerHTML = ''; }
 
   document.getElementById('login-btn').addEventListener('click', async () => {
-    errorBox.innerHTML = '';
+    clearErrors();
     const email = document.getElementById('email').value.trim();
     const password = document.getElementById('password').value;
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      errorBox.innerHTML = `<div class="at-error">${error.message}</div>`;
-      return;
+    if (!email || !password) return showError(errorBox, 'Enter your email and password.');
+    try {
+      await officerLogin(email, password);
+      window.location.href = './treasurer-home.html';
+    } catch (e) {
+      showError(errorBox, e.message);
     }
-    window.location.href = './treasurer-home.html';
+  });
+
+  document.getElementById('show-signup').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('login-card').style.display = 'none';
+    document.getElementById('signup-card').style.display = 'block';
+  });
+  document.getElementById('show-login').addEventListener('click', (e) => {
+    e.preventDefault();
+    document.getElementById('signup-card').style.display = 'none';
+    document.getElementById('login-card').style.display = 'block';
+  });
+
+  document.getElementById('signup-btn').addEventListener('click', async () => {
+    clearErrors();
+    const fullName = document.getElementById('su-name').value.trim();
+    const email = document.getElementById('su-email').value.trim();
+    const password = document.getElementById('su-password').value;
+    if (!fullName || !email || !password) return showError(signupErrorBox, 'Fill in all fields.');
+    if (password.length < 8) return showError(signupErrorBox, 'Password must be at least 8 characters.');
+    try {
+      await officerSelfSignup({ email, password, fullName });
+      signupErrorBox.innerHTML = `<div class="at-hint">Account created for <b>${fullName}</b>. Tell the Mayor your email so they can assign your role — then come back and sign in.</div>`;
+    } catch (e) {
+      showError(signupErrorBox, e.message);
+    }
   });
 </script>
 </body>

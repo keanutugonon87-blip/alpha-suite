@@ -76,3 +76,29 @@ export async function studentSelfSignup({ studentId, password, fullName }) {
 export function onAuthStateChange(callback) {
   return supabase.auth.onAuthStateChange((_event, session) => callback(session));
 }
+
+// -----------------------------------------------------------------
+// Officer login: plain email/password via Supabase Auth. Unlike
+// students, officers have no pre-seeded row to "claim" — signing up
+// only creates the Auth account itself. It grants NO access on its
+// own: every sensitive action is gated by officer_roles, which only
+// the Mayor/admin populates (by hand, matching the officer's email)
+// after they've signed up once. An unassigned account can log in but
+// can't do anything.
+// -----------------------------------------------------------------
+
+export async function officerLogin(email, password) {
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) throw new Error('Email or password is incorrect.');
+  return data;
+}
+
+export async function officerSelfSignup({ email, password, fullName }) {
+  const { data, error } = await supabase.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+  if (error) throw error;
+  return data;
+}
+
+export async function officerLogout() {
+  await supabase.auth.signOut();
+}
