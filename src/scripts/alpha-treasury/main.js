@@ -2,9 +2,9 @@
    Boot sequence: hydrate state from Supabase + localStorage, start live
    sync, decide which screen to land on, then do the first render. This is
    the entry point loaded by <script type="module"> in alpha-treasury.html. */
-import { state } from './state.js';
-import { render } from './router.js';
-import { loadShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw } from './sync.js';
+import { state } from './state.js?v=1';
+import { render } from './router.js?v=1';
+import { loadShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw } from './sync.js?v=1';
 
 /* Extra wiring for the treasurer dashboard CTA */
 document.addEventListener('click', (e) => {

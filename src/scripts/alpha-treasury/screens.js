@@ -3,21 +3,21 @@
    nav shell, role dashboards, log, ledger, liquidation report, accounts, modal.
    Mechanically split out of the original single-file alpha-treasury.html — logic
    is unchanged, only wrapped in ES module imports/exports. */
-import { ICONS as ICON } from '../shared/icons.js';
+import { ICONS as ICON } from '../shared/icons.js?v=1';
 import {
   state, loginLockout,
   approvedOf, totalCollections, totalExpenses, currentBalance, pendingCount, unverifiedApprovedCount,
   getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus, getStudentPeriodHistory,
   getExpenseGroups, groupExpensesByPurpose, groupCollectionsByCategory, GENERAL_PURPOSE_LABEL, purposeLabelOf,
   buildPeriodPreview, buildClosedPeriodRecord,
-} from './state.js';
+} from './state.js?v=1';
 import {
   COLLECTION_CATEGORIES, EXPENSE_CATEGORIES, ROLES, roleLabel,
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
-} from './constants.js';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED } from './sync.js';
-import { render, showToast } from './router.js';
+} from './constants.js?v=1';
+import { saveShared, mutateShared, savePersonal, IS_EMBEDDED } from './sync.js?v=1';
+import { render, showToast } from './router.js?v=1';
 
 /* ===================== setup_gate ===================== */
 export function setupHTML(){
