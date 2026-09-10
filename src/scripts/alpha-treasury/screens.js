@@ -582,43 +582,55 @@ export function logHTML(){
         <button type="button" data-type="expense" id="lf_type_expense">${ICON.down}Expense</button>
       </div>
       <input type="hidden" id="lf_type" value="collection"/>
-      <div class="field">
-        <label>Category</label>
-        <select id="lf_category" required></select>
-      </div>
-      <div class="field"><label>Amount (₱)</label><input type="number" id="lf_amount" min="0" step="0.01" placeholder="e.g. 50" required/></div>
-      <div class="field combo" id="lf_student_field">
-        <label>Student (optional)</label>
-        <input type="text" id="lf_student_search" placeholder="Type a name to link this to a student…" autocomplete="off"/>
-        <input type="hidden" id="lf_student_id" value=""/>
-        <div class="combo-list" id="lf_student_list" style="display:none;"></div>
-        <p class="subtext" style="margin:4px 0 0;font-size:11px;">Leave blank for a collection not tied to one student (e.g. bulk fundraising proceeds).</p>
-      </div>
-      <div class="field" id="lf_payee_field" style="display:none;"><label>Paid To (optional)</label><input type="text" id="lf_payee" placeholder="e.g. Vendor or supplier name"/></div>
-      <div class="field" id="lf_purpose_field" style="display:none;">
-        <label>Purpose / Event (optional)</label>
-        <input type="text" id="lf_purpose" list="lf_purpose_list" placeholder="e.g. Acquaintance Party, Sports Fest…" autocomplete="off"/>
-        <datalist id="lf_purpose_list">${getExpenseGroups().filter(g=>g.label!==GENERAL_PURPOSE_LABEL).map(g=>`<option value="${escapeHtml(g.label)}"></option>`).join('')}</datalist>
-        <p class="subtext" style="margin:4px 0 0;font-size:11px;">Groups this expense under an event/purpose in the Liquidation Report. Leave blank for general expenses.</p>
-      </div>
-      <div class="field" id="lf_receipt_field" style="display:none;">
-        <label>Official Receipt / Proof of Purchase</label>
-        <div class="receipt-picker">
-          <div class="receipt-preview" id="lf_receipt_preview">${ICON.image}</div>
-          <div class="receipt-actions">
-            <input type="file" id="lf_receipt_input" accept="image/*" style="display:none;"/>
-            <button type="button" class="btn-sm ghost" id="lf_receipt_btn">${ICON.paperclip}Attach Receipt</button>
-            <button type="button" class="btn-sm danger" id="lf_receipt_remove" style="display:none;">${ICON.trash}Remove</button>
-          </div>
+
+      <div id="lf_qr_callout">
+        <div class="card" style="background:var(--cream);border-style:dashed;">
+          <b style="display:block;margin-bottom:6px;">Collections are now logged by scanning a student's QR code.</b>
+          <p class="subtext" style="margin:0 0 12px;">Open Scan &amp; Collect, point the camera at the student's code, and confirm the amount there — it's verified and recorded automatically, no manual entry needed.</p>
+          <a class="btn-primary" href="_qr-source/pages/treasurer-collect.html" target="_blank" rel="noopener" style="text-decoration:none;display:inline-flex;">${ICON.checklist}Open Scan &amp; Collect</a>
+          <p class="subtext" style="margin:12px 0 0;font-size:11px;">Needs a separate one-time sign-in the first time you use it. Scanned collections currently appear in their own log — they aren't merged into this Dashboard/Ledger yet.</p>
         </div>
-        <p class="receipt-hint">Optional, but strongly recommended for every expense — a photo of the OR or proof of purchase.</p>
       </div>
-      <div class="field"><label>Date</label><input type="date" id="lf_date" value="${todayISO()}" required/></div>
-      <div class="field"><label>Time</label><input type="time" id="lf_time" value="${nowTimeHHMM()}" required/></div>
-      <div class="field"><label>Note (optional)</label><textarea id="lf_note" placeholder="Any details worth remembering"></textarea></div>
-      <p class="subtext" style="margin:-4px 0 4px;">This entry goes in as <b>Pending</b> until the Mayor or Vice Mayor approves it — approved entries are what count toward the fund balance.</p>
-      <div class="field"><label>Recorded By</label><input type="text" id="lf_reporter" value="${escapeHtml(state.session.name)}" required/></div>
-      <button type="submit" class="btn-primary">Submit Entry</button>
+
+      <div id="lf_manual_fields" style="display:none;">
+        <div class="field">
+          <label>Category</label>
+          <select id="lf_category" required></select>
+        </div>
+        <div class="field"><label>Amount (₱)</label><input type="number" id="lf_amount" min="0" step="0.01" placeholder="e.g. 50"/></div>
+        <div class="field combo" id="lf_student_field">
+          <label>Student (optional)</label>
+          <input type="text" id="lf_student_search" placeholder="Type a name to link this to a student…" autocomplete="off"/>
+          <input type="hidden" id="lf_student_id" value=""/>
+          <div class="combo-list" id="lf_student_list" style="display:none;"></div>
+          <p class="subtext" style="margin:4px 0 0;font-size:11px;">Leave blank for a collection not tied to one student (e.g. bulk fundraising proceeds).</p>
+        </div>
+        <div class="field" id="lf_payee_field" style="display:none;"><label>Paid To (optional)</label><input type="text" id="lf_payee" placeholder="e.g. Vendor or supplier name"/></div>
+        <div class="field" id="lf_purpose_field" style="display:none;">
+          <label>Purpose / Event (optional)</label>
+          <input type="text" id="lf_purpose" list="lf_purpose_list" placeholder="e.g. Acquaintance Party, Sports Fest…" autocomplete="off"/>
+          <datalist id="lf_purpose_list">${getExpenseGroups().filter(g=>g.label!==GENERAL_PURPOSE_LABEL).map(g=>`<option value="${escapeHtml(g.label)}"></option>`).join('')}</datalist>
+          <p class="subtext" style="margin:4px 0 0;font-size:11px;">Groups this expense under an event/purpose in the Liquidation Report. Leave blank for general expenses.</p>
+        </div>
+        <div class="field" id="lf_receipt_field" style="display:none;">
+          <label>Official Receipt / Proof of Purchase</label>
+          <div class="receipt-picker">
+            <div class="receipt-preview" id="lf_receipt_preview">${ICON.image}</div>
+            <div class="receipt-actions">
+              <input type="file" id="lf_receipt_input" accept="image/*" style="display:none;"/>
+              <button type="button" class="btn-sm ghost" id="lf_receipt_btn">${ICON.paperclip}Attach Receipt</button>
+              <button type="button" class="btn-sm danger" id="lf_receipt_remove" style="display:none;">${ICON.trash}Remove</button>
+            </div>
+          </div>
+          <p class="receipt-hint">Optional, but strongly recommended for every expense — a photo of the OR or proof of purchase.</p>
+        </div>
+        <div class="field"><label>Date</label><input type="date" id="lf_date" value="${todayISO()}"/></div>
+        <div class="field"><label>Time</label><input type="time" id="lf_time" value="${nowTimeHHMM()}"/></div>
+        <div class="field"><label>Note (optional)</label><textarea id="lf_note" placeholder="Any details worth remembering"></textarea></div>
+        <p class="subtext" style="margin:-4px 0 4px;">This entry goes in as <b>Pending</b> until the Mayor or Vice Mayor approves it — approved entries are what count toward the fund balance.</p>
+        <div class="field"><label>Recorded By</label><input type="text" id="lf_reporter" value="${escapeHtml(state.session.name)}"/></div>
+        <button type="submit" class="btn-primary">Submit Entry</button>
+      </div>
     </form>
   `;
 }
@@ -668,8 +680,10 @@ export function attachLogEvents(){
   const typeInput = document.getElementById('lf_type');
   const collBtn = document.getElementById('lf_type_collection');
   const expBtn = document.getElementById('lf_type_expense');
-  collBtn.onclick = ()=>{ typeInput.value='collection'; collBtn.classList.add('sel'); expBtn.classList.remove('sel'); populateLogCategories('collection'); };
-  expBtn.onclick = ()=>{ typeInput.value='expense'; expBtn.classList.add('sel'); collBtn.classList.remove('sel'); populateLogCategories('expense'); };
+  const qrCallout = document.getElementById('lf_qr_callout');
+  const manualFields = document.getElementById('lf_manual_fields');
+  collBtn.onclick = ()=>{ typeInput.value='collection'; collBtn.classList.add('sel'); expBtn.classList.remove('sel'); qrCallout.style.display=''; manualFields.style.display='none'; };
+  expBtn.onclick = ()=>{ typeInput.value='expense'; expBtn.classList.add('sel'); collBtn.classList.remove('sel'); populateLogCategories('expense'); qrCallout.style.display='none'; manualFields.style.display=''; };
 
   const studentSearch = document.getElementById('lf_student_search');
   const studentIdInput = document.getElementById('lf_student_id');
