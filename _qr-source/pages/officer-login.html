@@ -84,17 +84,22 @@
   });
 
   document.getElementById('signup-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('signup-btn');
+    if (btn.disabled) return;
     clearErrors();
     const fullName = document.getElementById('su-name').value.trim();
     const email = document.getElementById('su-email').value.trim();
     const password = document.getElementById('su-password').value;
     if (!fullName || !email || !password) return showError(signupErrorBox, 'Fill in all fields.');
     if (password.length < 8) return showError(signupErrorBox, 'Password must be at least 8 characters.');
+    btn.disabled = true;
     try {
       await officerSelfSignup({ email, password, fullName });
       signupErrorBox.innerHTML = `<div class="at-hint">Account created for <b>${fullName}</b>. Tell the Mayor your email so they can assign your role — then come back and sign in.</div>`;
     } catch (e) {
       showError(signupErrorBox, e.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 </script>

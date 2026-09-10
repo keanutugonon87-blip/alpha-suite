@@ -80,17 +80,21 @@
   });
 
   document.getElementById('signup-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('signup-btn');
+    if (btn.disabled) return;
     clearError();
     const studentId = document.getElementById('su-student-id').value.trim();
     const fullName = document.getElementById('su-full-name').value.trim();
     const password = document.getElementById('su-password').value;
     if (!studentId || !fullName || !password) return showError('Fill in all fields.');
     if (password.length < 8) return showError('Password must be at least 8 characters.');
+    btn.disabled = true;
     try {
       await studentSelfSignup({ studentId, password, fullName });
       window.location.href = './student-dashboard.html';
     } catch (e) {
       showError(e.message);
+      btn.disabled = false;
     }
   });
 </script>
