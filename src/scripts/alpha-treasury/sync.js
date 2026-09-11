@@ -39,6 +39,50 @@ export async function fetchQrCollections() {
     return [];
   }
 }
+
+// Removes a scanned payment from the new system. Needs the officer to have
+// an active Supabase Auth session (from signing in at officer-login.html —
+// that session is shared across this whole site since it's the same
+// Supabase project/origin) and to be listed in officer_roles, since RLS
+// enforces that server-side regardless of what this function tries to do.
+export async function deleteQrCollection(rawId) {
+  const id = rawId.replace(/^qr_/, '');
+  const { data: txn, error: fetchErr } = await sb
+    .from('transactions')
+    .select('id, amount, dues_instance_id')
+    .eq('id', id)
+    .maybeSingle();
+  if (fetchErr || !txn) throw new Error(fetchErr?.message || 'Payment not found — it may already be removed.');
+
+  const { data: { user } } = await sb.auth.getUser();
+
+  if (txn.dues_instance_id) {
+    const { data: instance } = await sb
+      .from('dues_instances')
+      .select('amount_due, amount_paid')
+      .eq('id', txn.dues_instance_id)
+      .maybeSingle();
+    if (instance) {
+      const newPaid = Math.max(0, Number(instance.amount_paid) - Number(txn.amount));
+      const newStatus = newPaid >= Number(instance.amount_due) ? 'paid' : newPaid > 0 ? 'partial' : 'pending';
+      await sb.from('dues_instances').update({ amount_paid: newPaid, status: newStatus, updated_at: new Date().toISOString() }).eq('id', txn.dues_instance_id);
+    }
+  }
+
+  const { data: deletedRows, error: delErr } = await sb.from('transactions').delete().eq('id', id).select();
+  if (delErr) throw new Error(delErr.message);
+  if (!deletedRows || deletedRows.length === 0) {
+    throw new Error('Nothing was deleted — you may need to sign in at officer-login.html first (your Mayor role there is what allows this).');
+  }
+
+  await sb.from('audit_log').insert({
+    actor_id: user?.id || null,
+    action: 'delete_payment',
+    target_type: 'transaction',
+    target_id: id,
+    details: { amount: txn.amount, removed_from: 'alpha-treasury-ledger' },
+  });
+}
 export const loadShared = data.loadShared;
 export const saveShared = data.saveShared;
 export const mutateShared = data.makeMutateShared(state, STATE_KEY_FOR);

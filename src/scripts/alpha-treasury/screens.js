@@ -16,7 +16,7 @@ import {
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
 } from './constants.js?v=1';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED } from './sync.js?v=2';
+import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections } from './sync.js?v=3';
 import { render, showToast } from './router.js?v=1';
 
 /* ===================== setup_gate ===================== */
@@ -796,10 +796,12 @@ export function ledgerHTML(){
           const canApprove = !isQr && (role==='mayor'||role==='vice_mayor') && t.status==='pending';
           const canVerify = !isQr && role==='auditor' && t.status==='approved';
           const canDelete = !isQr && role==='mayor';
+          const canDeleteQr = isQr && role==='mayor';
           const extra = [];
           if(canApprove) extra.push(`<button class="btn-sm gold" data-approve-tx="${t.id}" style="padding:6px 8px;">${ICON.check}</button>`, `<button class="btn-sm danger" data-reject-tx="${t.id}" style="padding:6px 8px;">${ICON.x}</button>`);
           if(canVerify) extra.push(`<button class="btn-sm ${t.verified?'ghost':'gold'}" data-verify-tx="${t.id}" style="padding:6px 8px;">${ICON.check}</button>`);
           if(canDelete) extra.push(`<button class="btn-sm danger" data-del-tx="${t.id}" style="padding:6px 8px;">${ICON.trash}</button>`);
+          if(canDeleteQr) extra.push(`<button class="btn-sm danger" data-del-qr-tx="${t.id}" style="padding:6px 8px;">${ICON.trash}</button>`);
           return `<div style="display:flex;align-items:center;gap:6px;">${txRowHTML(t)}${extra.length?`<div style="display:flex;gap:4px;flex-shrink:0;">${extra.join('')}</div>`:''}</div>`;
         }).join('')
       }
@@ -820,6 +822,22 @@ export function attachLedgerEvents(){
       await mutateShared('treasury_transactions', latest=>latest.filter(t=>t.id!==b.dataset.delTx));
       showToast('Record deleted');
       render();
+    };
+  });
+  document.querySelectorAll('[data-del-qr-tx]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(b.disabled) return;
+      if(!confirm('Remove this scanned payment? This cannot be undone, and it will also reverse the amount from that student\'s dues if one was linked.')) return;
+      b.disabled = true;
+      try{
+        await deleteQrCollection(b.dataset.delQrTx);
+        state.qrCollections = await fetchQrCollections();
+        showToast('Scanned payment removed');
+        render();
+      }catch(e){
+        showToast(e.message || 'Could not remove this payment');
+        b.disabled = false;
+      }
     };
   });
 }
