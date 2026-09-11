@@ -4,7 +4,7 @@
    in the app that talks to Supabase directly. */
 import { createSupabaseSync } from '../shared/supabase-client.js?v=1';
 import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=2';
-import { render, showToast } from './router.js?v=1';
+import { render, showToast } from './router.js?v=2';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_m3l1Dxhwj6bIse-3UwBB4w_fqZXLuD0';
