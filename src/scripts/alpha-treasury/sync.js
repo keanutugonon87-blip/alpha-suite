@@ -47,14 +47,19 @@ export async function fetchQrCollections() {
 // enforces that server-side regardless of what this function tries to do.
 export async function deleteQrCollection(rawId) {
   const id = rawId.replace(/^qr_/, '');
+
+  const { data: { user } } = await sb.auth.getUser();
+  if (!user) {
+    throw new Error('You\'re not signed in here yet — open officer-login.html once on this device/browser, sign in as Mayor, then come back and try again.');
+  }
+
   const { data: txn, error: fetchErr } = await sb
     .from('transactions')
     .select('id, amount, dues_instance_id')
     .eq('id', id)
     .maybeSingle();
-  if (fetchErr || !txn) throw new Error(fetchErr?.message || 'Payment not found — it may already be removed.');
-
-  const { data: { user } } = await sb.auth.getUser();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!txn) throw new Error('Payment not found — either it was already removed, or your officer role hasn\'t been assigned yet (ask the Mayor to check officer_roles).');
 
   if (txn.dues_instance_id) {
     const { data: instance } = await sb

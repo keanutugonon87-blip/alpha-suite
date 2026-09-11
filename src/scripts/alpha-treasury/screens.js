@@ -16,7 +16,7 @@ import {
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
 } from './constants.js?v=1';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections } from './sync.js?v=3';
+import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections } from './sync.js?v=4';
 import { render, showToast } from './router.js?v=1';
 
 /* ===================== setup_gate ===================== */
