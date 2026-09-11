@@ -268,12 +268,14 @@ export function attachPublicEvents(){
 
 /* ===================== nav_app ===================== */
 export function navBtn(id,label,icon){ return `<button data-tab="${id}" class="${state.tab===id?'active':''}">${icon}<span>${label}</span></button>`; }
+export function navLinkExternal(href,label,icon){ return `<a href="${href}" target="_blank" rel="noopener">${icon}<span>${label}</span></a>`; }
 export function navForRole(role){
   const tabs = [ navBtn('dashboard','Dashboard',ICON.home) ];
   if(role==='mayor' || role==='treasurer') tabs.push(navBtn('log','Log Entry',ICON.plus));
   tabs.push(navBtn('ledger','Ledger',ICON.list));
   tabs.push(navBtn('liquidation','Liquidation',ICON.checklist));
   tabs.push(navBtn('periods','Past Periods',ICON.clipboard));
+  if(role==='mayor' || role==='treasurer') tabs.push(navLinkExternal('_qr-source/pages/officer-login.html','Treasury Office',ICON.checklist));
   if(role==='mayor') tabs.push(navBtn('accounts','Accounts',ICON.key));
   return tabs.join('');
 }

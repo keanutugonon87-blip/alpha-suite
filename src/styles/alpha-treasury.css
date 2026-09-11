@@ -27,9 +27,9 @@
 
   .navbar{position:fixed;bottom:0;left:0;right:0;z-index:50;background:var(--navy-950);display:flex;justify-content:space-around;
     padding:6px 4px calc(6px + env(safe-area-inset-bottom));box-shadow:0 -6px 20px rgba(0,0,0,0.25);}
-  .navbar button{background:none;border:none;color:#9797c4;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
-    font-family:'Manrope',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:0.4px;padding:6px 8px;border-radius:10px;flex:1;text-transform:uppercase;}
-  .navbar button svg{width:19px;height:19px;}
+  .navbar button, .navbar a{background:none;border:none;color:#9797c4;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;
+    font-family:'Manrope',sans-serif;font-size:9.5px;font-weight:700;letter-spacing:0.4px;padding:6px 8px;border-radius:10px;flex:1;text-transform:uppercase;text-decoration:none;}
+  .navbar button svg, .navbar a svg{width:19px;height:19px;}
   .navbar button.active{color:var(--gold-light);position:relative;}
   .navbar button.active::after{content:'';position:absolute;background:var(--gold);border-radius:3px;bottom:2px;left:50%;width:18px;height:3px;transform:translateX(-50%);}
   .navbar-logo{display:none;}
@@ -39,7 +39,7 @@
     .navbar-logo{display:flex;align-items:center;gap:9px;padding:6px 8px 18px;}
     .navbar-logo .logo-chip{width:32px;height:32px;}
     .navbar-logo b{font-family:'Cinzel',serif;font-size:12px;color:var(--gold-light);letter-spacing:1px;line-height:1.2;}
-    .navbar button{flex-direction:row;justify-content:flex-start;font-size:12px;padding:11px 12px;gap:10px;}
+    .navbar button, .navbar a{flex-direction:row;justify-content:flex-start;font-size:12px;padding:11px 12px;gap:10px;}
     .topbar{display:none;}
     .top-desktop{display:flex;align-items:center;justify-content:space-between;padding:16px 4px 22px;border-bottom:1px solid var(--line);margin-bottom:18px;}
     main{max-width:760px;padding-top:22px;}
