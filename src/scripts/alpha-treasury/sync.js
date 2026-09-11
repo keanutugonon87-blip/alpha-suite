@@ -3,7 +3,7 @@
    STATE_KEY_FOR mapping, and localStorage namespace. This is the only file
    in the app that talks to Supabase directly. */
 import { createSupabaseSync } from '../shared/supabase-client.js?v=1';
-import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=1';
+import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=2';
 import { render, showToast } from './router.js?v=1';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
@@ -24,6 +24,21 @@ const data = createSupabaseSync({
 });
 
 export const sb = data.sb;
+
+// Read-only bridge into the newer QR/Supabase-Auth collection system —
+// this app never writes here, it just merges these rows into its own
+// totals/ledger so a Treasurer only has one place to look. See
+// mappedQrCollections() in state.js for how these rows get reshaped.
+export async function fetchQrCollections() {
+  try {
+    const { data: rows, error } = await sb.from('qr_collections_public').select('*');
+    if (error) throw error;
+    return rows || [];
+  } catch (e) {
+    console.error('fetchQrCollections failed', e);
+    return [];
+  }
+}
 export const loadShared = data.loadShared;
 export const saveShared = data.saveShared;
 export const mutateShared = data.makeMutateShared(state, STATE_KEY_FOR);

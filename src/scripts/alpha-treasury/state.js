@@ -15,6 +15,7 @@ export const state = {
   liquidationNotes: {}, // {purposeKey: narrative text} — written reports of fund use, per expense purpose
   periods: [], // closed collection periods — see closeCurrentPeriod() below
   beginningBalance: { amount: 0, fromPeriodName: null }, // carried forward from the most recently closed period
+  qrCollections: [], // raw rows from qr_collections_public — the NEW QR/Supabase-Auth collection system's data, merged read-only into totals/ledger alongside the classic `transactions` list (see mappedQrCollections below). Never mutated by this app — that system owns it.
   toast: null,
   modal: null, // {type:'account'|'resetpass'|'selfpass'|'closeperiod'|'studenthistory', data:{...}}
   search: '',
@@ -44,9 +45,44 @@ export const STATE_KEY_FOR = {
 
 export const SYNC_KEYS = ['treasury_accounts', 'treasury_transactions', 'roster', 'treasury_dues_amount', 'treasury_liquidation_notes', 'treasury_periods', 'treasury_beginning_balance'];
 
+/* ---- QR collections (new system) merged in as read-only entries -----
+   Each row from qr_collections_public gets reshaped into the same
+   {type, status, category, amount, studentId, ...} object the rest of
+   this file already works with, so every existing total/filter "just
+   works" without knowing two systems exist. studentId is resolved by
+   matching the QR system's student name against the Alpha Watch roster
+   (the two systems don't share IDs). A row that can't be matched still
+   counts toward totals — it just won't attribute to one student. */
+function matchRosterIdByName(name) {
+  if (!name) return null;
+  const norm = name.trim().toLowerCase();
+  const hit = state.roster.find(s => (s.name || '').trim().toLowerCase() === norm);
+  return hit ? hit.id : null;
+}
+export function mappedQrCollections() {
+  return (state.qrCollections || []).map(row => ({
+    id: 'qr_' + row.id,
+    type: 'collection',
+    status: 'approved',
+    verified: true,
+    source: 'qr',
+    category: row.transaction_type === 'recurring' ? 'Class Dues' : (row.purpose || 'Contribution'),
+    amount: Number(row.amount) || 0,
+    studentId: matchRosterIdByName(row.student_name),
+    payer: row.student_name || '',
+    date: (row.collected_at || '').slice(0, 10),
+    time: (row.collected_at || '').slice(11, 16),
+    note: [row.remarks, row.payment_mode === 'gcash' ? 'Paid via GCash' : 'Paid via Cash'].filter(Boolean).join(' — '),
+    recordedBy: 'QR Scan & Collect',
+    receipt: null,
+  }));
+}
+export function allCollectionsForDisplay() { return approvedOf('collection').concat(mappedQrCollections()); }
+export function allTransactionsForDisplay() { return state.transactions.concat(mappedQrCollections()); }
+
 /* ---- Derived totals ---- */
 export function approvedOf(type) { return state.transactions.filter(t => t.status === 'approved' && t.type === type); }
-export function totalCollections() { return approvedOf('collection').reduce((s, t) => s + t.amount, 0); }
+export function totalCollections() { return allCollectionsForDisplay().reduce((s, t) => s + t.amount, 0); }
 export function totalExpenses() { return approvedOf('expense').reduce((s, t) => s + t.amount, 0); }
 export function currentBalance() { return (state.beginningBalance?.amount || 0) + totalCollections() - totalExpenses(); }
 export function pendingCount() { return state.transactions.filter(t => t.status === 'pending').length; }
@@ -54,13 +90,13 @@ export function unverifiedApprovedCount() { return state.transactions.filter(t =
 
 /* ---- Per-student dues (Class Dues category only, approved entries only) ---- */
 export function getStudentDuesPaid(studentId) {
-  return state.transactions
-    .filter(t => t.status === 'approved' && t.type === 'collection' && t.category === 'Class Dues' && t.studentId === studentId)
+  return allCollectionsForDisplay()
+    .filter(t => t.category === 'Class Dues' && t.studentId === studentId)
     .reduce((s, t) => s + t.amount, 0);
 }
 export function getStudentOtherContributions(studentId) {
-  return state.transactions
-    .filter(t => t.status === 'approved' && t.type === 'collection' && t.category !== 'Class Dues' && t.studentId === studentId)
+  return allCollectionsForDisplay()
+    .filter(t => t.category !== 'Class Dues' && t.studentId === studentId)
     .reduce((s, t) => s + t.amount, 0);
 }
 export function getStudentDuesStatus(studentId) {
@@ -143,10 +179,14 @@ export function buildClosedPeriodRecord(name, closedByName) {
   const collectionsTotal = collections.reduce((s, t) => s + t.amount, 0);
   const expensesTotal = expenses.reduce((s, t) => s + t.amount, 0);
   const beginningBalance = state.beginningBalance?.amount || 0;
+  // Deliberately NOT getStudentDuesPaid/getStudentOtherContributions here —
+  // those now include merged QR collections, but this period only archives
+  // (and clears) the classic `transactions` list. Using the merged getters
+  // would record QR money as "archived" here while it stays live elsewhere.
   const perStudent = {};
   state.roster.forEach(s => {
-    const dues = getStudentDuesPaid(s.id);
-    const other = getStudentOtherContributions(s.id);
+    const dues = collections.filter(t => t.category === 'Class Dues' && t.studentId === s.id).reduce((sum, t) => sum + t.amount, 0);
+    const other = collections.filter(t => t.category !== 'Class Dues' && t.studentId === s.id).reduce((sum, t) => sum + t.amount, 0);
     if (dues + other > 0) perStudent[s.id] = { dues, other, total: dues + other };
   });
   return {

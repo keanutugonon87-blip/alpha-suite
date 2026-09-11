@@ -2,9 +2,9 @@
    Boot sequence: hydrate state from Supabase + localStorage, start live
    sync, decide which screen to land on, then do the first render. This is
    the entry point loaded by <script type="module"> in alpha-treasury.html. */
-import { state } from './state.js?v=1';
+import { state } from './state.js?v=2';
 import { render } from './router.js?v=1';
-import { loadShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw } from './sync.js?v=1';
+import { loadShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, fetchQrCollections } from './sync.js?v=2';
 
 /* Extra wiring for the treasurer dashboard CTA */
 document.addEventListener('click', (e) => {
@@ -39,8 +39,14 @@ async function init() {
     treasury_periods: JSON.stringify(state.periods),
     treasury_beginning_balance: JSON.stringify(state.beginningBalance),
   });
+  state.qrCollections = await fetchQrCollections();
+
   subscribeRealtime();
   startSyncPolling();
+  setInterval(async () => {
+    state.qrCollections = await fetchQrCollections();
+    if (state.screen === 'app' || state.screen === 'public') render();
+  }, 20000);
 
   if (!accounts || accounts.length === 0) {
     state.screen = 'setup';

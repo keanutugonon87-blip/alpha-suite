@@ -9,14 +9,14 @@ import {
   approvedOf, totalCollections, totalExpenses, currentBalance, pendingCount, unverifiedApprovedCount,
   getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus, getStudentPeriodHistory,
   getExpenseGroups, groupExpensesByPurpose, groupCollectionsByCategory, GENERAL_PURPOSE_LABEL, purposeLabelOf,
-  buildPeriodPreview, buildClosedPeriodRecord,
-} from './state.js?v=1';
+  buildPeriodPreview, buildClosedPeriodRecord, allTransactionsForDisplay, allCollectionsForDisplay,
+} from './state.js?v=2';
 import {
   COLLECTION_CATEGORIES, EXPENSE_CATEGORIES, ROLES, roleLabel,
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
 } from './constants.js?v=1';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED } from './sync.js?v=1';
+import { saveShared, mutateShared, savePersonal, IS_EMBEDDED } from './sync.js?v=2';
 import { render, showToast } from './router.js?v=1';
 
 /* ===================== setup_gate ===================== */
@@ -163,7 +163,7 @@ export function publicHTML(){
 }
 export function publicOverviewHTML(){
   const paidCount = state.roster.filter(s=>getStudentDuesStatus(s.id)==='paid').length;
-  const recent = [...state.transactions].filter(t=>t.status==='approved').sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,6);
+  const recent = allTransactionsForDisplay().filter(t=>t.status==='approved').sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time)).slice(0,6);
   return `
     <div class="grid-stats" style="margin-bottom:12px;">
       <div class="stat gold"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(totalCollections())}</b><span>Collections</span></div>
@@ -187,7 +187,7 @@ export function publicContributionsHTML(){
       paid: getStudentDuesPaid(s.id),
       other: getStudentOtherContributions(s.id),
       status: getStudentDuesStatus(s.id),
-      entries: state.transactions.filter(t=>t.status==='approved' && t.type==='collection' && t.studentId===s.id),
+      entries: allCollectionsForDisplay().filter(t=>t.studentId===s.id),
     }))
     .sort((a,b)=> (a.status==='paid')-(b.status==='paid') || a.name.localeCompare(b.name));
 
@@ -361,9 +361,10 @@ export function txRowHTML(t){
   const cls = t.type==='collection' ? 'pos' : 'neg';
   const who = t.payer ? ` · ${escapeHtml(t.payer)}` : '';
   const receiptLink = t.receipt ? ` · <a class="receipt-thumb-link" href="${t.receipt}" target="_blank" rel="noopener">${ICON.paperclip}Receipt</a>` : '';
+  const qrBadge = t.source==='qr' ? ` <span class="status-chip resolved" style="font-size:9.5px;padding:2px 6px;">QR</span>` : '';
   return `<div class="list-item">
     ${txIconHTML(t)}
-    <div class="li-main"><b>${escapeHtml(t.category)}${t.verified?' ✓':''}</b><span>${formatDateTime(t.date,t.time)}${who} · by ${escapeHtml(t.recordedBy)}${receiptLink}</span></div>
+    <div class="li-main"><b>${escapeHtml(t.category)}${t.verified?' ✓':''}${qrBadge}</b><span>${formatDateTime(t.date,t.time)}${who} · by ${escapeHtml(t.recordedBy)}${receiptLink}</span></div>
     <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;">
       <span class="amt ${cls}">${sign}${formatPeso(t.amount)}</span>
       ${statusChipHTML(t)}
@@ -463,7 +464,7 @@ export function balanceHeroHTML(){
     </div>`;
 }
 export function recentActivityHTML(limit){
-  const recent = [...state.transactions].sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time)).slice(0, limit||6);
+  const recent = allTransactionsForDisplay().slice().sort((a,b)=> (b.date+b.time).localeCompare(a.date+a.time)).slice(0, limit||6);
   return `
     <h2 class="section-title" style="font-size:15px;margin-top:6px;">${ICON.list}Recent Activity</h2>
     <div class="card">
@@ -485,7 +486,7 @@ export function mayorDashboardHTML(){
       <div class="stat gold"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(totalCollections())}</b><span>Total Collections</span></div>
       <div class="stat danger"><div class="stat-icon">${ICON.cash}</div><b>${formatPeso(totalExpenses())}</b><span>Total Expenses</span></div>
       <div class="stat pend"><div class="stat-icon">${ICON.clock}</div><b>${pending.length}</b><span>Pending Approvals</span></div>
-      <div class="stat"><div class="stat-icon">${ICON.list}</div><b>${state.transactions.length}</b><span>Total Entries</span></div>
+      <div class="stat"><div class="stat-icon">${ICON.list}</div><b>${allTransactionsForDisplay().length}</b><span>Total Entries</span></div>
     </div>
     <h2 class="section-title" style="font-size:15px;margin-top:6px;">${ICON.clock}Awaiting Your Approval</h2>
     ${pending.length===0? emptyState('All caught up','No transactions are waiting on approval.', ICON.check) :
@@ -765,7 +766,7 @@ export function attachLogEvents(){
 export function ledgerHTML(){
   const role = state.session.role;
   const q = state.search.toLowerCase();
-  let rows = state.transactions.slice();
+  let rows = allTransactionsForDisplay();
   if(state.typeFilter!=='all') rows = rows.filter(t=>t.type===state.typeFilter);
   if(state.statusFilter!=='all') rows = rows.filter(t=>t.status===state.statusFilter);
   if(q) rows = rows.filter(t=> t.category.toLowerCase().includes(q) || (t.note||'').toLowerCase().includes(q) || (t.payer||'').toLowerCase().includes(q) || (t.recordedBy||'').toLowerCase().includes(q));
@@ -773,7 +774,7 @@ export function ledgerHTML(){
 
   return `
     <h2 class="section-title">${ICON.list}Transaction Ledger</h2>
-    <p class="subtext">Every collection and expense, in one place.</p>
+    <p class="subtext">Every collection and expense, in one place — including QR-scanned collections.</p>
     <div class="fab-row">
       <div class="search" style="flex:1;margin-bottom:0;">${ICON.search}<input id="ledgerSearch" placeholder="Search category, note, name…" value="${escapeHtml(state.search)}"/></div>
       <select id="ledgerTypeFilter" class="btn-sm ghost" style="cursor:pointer;">
@@ -791,9 +792,10 @@ export function ledgerHTML(){
     <div class="card">
       ${rows.length===0? emptyState('No transactions found','Try a different search or filter.', ICON.list) :
         rows.map(t=>{
-          const canApprove = (role==='mayor'||role==='vice_mayor') && t.status==='pending';
-          const canVerify = role==='auditor' && t.status==='approved';
-          const canDelete = role==='mayor';
+          const isQr = t.source==='qr';
+          const canApprove = !isQr && (role==='mayor'||role==='vice_mayor') && t.status==='pending';
+          const canVerify = !isQr && role==='auditor' && t.status==='approved';
+          const canDelete = !isQr && role==='mayor';
           const extra = [];
           if(canApprove) extra.push(`<button class="btn-sm gold" data-approve-tx="${t.id}" style="padding:6px 8px;">${ICON.check}</button>`, `<button class="btn-sm danger" data-reject-tx="${t.id}" style="padding:6px 8px;">${ICON.x}</button>`);
           if(canVerify) extra.push(`<button class="btn-sm ${t.verified?'ghost':'gold'}" data-verify-tx="${t.id}" style="padding:6px 8px;">${ICON.check}</button>`);
