@@ -270,21 +270,21 @@ Deno.serve(async (req) => {
   }
 
   // -------------------------------------------------------------
-  // COLLECT — verify token, then atomically log the transaction,
-  // update the dues instance, and write an audit entry. This is
-  // the only path that should ever create a transaction, so
-  // amounts can't be forged from the browser.
+  // COLLECT — verify token, then use the atomic log_collection()
+  // RPC function to write transaction, update dues instance, and
+  // audit log in a single atomic operation.
+  // ⭐ FIXED: Uses server-side transaction function for atomicity
   // -------------------------------------------------------------
   if (action === "collect") {
     const {
       token,
-      dues_instance_id, // nullable for ad-hoc one-time collections not tied to a pre-generated instance
+      dues_instance_id,
       amount,
-      payment_mode,      // 'cash' | 'gcash'
+      payment_mode,
       gcash_reference,
       purpose,
       remarks,
-      transaction_type,  // 'recurring' | 'one_time'
+      transaction_type,
     } = body;
 
     if (!token || !amount || !payment_mode || !purpose || !transaction_type) {
@@ -294,9 +294,11 @@ Deno.serve(async (req) => {
       return jsonResponse({ error: "gcash_reference_required" }, 400);
     }
 
+    // 1. Verify the token first (client-side verification)
     const result = await verifyToken(token);
     if (!result.valid) return jsonResponse({ error: "invalid_token", reason: result.reason }, 400);
 
+    // 2. Verify student exists and is eligible
     const { data: student, error: studentErr } = await admin
       .from("students")
       .select("id, student_id, full_name, token_version, token_revoked, enrollment_status")
@@ -307,53 +309,45 @@ Deno.serve(async (req) => {
     if (student.token_revoked) return jsonResponse({ error: "token_revoked" }, 400);
     if (student.token_version !== result.payload.v) return jsonResponse({ error: "token_superseded" }, 400);
 
+    // 3. Generate receipt number
     const { data: receiptNoRow, error: rnErr } = await admin.rpc("next_receipt_number");
     if (rnErr) return jsonResponse({ error: "receipt_number_failed", detail: rnErr.message }, 500);
     const receiptNumber = receiptNoRow as unknown as string;
 
-    const { data: txn, error: txnErr } = await admin
-      .from("transactions")
-      .insert({
-        receipt_number: receiptNumber,
-        student_id: student.id,
-        dues_instance_id: dues_instance_id ?? null,
-        amount,
-        payment_mode,
-        gcash_reference: gcash_reference ?? null,
-        purpose,
-        remarks: remarks ?? null,
-        transaction_type,
-        collected_by: callerId,
-      })
-      .select()
-      .single();
+    // 4. ⭐ ATOMIC: Call server-side log_collection() function that atomically:
+    //    - Inserts the transaction
+    //    - Updates dues_instance with proper locking
+    //    - Writes audit log
+    //    All in a single database transaction
+    const { data: logResult, error: logErr } = await admin.rpc("log_collection", {
+      p_receipt_number: receiptNumber,
+      p_student_id: student.id,
+      p_dues_instance_id: dues_instance_id || null,
+      p_amount: amount,
+      p_payment_mode: payment_mode,
+      p_purpose: purpose,
+      p_collected_by: callerId,
+      p_remarks: remarks || null,
+      p_transaction_type: transaction_type,
+      p_gcash_reference: gcash_reference || null,
+    });
 
-    if (txnErr) return jsonResponse({ error: "transaction_failed", detail: txnErr.message }, 500);
-
-    if (dues_instance_id) {
-      const { data: instance } = await admin
-        .from("dues_instances")
-        .select("amount_due, amount_paid")
-        .eq("id", dues_instance_id)
-        .maybeSingle();
-      if (instance) {
-        const newPaid = Number(instance.amount_paid) + Number(amount);
-        const newStatus =
-          newPaid >= Number(instance.amount_due) ? "paid" : newPaid > 0 ? "partial" : "pending";
-        await admin
-          .from("dues_instances")
-          .update({ amount_paid: newPaid, status: newStatus, updated_at: new Date().toISOString() })
-          .eq("id", dues_instance_id);
-      }
+    if (logErr) {
+      console.error("log_collection failed:", logErr);
+      return jsonResponse({ error: "collection_failed", detail: logErr.message }, 500);
     }
 
-    await admin.from("audit_log").insert({
-      actor_id: callerId,
-      action: "collect_payment",
-      target_type: "transaction",
-      target_id: txn.id,
-      details: { student_id: student.id, amount, payment_mode, transaction_type },
-    });
+    // 5. Fetch the created transaction to return to client
+    const { data: txn, error: txnFetchErr } = await admin
+      .from("transactions")
+      .select("*")
+      .eq("receipt_number", receiptNumber)
+      .single();
+
+    if (txnFetchErr || !txn) {
+      console.error("Failed to fetch created transaction:", txnFetchErr);
+      return jsonResponse({ error: "transaction_fetch_failed" }, 500);
+    }
 
     return jsonResponse({ success: true, transaction: txn, student });
   }
