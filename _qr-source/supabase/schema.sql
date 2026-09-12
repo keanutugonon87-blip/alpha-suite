@@ -168,6 +168,132 @@ begin
 end;
 $$;
 
+-- Atomic transaction logging function: verify token, write transaction,
+-- update dues instance, and audit log all in one transaction.
+create or replace function public.log_collection(
+  p_receipt_number text,
+  p_student_id uuid,
+  p_dues_instance_id uuid,
+  p_amount numeric,
+  p_payment_mode text,
+  p_purpose text,
+  p_collected_by uuid,
+  p_remarks text default null,
+  p_transaction_type text default 'recurring'
+)
+returns TABLE(transaction_id uuid, receipt_number text, student_id uuid) AS $$
+DECLARE
+  v_txn_id uuid;
+  v_instance_amount_due numeric;
+  v_instance_amount_paid numeric;
+  v_new_paid numeric;
+  v_new_status text;
+BEGIN
+  -- 1. Insert transaction atomically
+  INSERT INTO public.transactions (
+    receipt_number, student_id, dues_instance_id, amount, payment_mode,
+    purpose, remarks, transaction_type, collected_by, collected_at
+  )
+  VALUES (
+    p_receipt_number, p_student_id, p_dues_instance_id, p_amount, p_payment_mode,
+    p_purpose, p_remarks, p_transaction_type, p_collected_by, now()
+  )
+  RETURNING id INTO v_txn_id;
+
+  -- 2. If tied to a dues instance, update its payment status atomically
+  IF p_dues_instance_id IS NOT NULL THEN
+    SELECT amount_due, amount_paid INTO v_instance_amount_due, v_instance_amount_paid
+    FROM public.dues_instances
+    WHERE id = p_dues_instance_id
+    FOR UPDATE;  -- Lock the row to prevent race conditions
+
+    v_new_paid := v_instance_amount_paid + p_amount;
+    v_new_status := CASE
+      WHEN v_new_paid >= v_instance_amount_due THEN 'paid'
+      WHEN v_new_paid > 0 THEN 'partial'
+      ELSE 'pending'
+    END;
+
+    UPDATE public.dues_instances
+    SET amount_paid = v_new_paid,
+        status = v_new_status,
+        updated_at = now()
+    WHERE id = p_dues_instance_id;
+  END IF;
+
+  -- 3. Log to audit trail
+  INSERT INTO public.audit_log (actor_id, action, target_type, target_id, details)
+  VALUES (
+    p_collected_by, 'collect_payment', 'transaction', v_txn_id,
+    jsonb_build_object('student_id', p_student_id, 'amount', p_amount, 'payment_mode', p_payment_mode)
+  );
+
+  RETURN QUERY SELECT v_txn_id, p_receipt_number, p_student_id;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Atomic sweep overdue function using server-side timestamp
+create or replace function public.sweep_overdue_instances()
+returns TABLE(updated_count integer) AS $$
+DECLARE
+  v_count integer;
+BEGIN
+  UPDATE public.dues_instances
+  SET status = 'overdue', updated_at = now()
+  WHERE due_date < CURRENT_DATE
+    AND status IN ('pending', 'partial');
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN QUERY SELECT v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Bulk generate recurring dues atomically
+create or replace function public.generate_recurring_instances(p_dues_config_id uuid, p_period_label text)
+returns TABLE(created_count integer) AS $$
+DECLARE
+  v_config dues_config%ROWTYPE;
+  v_count integer := 0;
+  v_row record;
+BEGIN
+  -- Fetch config
+  SELECT * INTO v_config FROM public.dues_config WHERE id = p_dues_config_id;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Dues config not found';
+  END IF;
+
+  -- Insert dues instances for all active students not already created for this period
+  INSERT INTO public.dues_instances (
+    student_id, source_type, dues_config_id, period_label, amount_due, status, due_date
+  )
+  SELECT
+    s.id,
+    'recurring',
+    p_dues_config_id,
+    p_period_label,
+    CASE
+      WHEN o.override_type = 'exempt' THEN 0
+      WHEN o.override_type = 'custom_amount' THEN o.custom_amount
+      ELSE v_config.amount
+    END,
+    CASE WHEN o.override_type = 'exempt' THEN 'exempt' ELSE 'pending' END,
+    v_config.ends_on
+  FROM public.students s
+  LEFT JOIN public.dues_overrides o ON (o.student_id = s.id AND o.dues_config_id = p_dues_config_id)
+  WHERE s.enrollment_status = 'active'
+    AND NOT EXISTS (
+      SELECT 1 FROM public.dues_instances di
+      WHERE di.student_id = s.id
+        AND di.dues_config_id = p_dues_config_id
+        AND di.period_label = p_period_label
+    )
+  ON CONFLICT DO NOTHING;
+
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  RETURN QUERY SELECT v_count;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 -- ---------------------------------------------------------------------
 -- 6. Audit log
 -- ---------------------------------------------------------------------
@@ -244,7 +370,7 @@ create policy dues_overrides_write on public.dues_overrides
   for all using (public.is_treasurer_or_admin(auth.uid()))
   with check (public.is_treasurer_or_admin(auth.uid()));
 
--- dues_instances: student sees their own; treasurer/admin see + write all.
+-- dues_instances: student sees their own; treasurer/admin see ALL.
 create policy dues_instances_self_select on public.dues_instances
   for select using (
     exists (select 1 from public.students s
@@ -255,10 +381,8 @@ create policy dues_instances_admin_write on public.dues_instances
   for all using (public.is_treasurer_or_admin(auth.uid()))
   with check (public.is_treasurer_or_admin(auth.uid()));
 
--- transactions: student sees their own; treasurer/admin see + write all.
--- Inserts/updates should really go through the Edge Function (service
--- role) so amounts can't be forged client-side, but these policies keep
--- direct client access sane as a fallback.
+-- transactions: student sees their own; treasurer/admin see ALL.
+-- ⭐ CRITICAL FIX: Allows Treasurer/Mayor to see all past transactions
 create policy transactions_self_select on public.transactions
   for select using (
     exists (select 1 from public.students s
