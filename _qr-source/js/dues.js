@@ -1,5 +1,7 @@
 // =====================================================================
 // Dues configuration (admin/treasurer) + status computation.
+// ⭐ FIXED: Added error handling, atomic server-side functions,
+// and server-side timestamp for sweep_overdue_instances()
 // =====================================================================
 import { supabase } from './supabase-client.js';
 
@@ -97,70 +99,21 @@ export async function createOneTimeDue({ title, description, amount, dueDate, ap
 }
 
 // --- Generate this period's recurring instances -----------------------
+// ⭐ FIXED: Now uses server-side atomic RPC function for consistency
 // Call this once per period (e.g. monthly) — from an admin action button
 // or a scheduled Supabase cron job hitting a small wrapper function.
-// Idempotent-ish: skips students who already have an instance with the
-// same period_label for this dues_config.
 
 export async function generateRecurringInstancesForPeriod(duesConfigId, periodLabel) {
-  const { data: config, error: cfgErr } = await supabase
-    .from('dues_config')
-    .select('*')
-    .eq('id', duesConfigId)
-    .single();
-  if (cfgErr) throw cfgErr;
+  // Use the server-side atomic function instead of client-side logic
+  const { data, error } = await supabase.rpc('generate_recurring_instances', {
+    p_dues_config_id: duesConfigId,
+    p_period_label: periodLabel,
+  });
 
-  const { data: students, error: studErr } = await supabase
-    .from('students')
-    .select('id')
-    .eq('enrollment_status', 'active');
-  if (studErr) throw studErr;
-
-  const { data: overrides } = await supabase
-    .from('dues_overrides')
-    .select('*')
-    .eq('dues_config_id', duesConfigId);
-  const overrideMap = new Map((overrides || []).map((o) => [o.student_id, o]));
-
-  const { data: existing } = await supabase
-    .from('dues_instances')
-    .select('student_id')
-    .eq('dues_config_id', duesConfigId)
-    .eq('period_label', periodLabel);
-  const alreadyHas = new Set((existing || []).map((e) => e.student_id));
-
-  const rows = [];
-  for (const s of students) {
-    if (alreadyHas.has(s.id)) continue;
-    const override = overrideMap.get(s.id);
-    if (override?.override_type === 'exempt') {
-      rows.push({
-        student_id: s.id,
-        source_type: 'recurring',
-        dues_config_id: duesConfigId,
-        period_label: periodLabel,
-        amount_due: 0,
-        status: 'exempt',
-      });
-      continue;
-    }
-    const amount = override?.override_type === 'custom_amount' ? override.custom_amount : config.amount;
-    rows.push({
-      student_id: s.id,
-      source_type: 'recurring',
-      dues_config_id: duesConfigId,
-      period_label: periodLabel,
-      amount_due: amount,
-      status: 'pending',
-      due_date: config.ends_on,
-    });
-  }
-
-  if (rows.length) {
-    const { error } = await supabase.from('dues_instances').insert(rows);
-    if (error) throw error;
-  }
-  return rows.length;
+  if (error) throw new Error(`Failed to generate recurring instances: ${error.message}`);
+  
+  // data.created_count is the number of instances created
+  return data?.[0]?.created_count || 0;
 }
 
 // --- Reads used by both dashboard and collect flow ---------------------
@@ -186,14 +139,17 @@ export async function getDuesHistoryForStudent(studentId) {
   return data;
 }
 
+// ⭐ FIXED: Uses server-side RPC function with CURRENT_DATE for atomicity
 // Mark instances overdue whose due_date has passed and are still unpaid.
 // Run this periodically (e.g. on dashboard load, or a daily cron).
 export async function sweepOverdueInstances() {
-  const today = new Date().toISOString().slice(0, 10);
-  const { error } = await supabase
-    .from('dues_instances')
-    .update({ status: 'overdue' })
-    .lt('due_date', today)
-    .in('status', ['pending', 'partial']);
-  if (error) throw error;
+  const { data, error } = await supabase.rpc('sweep_overdue_instances');
+  
+  if (error) {
+    console.warn('sweep_overdue_instances error:', error);
+    // Don't throw — this is non-critical
+    return 0;
+  }
+  
+  return data?.[0]?.updated_count || 0;
 }
