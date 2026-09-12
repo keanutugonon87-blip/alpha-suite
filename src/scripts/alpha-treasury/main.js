@@ -4,7 +4,7 @@
    the entry point loaded by <script type="module"> in alpha-treasury.html. */
 import { state } from './state.js?v=2';
 import { render } from './router.js?v=2';
-import { loadShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, fetchQrCollections } from './sync.js?v=4';
+import { loadShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, fetchQrCollections } from './sync.js?v=5';
 
 /* Extra wiring for the treasurer dashboard CTA */
 document.addEventListener('click', (e) => {

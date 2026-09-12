@@ -14,7 +14,7 @@
    Treasury tab is active) and sync.js (to forward treasury_* key updates). */
 import { ICONS as ICON } from '../shared/icons.js?v=1';
 import { state } from './state.js?v=1';
-import { loadShared, saveShared, loadPersonal, savePersonal, makeMutateShared } from './sync.js?v=1';
+import { loadShared, saveShared, loadPersonal, savePersonal, makeMutateShared } from './sync.js?v=2';
 import { showToast } from './router.js?v=1';
 /* ============== Password hashing — Treasury's own salt. Existing Treasury
    accounts (created via the standalone alpha-treasury.html) have their

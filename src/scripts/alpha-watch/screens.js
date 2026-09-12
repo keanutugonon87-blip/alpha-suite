@@ -15,7 +15,7 @@ import {
   roleLabel, statusChipHTML, formatPeso, initials, avatarHTML, resizeImageFile,
   escapeHtml, todayISO, nowTimeHHMM, formatDateTime, emptyState,
 } from './constants.js?v=1';
-import { saveShared, mutateShared, savePersonal } from './sync.js?v=1';
+import { saveShared, mutateShared, savePersonal } from './sync.js?v=2';
 import { render, showToast } from './router.js?v=1';
 import { exportLedgerCSV, printLedgerReport } from './reports.js?v=1';
 import { Treasury } from './treasury-embed.js?v=1';

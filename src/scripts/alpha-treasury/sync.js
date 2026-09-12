@@ -7,7 +7,7 @@ import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=2';
 import { render, showToast } from './router.js?v=2';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_m3l1Dxhwj6bIse-3UwBB4w_fqZXLuD0';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d2drYnBsc2NzZHVzY29lb3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDA1MjgsImV4cCI6MjEwMjkxNjUyOH0.OViRrNPgfYFOXVvc0R3Cup66KAtC1Pzfh6SETAIkUn0';
 
 // True when this page is loaded inside an <iframe> (e.g. embedded elsewhere)
 // — used to hide redundant "Open Alpha Watch" links that would otherwise

@@ -5,7 +5,7 @@
 import { state } from './state.js?v=1';
 import { DEFAULT_STANDARD } from './constants.js?v=1';
 import { render } from './router.js?v=1';
-import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js?v=1';
+import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js?v=2';
 
 let liveSyncStarted = false;
 

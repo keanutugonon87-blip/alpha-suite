@@ -10,7 +10,7 @@ import { render, showToast } from './router.js?v=1';
 import { Treasury } from './treasury-embed.js?v=1';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_m3l1Dxhwj6bIse-3UwBB4w_fqZXLuD0';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d2drYnBsc2NzZHVzY29lb3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDA1MjgsImV4cCI6MjEwMjkxNjUyOH0.OViRrNPgfYFOXVvc0R3Cup66KAtC1Pzfh6SETAIkUn0';
 
 function showToastSafe(msg) { if (state.screen && state.screen !== 'loading') showToast(msg); else console.warn(msg); }
 
