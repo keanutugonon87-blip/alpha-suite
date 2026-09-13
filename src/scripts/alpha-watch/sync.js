@@ -4,7 +4,7 @@
    Supabase directly. Also forwards treasury_* key updates to the embedded
    Treasury module's own applyRemoteUpdate, since both apps share one
    `shared_data` table. */
-import { createSupabaseSync } from '../shared/supabase-client.js?v=1';
+import { createSupabaseSync } from '../shared/supabase-client.js?v=2';
 import { state } from './state.js?v=1';
 import { render, showToast } from './router.js?v=1';
 import { Treasury } from './treasury-embed.js?v=1';

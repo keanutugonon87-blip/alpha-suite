@@ -2,7 +2,7 @@
    Wires the shared supabase-client.js factory to Treasury's own state,
    STATE_KEY_FOR mapping, and localStorage namespace. This is the only file
    in the app that talks to Supabase directly. */
-import { createSupabaseSync } from '../shared/supabase-client.js?v=1';
+import { createSupabaseSync } from '../shared/supabase-client.js?v=2';
 import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=2';
 import { render, showToast } from './router.js?v=2';
 
