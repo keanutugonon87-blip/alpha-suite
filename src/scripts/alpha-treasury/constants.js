@@ -51,7 +51,8 @@ export function avatarHTML(person, extraStyle) {
 /* Resizes/compresses an uploaded image client-side before it's stored as a
    base64 data URL — keeps receipt photos from bloating the shared_data row.
    maxSize is the longest side in pixels. */
-export function resizeImageFile(file, maxSize) {
+export function resizeImageFile(file, maxSize, quality) {
+  quality = quality || 0.85;
   return new Promise((resolve, reject) => {
     if (!file.type || !file.type.startsWith('image/')) { reject(new Error('Not an image')); return; }
     const reader = new FileReader();
@@ -68,7 +69,7 @@ export function resizeImageFile(file, maxSize) {
         canvas.width = width; canvas.height = height;
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
-        resolve(canvas.toDataURL('image/jpeg', 0.85));
+        resolve(canvas.toDataURL('image/jpeg', quality));
       };
       img.src = reader.result;
     };

@@ -15,9 +15,9 @@ import {
   COLLECTION_CATEGORIES, EXPENSE_CATEGORIES, ROLES, roleLabel,
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
-} from './constants.js?v=1';
+} from './constants.js?v=2';
 import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, checkAccountsExistOnServer } from './sync.js?v=7';
-import { render, showToast } from './router.js?v=2';
+import { render, showToast } from './router.js?v=3';
 
 /* ===================== setup_gate ===================== */
 export function setupHTML(){
@@ -730,7 +730,7 @@ export function attachLogEvents(){
     const file = receiptInput.files[0];
     if(!file) return;
     try{
-      const dataUrl = await resizeImageFile(file, 1000);
+      const dataUrl = await resizeImageFile(file, 800, 0.5);
       receiptData = dataUrl;
       receiptPreview.innerHTML = `<img src="${dataUrl}" alt=""/>`;
       receiptRemove.style.display = '';

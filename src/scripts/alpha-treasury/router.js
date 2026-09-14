@@ -8,8 +8,8 @@
    runtime once the whole module graph has finished loading. */
 import { ICONS as ICON } from '../shared/icons.js?v=1';
 import { state } from './state.js?v=2';
-import { MAINTENANCE_MODE } from './constants.js?v=1';
-import { setupHTML, attachSetupEvents, gateHTML, attachGateEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js?v=8';
+import { MAINTENANCE_MODE } from './constants.js?v=2';
+import { setupHTML, attachSetupEvents, gateHTML, attachGateEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js?v=9';
 
 export function render() {
   const root = document.getElementById('root');
