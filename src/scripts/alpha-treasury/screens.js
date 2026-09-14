@@ -16,7 +16,7 @@ import {
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
 } from './constants.js?v=1';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections } from './sync.js?v=6';
+import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, checkAccountsExistOnServer } from './sync.js?v=7';
 import { render, showToast } from './router.js?v=2';
 
 /* ===================== setup_gate ===================== */
@@ -43,7 +43,9 @@ export function setupHTML(){
 export function attachSetupEvents(){
   const publicBtn = document.getElementById('publicLinkBtn');
   if(publicBtn) publicBtn.onclick = ()=>{ location.hash='public'; state.screen='public'; render(); };
-  document.getElementById('setupBtn').onclick = async ()=>{
+  const setupBtn = document.getElementById('setupBtn');
+  setupBtn.onclick = async ()=>{
+    if(setupBtn.disabled) return;
     const name = document.getElementById('su_name').value.trim();
     const username = document.getElementById('su_username').value.trim();
     const password = document.getElementById('su_password').value;
@@ -51,6 +53,28 @@ export function attachSetupEvents(){
     if(!name || !username || !password){ state._setupError='Please fill in every field.'; render(); return; }
     if(password.length<4){ state._setupError='Password must be at least 4 characters.'; render(); return; }
     if(password!==confirm){ state._setupError='Passwords do not match.'; render(); return; }
+    setupBtn.disabled = true;
+    // Critical safety check: re-read accounts directly from the server right
+    // now, ignoring whatever this page loaded with. Setup should only ever
+    // be reachable when there are truly zero accounts — if a stale/failed
+    // initial load is what got us here, or someone reaches this screen a
+    // second time, this MUST refuse rather than overwrite real accounts.
+    const check = await checkAccountsExistOnServer();
+    if(!check.ok){
+      state._setupError = "Couldn't confirm this safely — check your connection and try again.";
+      setupBtn.disabled = false;
+      render();
+      return;
+    }
+    if(check.accounts.length > 0){
+      state.accounts = check.accounts;
+      state._setupError = null;
+      state.screen = 'gate';
+      setupBtn.disabled = false;
+      showToast('Accounts already exist — please sign in instead.');
+      render();
+      return;
+    }
     const passwordHash = await hashPassword(username, password);
     const account = {id:'acc_'+Date.now(), name, username, role:'mayor', passwordHash};
     state.accounts = [account];
@@ -59,6 +83,7 @@ export function attachSetupEvents(){
     await savePersonal('session', state.session);
     state._setupError=null;
     state.screen='app';
+    setupBtn.disabled = false;
     render();
   };
 }

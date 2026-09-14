@@ -25,6 +25,24 @@ const data = createSupabaseSync({
 
 export const sb = data.sb;
 
+// Used only by the Setup screen's safety check before it's allowed to
+// create the first Mayor account. Unlike loadShared (which silently
+// folds "network error" and "no row yet" into the same fallback value),
+// this makes that distinction explicit — Setup needs to know for sure
+// whether accounts truly don't exist, versus just failing to reach the
+// server, since those two cases call for opposite actions.
+export async function checkAccountsExistOnServer() {
+  try {
+    const { data: row, error } = await sb.from('shared_data').select('value').eq('key', 'treasury_accounts').maybeSingle();
+    if (error) throw error;
+    const accounts = row ? row.value : [];
+    return { ok: true, accounts: accounts || [] };
+  } catch (e) {
+    console.error('checkAccountsExistOnServer failed', e);
+    return { ok: false, accounts: [] };
+  }
+}
+
 // Read-only bridge into the newer QR/Supabase-Auth collection system —
 // this app never writes here, it just merges these rows into its own
 // totals/ledger so a Treasurer only has one place to look. See
