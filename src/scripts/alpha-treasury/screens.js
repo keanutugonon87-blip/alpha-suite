@@ -10,13 +10,13 @@ import {
   getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus, getStudentPeriodHistory,
   getExpenseGroups, groupExpensesByPurpose, groupCollectionsByCategory, GENERAL_PURPOSE_LABEL, purposeLabelOf,
   buildPeriodPreview, buildClosedPeriodRecord, allTransactionsForDisplay, allCollectionsForDisplay,
-} from './state.js?v=2';
+} from './state.js?v=3';
 import {
   COLLECTION_CATEGORIES, EXPENSE_CATEGORIES, ROLES, roleLabel,
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile, hashPassword,
 } from './constants.js?v=2';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, checkAccountsExistOnServer } from './sync.js?v=7';
+import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, checkAccountsExistOnServer, retrySync } from './sync.js?v=8';
 import { render, showToast } from './router.js?v=3';
 
 /* ===================== setup_gate ===================== */
@@ -292,6 +292,46 @@ export function attachPublicEvents(){
 /* ============== APP SHELL ============== */
 
 /* ===================== nav_app ===================== */
+/* Visible sync status. Silent write failures cost hours of confusion once —
+   this makes the app's own connection health legible at a glance, and gives
+   a one-tap retry instead of guessing whether a save actually landed. */
+export function syncChipHTML(){
+  const h = state.syncHealth || {};
+  let label, bg, border, color, title;
+  if(h.saving){
+    label = 'Saving…'; bg='rgba(240,180,41,0.18)'; border='rgba(240,180,41,0.5)'; color='#ffd868';
+    title = 'Saving to the server…';
+  } else if(h.lastErrorAt){
+    label = 'Offline'; bg='rgba(194,59,59,0.22)'; border='rgba(194,59,59,0.6)'; color='#ffb3b3';
+    title = `Last error: ${h.lastErrorMsg || 'unknown'}\nTap to retry.`;
+  } else if(h.lastOkAt){
+    label = 'Synced'; bg='rgba(35,122,79,0.2)'; border='rgba(35,122,79,0.55)'; color='#9fe3bd';
+    title = `Last synced ${timeAgo(h.lastOkAt)}.\nTap to check now.`;
+  } else {
+    label = 'Idle'; bg='rgba(255,255,255,0.08)'; border='rgba(255,255,255,0.25)'; color='#d8d8ea';
+    title = 'No save attempted yet this session.\nTap to check the connection.';
+  }
+  return `<button id="syncChip" title="${escapeHtml(title)}" style="background:${bg};border:1px solid ${border};color:${color};font-size:11px;font-weight:700;padding:5px 10px;border-radius:20px;cursor:pointer;white-space:nowrap;">${escapeHtml(label)}</button>`;
+}
+export function timeAgo(ts){
+  const s = Math.max(0, Math.round((Date.now()-ts)/1000));
+  if(s < 10) return 'just now';
+  if(s < 60) return `${s}s ago`;
+  const m = Math.round(s/60);
+  if(m < 60) return `${m}m ago`;
+  return `${Math.round(m/60)}h ago`;
+}
+export function attachSyncChip(){
+  const chip = document.getElementById('syncChip');
+  if(!chip) return;
+  chip.onclick = async ()=>{
+    if(chip.disabled) return;
+    chip.disabled = true;
+    const ok = await retrySync();
+    showToast(ok ? 'Connection is working' : 'Still cannot reach the server');
+    render();
+  };
+}
 export function navBtn(id,label,icon){ return `<button data-tab="${id}" class="${state.tab===id?'active':''}">${icon}<span>${label}</span></button>`; }
 export function navLinkExternal(href,label,icon){ return `<a href="${href}" target="_blank" rel="noopener">${icon}<span>${label}</span></a>`; }
 export function navForRole(role){
@@ -323,6 +363,7 @@ export function appHTML(){
       </div>
       <div class="who">
         <span class="chip">${escapeHtml(roleLabel(role))}</span>
+        ${syncChipHTML()}
         ${IS_EMBEDDED ? '' : `<a href="alpha-watch.html" target="_blank" rel="noopener" title="Open Alpha Watch" style="background:none;border:1px solid rgba(255,255,255,0.25);color:#d8d8ea;font-size:11px;padding:5px 10px;border-radius:20px;text-decoration:none;">Watch</a>`}
         <button id="changePassBtn" title="Change password">${ICON.key}</button>
         <button id="logoutBtn">Sign Out</button>
@@ -332,6 +373,7 @@ export function appHTML(){
     <div class="top-desktop">
       <div><h2 class="section-title" style="padding-bottom:2px;">${escapeHtml(roleLabel(role))} View</h2><span class="subtext" style="margin:0;">Signed in as ${escapeHtml(state.session.name)}</span></div>
       <div class="who">
+        ${syncChipHTML()}
         ${IS_EMBEDDED ? '' : `<a href="alpha-watch.html" target="_blank" rel="noopener" class="btn-sm ghost" style="text-decoration:none;">${ICON.checklist}Alpha Watch</a>`}
         <button id="changePassBtnD" class="btn-sm ghost">${ICON.key}Change Password</button>
         <button id="logoutBtnD" class="btn-sm ghost">Sign Out</button>
@@ -358,6 +400,7 @@ export function attachAppEvents(){
   const lod = document.getElementById('logoutBtnD'); if(lod) lod.onclick = doLogout;
   const cp = document.getElementById('changePassBtn'); if(cp) cp.onclick = ()=>{ state.modal={type:'selfpass', data:{}}; render(); };
   const cpd = document.getElementById('changePassBtnD'); if(cpd) cpd.onclick = ()=>{ state.modal={type:'selfpass', data:{}}; render(); };
+  attachSyncChip();
 
   if(state.tab==='log') attachLogEvents();
   if(state.tab==='ledger') attachLedgerEvents();

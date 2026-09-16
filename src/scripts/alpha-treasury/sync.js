@@ -3,7 +3,7 @@
    STATE_KEY_FOR mapping, and localStorage namespace. This is the only file
    in the app that talks to Supabase directly. */
 import { createSupabaseSync } from '../shared/supabase-client.js?v=2';
-import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=2';
+import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=3';
 import { render, showToast } from './router.js?v=3';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
@@ -20,7 +20,11 @@ const data = createSupabaseSync({
   url: SUPABASE_URL,
   key: SUPABASE_ANON_KEY,
   storageNamespace: 'alpha-treasury',
-  onSaveError: () => showToastSafe('Sync failed — check your connection and try again'),
+  onSaveError: (key, err) => {
+    state.syncHealth.lastErrorAt = Date.now();
+    state.syncHealth.lastErrorMsg = (err && err.message) || 'Could not reach the server';
+    showToastSafe('Sync failed — check your connection and try again');
+  },
 });
 
 export const sb = data.sb;
@@ -107,8 +111,47 @@ export async function deleteQrCollection(rawId) {
   });
 }
 export const loadShared = data.loadShared;
-export const saveShared = data.saveShared;
-export const mutateShared = data.makeMutateShared(state, STATE_KEY_FOR);
+
+/* ---- Sync health -------------------------------------------------
+   The underlying saveShared swallows errors (it just calls onSaveError),
+   so wrap both write paths to record what actually happened. The topbar
+   chip reads state.syncHealth — see syncChipHTML() in screens.js. */
+function markSyncOk() {
+  state.syncHealth.lastOkAt = Date.now();
+  state.syncHealth.lastErrorAt = null;
+  state.syncHealth.lastErrorMsg = null;
+}
+function markSyncFailed(msg) {
+  state.syncHealth.lastErrorAt = Date.now();
+  state.syncHealth.lastErrorMsg = msg || 'Could not reach the server';
+}
+// Verifies a write actually landed, rather than trusting a silent success.
+async function confirmWrite(key) {
+  try {
+    const { error } = await sb.from('shared_data').select('key').eq('key', key).maybeSingle();
+    if (error) throw error;
+    markSyncOk();
+    return true;
+  } catch (e) {
+    markSyncFailed(e.message);
+    return false;
+  }
+}
+
+const _saveShared = data.saveShared;
+const _mutateShared = data.makeMutateShared(state, STATE_KEY_FOR);
+
+export async function saveShared(key, value) {
+  state.syncHealth.saving = true;
+  try { await _saveShared(key, value); await confirmWrite(key); }
+  finally { state.syncHealth.saving = false; }
+}
+export async function mutateShared(key, fn) {
+  state.syncHealth.saving = true;
+  try { const r = await _mutateShared(key, fn); await confirmWrite(key); return r; }
+  finally { state.syncHealth.saving = false; }
+}
+export function retrySync() { return confirmWrite('treasury_accounts'); }
 export const loadPersonal = data.loadPersonal;
 export const savePersonal = data.savePersonal;
 

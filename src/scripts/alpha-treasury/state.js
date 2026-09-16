@@ -15,6 +15,9 @@ export const state = {
   liquidationNotes: {}, // {purposeKey: narrative text} — written reports of fund use, per expense purpose
   periods: [], // closed collection periods — see closeCurrentPeriod() below
   beginningBalance: { amount: 0, fromPeriodName: null }, // carried forward from the most recently closed period
+  // Health of the connection to Supabase, surfaced in the topbar so a
+  // failing sync is visible rather than a silent toast that scrolls away.
+  syncHealth: { lastOkAt: null, lastErrorAt: null, lastErrorMsg: null, saving: false },
   qrCollections: [], // raw rows from qr_collections_public — the NEW QR/Supabase-Auth collection system's data, merged read-only into totals/ledger alongside the classic `transactions` list (see mappedQrCollections below). Never mutated by this app — that system owns it.
   toast: null,
   modal: null, // {type:'account'|'resetpass'|'selfpass'|'closeperiod'|'studenthistory', data:{...}}
