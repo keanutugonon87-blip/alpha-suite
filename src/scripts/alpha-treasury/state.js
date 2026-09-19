@@ -5,10 +5,10 @@
    read from it. */
 
 export const state = {
-  screen: 'loading', // loading | setup | gate | app | public
+  screen: 'loading', // loading | gate | pending | app | public
   tab: 'dashboard',
-  session: null, // {name, role, username, accountId}
-  accounts: [],
+  session: null, // {name, role, username, accountId, email}
+  officerRoles: [], // [{user_id, role, full_name, email}] — Supabase Auth + officer_roles now, not the old accounts blob
   transactions: [],
   roster: [], // read-only here — owned by Alpha Watch
   duesAmount: 100,
@@ -33,11 +33,11 @@ export const state = {
 export const loginLockout = { attempts: 0, until: 0 };
 
 // Maps a shared_data storage key to the state property it hydrates, since
-// Treasury's storage keys (treasury_accounts, treasury_transactions) are
-// prefixed to avoid colliding with Alpha Watch's keys in the same table,
-// but the rest of this app just reads state.accounts / state.transactions.
+// Treasury's storage keys are prefixed to avoid colliding with Alpha
+// Watch's keys in the same table. Officer accounts no longer live here —
+// see fetchOfficerRoles() in sync.js — they're real Supabase Auth users
+// plus a row in officer_roles now, not a single overwritable blob.
 export const STATE_KEY_FOR = {
-  treasury_accounts: 'accounts',
   treasury_transactions: 'transactions',
   roster: 'roster',
   treasury_dues_amount: 'duesAmount',
@@ -46,7 +46,7 @@ export const STATE_KEY_FOR = {
   treasury_beginning_balance: 'beginningBalance',
 };
 
-export const SYNC_KEYS = ['treasury_accounts', 'treasury_transactions', 'roster', 'treasury_dues_amount', 'treasury_liquidation_notes', 'treasury_periods', 'treasury_beginning_balance'];
+export const SYNC_KEYS = ['treasury_transactions', 'roster', 'treasury_dues_amount', 'treasury_liquidation_notes', 'treasury_periods', 'treasury_beginning_balance'];
 
 /* ---- QR collections (new system) merged in as read-only entries -----
    Each row from qr_collections_public gets reshaped into the same

@@ -7,9 +7,9 @@
    functions at the top level, and the actual calls happen later at
    runtime once the whole module graph has finished loading. */
 import { ICONS as ICON } from '../shared/icons.js?v=1';
-import { state } from './state.js?v=3';
-import { MAINTENANCE_MODE } from './constants.js?v=2';
-import { setupHTML, attachSetupEvents, gateHTML, attachGateEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js?v=10';
+import { state } from './state.js?v=4';
+import { MAINTENANCE_MODE } from './constants.js?v=3';
+import { gateHTML, attachGateEvents, pendingHTML, attachPendingEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js?v=12';
 
 export function render() {
   const root = document.getElementById('root');
@@ -30,8 +30,8 @@ export function render() {
     </div>`;
     return;
   }
-  if (state.screen === 'setup') { root.innerHTML = setupHTML(); attachSetupEvents(); return; }
   if (state.screen === 'gate') { root.innerHTML = gateHTML(); attachGateEvents(); return; }
+  if (state.screen === 'pending') { root.innerHTML = pendingHTML(); attachPendingEvents(); return; }
   if (state.screen === 'public') {
     root.innerHTML = publicHTML();
     attachPublicEvents();

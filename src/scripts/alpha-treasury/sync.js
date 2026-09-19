@@ -3,8 +3,8 @@
    STATE_KEY_FOR mapping, and localStorage namespace. This is the only file
    in the app that talks to Supabase directly. */
 import { createSupabaseSync } from '../shared/supabase-client.js?v=2';
-import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=3';
-import { render, showToast } from './router.js?v=3';
+import { state, STATE_KEY_FOR, SYNC_KEYS } from './state.js?v=4';
+import { render, showToast } from './router.js?v=4';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d2drYnBsc2NzZHVzY29lb3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDA1MjgsImV4cCI6MjEwMjkxNjUyOH0.OViRrNPgfYFOXVvc0R3Cup66KAtC1Pzfh6SETAIkUn0';
@@ -35,17 +35,8 @@ export const sb = data.sb;
 // this makes that distinction explicit — Setup needs to know for sure
 // whether accounts truly don't exist, versus just failing to reach the
 // server, since those two cases call for opposite actions.
-export async function checkAccountsExistOnServer() {
-  try {
-    const { data: row, error } = await sb.from('shared_data').select('value').eq('key', 'treasury_accounts').maybeSingle();
-    if (error) throw error;
-    const accounts = row ? row.value : [];
-    return { ok: true, accounts: accounts || [] };
-  } catch (e) {
-    console.error('checkAccountsExistOnServer failed', e);
-    return { ok: false, accounts: [] };
-  }
-}
+// (checkAccountsExistOnServer removed — the treasury_accounts blob it
+// guarded no longer exists; officer accounts are Supabase Auth now.)
 
 // Read-only bridge into the newer QR/Supabase-Auth collection system —
 // this app never writes here, it just merges these rows into its own
@@ -151,7 +142,60 @@ export async function mutateShared(key, fn) {
   try { const r = await _mutateShared(key, fn); await confirmWrite(key); return r; }
   finally { state.syncHealth.saving = false; }
 }
-export function retrySync() { return confirmWrite('treasury_accounts'); }
+export async function retrySync() {
+  try {
+    const { error } = await sb.from('shared_data').select('key').eq('key', 'treasury_transactions').maybeSingle();
+    if (error) throw error;
+    markSyncOk();
+    return true;
+  } catch (e) {
+    markSyncFailed(e.message);
+    return false;
+  }
+}
+
+/* ---- Officer accounts, now on Supabase Auth instead of the classic
+   treasury_accounts blob. One row per person in officer_roles, real
+   sessions, no way for one save to clobber everyone else's account. ---- */
+export async function fetchOfficerRoles() {
+  try {
+    const { data, error } = await sb.from('officer_roles').select('user_id, role, full_name, email').order('created_at');
+    if (error) throw error;
+    return data || [];
+  } catch (e) {
+    console.error('fetchOfficerRoles failed', e);
+    return [];
+  }
+}
+export async function getCurrentAuthUser() {
+  try {
+    const { data: { user } } = await sb.auth.getUser();
+    return user || null;
+  } catch (e) {
+    return null;
+  }
+}
+export async function officerSignIn(email, password) {
+  const { data, error } = await sb.auth.signInWithPassword({ email, password });
+  if (error) throw new Error('Email or password is incorrect.');
+  return data.user;
+}
+export async function officerSignUp({ email, password, fullName }) {
+  const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
+  if (error) throw error;
+  const user = data.user;
+  if (!user) throw new Error('Account created — check your email to confirm, then sign in.');
+  // Self-insert: 'pending' unless this is truly the first-ever officer,
+  // in which case the RLS policy itself allows claiming 'mayor' directly.
+  const { count } = await sb.from('officer_roles').select('*', { count: 'exact', head: true });
+  const role = (count || 0) === 0 ? 'mayor' : 'pending';
+  const { error: insErr } = await sb.from('officer_roles').insert({ user_id: user.id, email, full_name: fullName, role });
+  if (insErr) console.error('officer_roles self-insert failed', insErr);
+  return { user, role };
+}
+export async function officerSignOut() {
+  await sb.auth.signOut();
+}
 export const loadPersonal = data.loadPersonal;
 export const savePersonal = data.savePersonal;
 
@@ -162,19 +206,6 @@ export function applyRemoteUpdate(key, value) {
   lastSyncedRaw[key] = JSON.stringify(value);
   const stateKey = STATE_KEY_FOR[key] || key;
   state[stateKey] = value;
-  if (key === 'treasury_accounts' && state.session) {
-    const acc = (value || []).find(a => a.id === state.session.accountId);
-    if (!acc) {
-      state.session = null;
-      state.screen = 'gate';
-      savePersonal('session', null);
-      showToastSafe('Your account was removed — please sign in again');
-      return renderPreserveFocus();
-    }
-    if (acc.role !== state.session.role || acc.name !== state.session.name) {
-      state.session = { ...state.session, role: acc.role, name: acc.name };
-    }
-  }
   if (state.modal) return;
   if (state.screen !== 'app' && state.screen !== 'public') return;
   renderPreserveFocus();

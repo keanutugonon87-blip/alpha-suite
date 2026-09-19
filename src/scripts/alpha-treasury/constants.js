@@ -13,7 +13,8 @@ export const EXPENSE_CATEGORIES = ['Supplies', 'Printing', 'Event Expenses', 'Tr
 export const ROLES = ['mayor', 'vice_mayor', 'treasurer', 'auditor'];
 
 export function roleLabel(role) {
-  return role === 'mayor' ? 'Mayor' : role === 'vice_mayor' ? 'Vice Mayor' : role === 'treasurer' ? 'Treasurer' : 'Auditor';
+  const labels = { mayor:'Mayor', vice_mayor:'Vice Mayor', secretary:'Secretary', treasurer:'Treasurer', auditor:'Auditor', marshal:'Marshal', sails_officer:'SAILS Officer', admin:'Admin', pending:'Pending Approval' };
+  return labels[role] || role;
 }
 
 /* ---- Password hashing (SHA-256, salted with username) ---- */

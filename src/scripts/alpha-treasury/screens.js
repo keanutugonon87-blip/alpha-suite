@@ -10,142 +10,136 @@ import {
   getStudentDuesPaid, getStudentOtherContributions, getStudentDuesStatus, getStudentPeriodHistory,
   getExpenseGroups, groupExpensesByPurpose, groupCollectionsByCategory, GENERAL_PURPOSE_LABEL, purposeLabelOf,
   buildPeriodPreview, buildClosedPeriodRecord, allTransactionsForDisplay, allCollectionsForDisplay,
-} from './state.js?v=3';
+} from './state.js?v=4';
 import {
   COLLECTION_CATEGORIES, EXPENSE_CATEGORIES, ROLES, roleLabel,
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
-  initials, avatarHTML, resizeImageFile, hashPassword,
-} from './constants.js?v=2';
-import { saveShared, mutateShared, savePersonal, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, checkAccountsExistOnServer, retrySync } from './sync.js?v=8';
-import { render, showToast } from './router.js?v=3';
+  initials, avatarHTML, resizeImageFile,
+} from './constants.js?v=3';
+import { saveShared, mutateShared, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, retrySync, fetchOfficerRoles, officerSignIn, officerSignUp, officerSignOut, sb } from './sync.js?v=9';
+import { render, showToast } from './router.js?v=4';
 
-/* ===================== setup_gate ===================== */
-export function setupHTML(){
-  return `
-  <div class="gate">
-    <div class="gate-card">
-      <div class="logo-chip">${ICON.chest}</div>
-      <h1>ALPHA TREASURY</h1>
-      <div class="tag">Class Fund & Ledger</div>
-      <p class="gate-note" style="margin-top:2px;">No accounts yet. Set up the Class Mayor account first — the Mayor can then create Vice Mayor, Treasurer, and Auditor accounts from inside the app.</p>
-      <div class="field"><label>Mayor's Name</label><input type="text" id="su_name" placeholder="e.g. Juan Dela Cruz"/></div>
-      <div class="field"><label>Username</label><input type="text" id="su_username" placeholder="e.g. juan.mayor" autocapitalize="off"/></div>
-      <div class="field"><label>Password</label><input type="password" id="su_password" placeholder="At least 4 characters"/></div>
-      <div class="field"><label>Confirm Password</label><input type="password" id="su_confirm" placeholder="Re-enter password"/></div>
-      ${state._setupError?`<p style="color:var(--danger);font-size:12px;margin:0 0 12px;font-weight:700;">${escapeHtml(state._setupError)}</p>`:''}
-      <button class="btn-primary" id="setupBtn">Create Mayor Account</button>
-      <p class="gate-note">Passwords are hashed before they're stored. This connects to the same shared class database as Alpha Watch, so it's synced across every officer's device.</p>
-      <button class="btn-sm ghost" id="publicLinkBtn" style="width:100%;justify-content:center;margin-top:6px;">${ICON.users}View Public Student Dashboard</button>
-      ${IS_EMBEDDED ? '' : `<a class="btn-sm ghost" href="alpha-watch.html" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin-top:8px;text-decoration:none;">${ICON.checklist}Open Alpha Watch</a>`}
-    </div>
-  </div>`;
-}
-export function attachSetupEvents(){
-  const publicBtn = document.getElementById('publicLinkBtn');
-  if(publicBtn) publicBtn.onclick = ()=>{ location.hash='public'; state.screen='public'; render(); };
-  const setupBtn = document.getElementById('setupBtn');
-  setupBtn.onclick = async ()=>{
-    if(setupBtn.disabled) return;
-    const name = document.getElementById('su_name').value.trim();
-    const username = document.getElementById('su_username').value.trim();
-    const password = document.getElementById('su_password').value;
-    const confirm = document.getElementById('su_confirm').value;
-    if(!name || !username || !password){ state._setupError='Please fill in every field.'; render(); return; }
-    if(password.length<4){ state._setupError='Password must be at least 4 characters.'; render(); return; }
-    if(password!==confirm){ state._setupError='Passwords do not match.'; render(); return; }
-    setupBtn.disabled = true;
-    // Critical safety check: re-read accounts directly from the server right
-    // now, ignoring whatever this page loaded with. Setup should only ever
-    // be reachable when there are truly zero accounts — if a stale/failed
-    // initial load is what got us here, or someone reaches this screen a
-    // second time, this MUST refuse rather than overwrite real accounts.
-    const check = await checkAccountsExistOnServer();
-    if(!check.ok){
-      state._setupError = "Couldn't confirm this safely — check your connection and try again.";
-      setupBtn.disabled = false;
-      render();
-      return;
-    }
-    if(check.accounts.length > 0){
-      state.accounts = check.accounts;
-      state._setupError = null;
-      state.screen = 'gate';
-      setupBtn.disabled = false;
-      showToast('Accounts already exist — please sign in instead.');
-      render();
-      return;
-    }
-    const passwordHash = await hashPassword(username, password);
-    const account = {id:'acc_'+Date.now(), name, username, role:'mayor', passwordHash};
-    state.accounts = [account];
-    await saveShared('treasury_accounts', state.accounts);
-    state.session = {name, role:'mayor', username, accountId:account.id};
-    await savePersonal('session', state.session);
-    state._setupError=null;
-    state.screen='app';
-    setupBtn.disabled = false;
-    render();
-  };
-}
-
-/* ============== GATE (sign in) ============== */
+/* ===================== auth (Supabase Auth + officer_roles) ===================== */
 export function gateHTML(){
   return `
   <div class="gate">
     <div class="gate-card">
-      <div class="logo-chip">${ICON.chest}</div>
+      <div class="logo-chip" style="margin:0 auto 14px;">${ICON.chest}</div>
       <h1>ALPHA TREASURY</h1>
-      <div class="tag">Class Fund & Ledger</div>
-      <div class="field"><label>Username</label><input type="text" id="lg_username" placeholder="Your username" autocapitalize="off"/></div>
-      <div class="field"><label>Password</label><input type="password" id="lg_password" placeholder="Your password"/></div>
-      ${state._loginError?`<p style="color:var(--danger);font-size:12px;margin:0 0 12px;font-weight:700;">${escapeHtml(state._loginError)}</p>`:''}
-      <button class="btn-primary" id="loginBtn">Sign In</button>
-      <p class="gate-note">Forgot your password? Ask your Class Mayor to reset it from the Accounts tab.</p>
-      <button class="btn-sm ghost" id="publicLinkBtn" style="width:100%;justify-content:center;margin-top:6px;">${ICON.users}View Public Student Dashboard</button>
-      ${IS_EMBEDDED ? '' : `<a class="btn-sm ghost" href="alpha-watch.html" target="_blank" rel="noopener" style="width:100%;justify-content:center;margin-top:8px;text-decoration:none;">${ICON.checklist}Open Alpha Watch</a>`}
+      <p class="tag">BSMT 1-Alpha &middot; Batch 28</p>
+
+      <div id="signInPane">
+        <h2>Officer Sign In</h2>
+        ${state._loginError ? `<p style="color:var(--danger);font-size:12px;margin:0 0 12px;font-weight:700;">${escapeHtml(state._loginError)}</p>` : ''}
+        <div class="field"><label>Email</label><input id="si_email" type="email" autocomplete="username"/></div>
+        <div class="field"><label>Password</label><input id="si_password" type="password" autocomplete="current-password"/></div>
+        <button class="btn-primary" id="loginBtn" style="width:100%;justify-content:center;">Sign In</button>
+        <p class="gate-note" style="text-align:center;margin-top:14px;">First time? <a href="#" id="showSignup">Create your officer account</a></p>
+      </div>
+
+      <div id="signUpPane" style="display:none;">
+        <h2>Create Your Account</h2>
+        <p class="gate-note">This does not grant access by itself — the Mayor still assigns your officer role afterward. Tell them once you've signed up.</p>
+        ${state._setupError ? `<p style="color:var(--danger);font-size:12px;margin:0 0 12px;font-weight:700;">${escapeHtml(state._setupError)}</p>` : ''}
+        <div class="field"><label>Full Name</label><input id="su_name" type="text" placeholder="As registered with the class"/></div>
+        <div class="field"><label>Email</label><input id="su_email" type="email" autocomplete="username"/></div>
+        <div class="field"><label>Create Password</label><input id="su_password" type="password" placeholder="At least 8 characters"/></div>
+        <button class="btn-primary" id="signupBtn" style="width:100%;justify-content:center;">Create Account</button>
+        <p class="gate-note" style="text-align:center;margin-top:14px;"><a href="#" id="showSignin">Back to sign in</a></p>
+      </div>
+
+      <button class="btn-sm ghost" id="publicLinkBtn" style="width:100%;justify-content:center;margin-top:10px;">${ICON.users}View Public Dashboard</button>
+    </div>
+  </div>`;
+}
+export function pendingHTML(){
+  return `
+  <div class="gate">
+    <div class="gate-card" style="text-align:center;">
+      <div class="logo-chip" style="margin:0 auto 14px;">${ICON.clock}</div>
+      <h1>ALPHA TREASURY</h1>
+      <h2>Waiting for Access</h2>
+      <p class="gate-note">Your account is created, but the Mayor hasn't assigned you an officer role yet. Let them know you've signed up — once they grant access from the Accounts tab, just reload this page.</p>
+      <button class="btn-sm ghost" id="pendingSignOutBtn" style="width:100%;justify-content:center;margin-top:14px;">Sign Out</button>
     </div>
   </div>`;
 }
 export function attachGateEvents(){
   const publicBtn = document.getElementById('publicLinkBtn');
   if(publicBtn) publicBtn.onclick = ()=>{ location.hash='public'; state.screen='public'; render(); };
-  const uInput = document.getElementById('lg_username');
-  const pInput = document.getElementById('lg_password');
-  uInput.focus();
+
+  const signInPane = document.getElementById('signInPane');
+  const signUpPane = document.getElementById('signUpPane');
+  const showSignup = document.getElementById('showSignup');
+  const showSignin = document.getElementById('showSignin');
+  if(showSignup) showSignup.onclick = (e)=>{ e.preventDefault(); signInPane.style.display='none'; signUpPane.style.display='block'; };
+  if(showSignin) showSignin.onclick = (e)=>{ e.preventDefault(); signUpPane.style.display='none'; signInPane.style.display='block'; };
+
+  const loginBtn = document.getElementById('loginBtn');
   const submit = async ()=>{
-    const now = Date.now();
-    if(now < loginLockout.until){
-      const wait = Math.ceil((loginLockout.until-now)/1000);
-      state._loginError = `Too many attempts — try again in ${wait}s.`;
-      render();
-      return;
+    if(loginBtn.disabled) return;
+    if(Date.now() < loginLockout.until){
+      state._loginError = 'Too many attempts. Please wait a moment and try again.'; render(); return;
     }
-    const username = uInput.value.trim();
-    const password = pInput.value;
-    if(!username || !password){ state._loginError='Enter your username and password.'; render(); return; }
-    const passwordHash = await hashPassword(username, password);
-    const account = state.accounts.find(a=> a.username.toLowerCase()===username.toLowerCase() && a.passwordHash===passwordHash);
-    if(!account){
-      loginLockout.attempts++;
-      if(loginLockout.attempts>=5){
-        loginLockout.until = Date.now()+15000;
-        loginLockout.attempts = 0;
-        state._loginError = 'Too many attempts — try again in 15s.';
+    const email = document.getElementById('si_email').value.trim();
+    const password = document.getElementById('si_password').value;
+    if(!email || !password){ state._loginError='Enter your email and password.'; render(); return; }
+    loginBtn.disabled = true;
+    try{
+      const user = await officerSignIn(email, password);
+      state.officerRoles = await fetchOfficerRoles();
+      const mine = state.officerRoles.find(r=>r.user_id===user.id);
+      if(mine && mine.role && mine.role!=='pending'){
+        const role = mine.role==='admin' ? 'mayor' : mine.role;
+        state.session = { name: mine.full_name || user.email, role, username: mine.email || user.email, accountId: user.id, email: user.email };
+        state._loginError = null;
+        state.screen = 'app';
       } else {
-        state._loginError='Incorrect username or password.';
+        state.screen = 'pending';
       }
-      render();
-      return;
+      loginLockout.attempts = 0;
+    }catch(e){
+      loginLockout.attempts++;
+      if(loginLockout.attempts>=5){ loginLockout.until = Date.now()+30000; loginLockout.attempts=0; }
+      state._loginError = e.message;
+      loginBtn.disabled = false;
     }
-    loginLockout.attempts = 0; loginLockout.until = 0;
-    state.session = {name:account.name, role:account.role, username:account.username, accountId:account.id};
-    await savePersonal('session', state.session);
-    state._loginError=null;
-    state.screen='app';
     render();
   };
-  document.getElementById('loginBtn').onclick = submit;
-  pInput.onkeydown = (e)=>{ if(e.key==='Enter') submit(); };
+  if(loginBtn) loginBtn.onclick = submit;
+  const siPassword = document.getElementById('si_password');
+  if(siPassword) siPassword.onkeydown = (e)=>{ if(e.key==='Enter') submit(); };
+
+  const signupBtn = document.getElementById('signupBtn');
+  if(signupBtn) signupBtn.onclick = async ()=>{
+    if(signupBtn.disabled) return;
+    const fullName = document.getElementById('su_name').value.trim();
+    const email = document.getElementById('su_email').value.trim();
+    const password = document.getElementById('su_password').value;
+    if(!fullName || !email || !password){ state._setupError='Fill in every field.'; render(); return; }
+    if(password.length<8){ state._setupError='Password must be at least 8 characters.'; render(); return; }
+    signupBtn.disabled = true;
+    try{
+      const { role } = await officerSignUp({ email, password, fullName });
+      state.officerRoles = await fetchOfficerRoles();
+      if(role==='mayor'){
+        showToast('Account created — you are the first officer, so you are the Mayor.');
+      } else {
+        showToast('Account created — ask the Mayor to grant your role.');
+      }
+      state._setupError = null;
+      document.getElementById('signUpPane').style.display='none';
+      document.getElementById('signInPane').style.display='block';
+    }catch(e){
+      state._setupError = e.message;
+      signupBtn.disabled = false;
+    }
+    render();
+  };
+}
+export function attachPendingEvents(){
+  const btn = document.getElementById('pendingSignOutBtn');
+  if(btn) btn.onclick = doLogout;
 }
 
 /* ============== PUBLIC STUDENT DASHBOARD (no login required) ==============
@@ -284,7 +278,7 @@ export function attachPublicEvents(){
     state.search='';
     state.publicTab='overview';
     if(location.hash) history.replaceState(null,'',location.pathname+location.search);
-    state.screen = state.session ? 'app' : (state.accounts.length ? 'gate' : 'setup');
+    state.screen = state.session ? 'app' : 'gate';
     render();
   };
 }
@@ -410,8 +404,8 @@ export function attachAppEvents(){
   if(state.tab==='dashboard') attachDashboardEvents();
 }
 async function doLogout(){
+  await officerSignOut();
   state.session=null; state.screen='gate'; state._loginError=null;
-  await savePersonal('session', null);
   render();
 }
 
@@ -514,10 +508,18 @@ export function attachDashboardEvents(){
 /* ============== DASHBOARDS ============== */
 export function currentDashboardHTML(){
   const role = state.session.role;
+  if(role==='mayor') return mayorDashboardHTML();
   if(role==='vice_mayor') return viceMayorDashboardHTML();
   if(role==='treasurer') return treasurerDashboardHTML();
   if(role==='auditor') return auditorDashboardHTML();
-  return mayorDashboardHTML();
+  // Any other officer_roles role (secretary, marshal, sails_officer) is a
+  // real role in the wider Alpha Suite, just not one this app has a
+  // dashboard for — showing Mayor's view here would be a real privilege
+  // leak, so this is deliberately not a fallback-to-Mayor default.
+  return `
+    <h2 class="section-title">${ICON.chest}No Dashboard For Your Role</h2>
+    <div class="card"><p class="subtext">Alpha Treasury doesn't have a dashboard for the <b>${escapeHtml(roleLabel(role))}</b> role. You can still browse the Ledger, Liquidation Report, and Past Periods from the tabs above.</p></div>
+  `;
 }
 export function balanceHeroHTML(){
   const bal = currentBalance();
@@ -1092,6 +1094,11 @@ export function attachPeriodsEvents(){ /* plain expand/collapse via native <deta
 
 /* ===================== accounts ===================== */
 export function accountsHTML(){
+  const rows = state.officerRoles.slice().sort((a,b)=>{
+    if(a.role==='pending' && b.role!=='pending') return -1;
+    if(b.role==='pending' && a.role!=='pending') return 1;
+    return (a.full_name||'').localeCompare(b.full_name||'');
+  });
   return `
     <h2 class="section-title">${ICON.checklist}Dues Settings</h2>
     <div class="card" style="margin-bottom:16px;display:flex;align-items:flex-end;gap:12px;flex-wrap:wrap;">
@@ -1099,19 +1106,28 @@ export function accountsHTML(){
       <button class="btn-sm gold" id="saveDuesBtn">${ICON.check}Save</button>
     </div>
     <h2 class="section-title">${ICON.key}Officer Accounts</h2>
-    <p class="subtext">Create and manage sign-ins for Vice Mayor, Treasurer, and Auditor.</p>
-    <div class="fab-row"><div></div><button class="btn-sm gold" id="addAccountBtn">${ICON.plus}Add Account</button></div>
+    <p class="subtext">Officers create their own account at the sign-in screen — there's nothing to add here. New sign-ups show up below as <b>Pending</b>; assign them a role to grant access.</p>
     <div class="card">
-      ${state.accounts.map(a=>`
-        <div class="list-item">
-          <div class="tx-icon">${a.role==='mayor'?ICON.crown:a.role==='vice_mayor'?ICON.shield:a.role==='treasurer'?ICON.cash:ICON.checklist}</div>
-          <div class="li-main"><b>${escapeHtml(a.name)}</b><span>@${escapeHtml(a.username)} · ${escapeHtml(roleLabel(a.role))}</span></div>
-          <div style="display:flex;gap:6px;">
-            <button class="btn-sm ghost" data-reset-pass="${a.id}" style="padding:6px 8px;">${ICON.key}</button>
-            ${a.id!==state.session.accountId?`<button class="btn-sm danger" data-del-account="${a.id}" style="padding:6px 8px;">${ICON.trash}</button>`:''}
+      ${rows.length===0 ? emptyState('No officers yet','Once someone signs up, they will appear here.', ICON.key) :
+        rows.map(a=>{
+          const isPending = a.role==='pending';
+          const isSelf = a.user_id===state.session.accountId;
+          return `
+        <div class="list-item" style="align-items:flex-start;">
+          <div class="tx-icon">${isPending?ICON.clock:a.role==='mayor'?ICON.crown:a.role==='vice_mayor'?ICON.shield:a.role==='treasurer'?ICON.cash:ICON.checklist}</div>
+          <div class="li-main"><b>${escapeHtml(a.full_name||'(no name)')}${isSelf?' (you)':''}</b><span>${escapeHtml(a.email||'')}${isPending?' · Pending':''}</span></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+            <select class="btn-sm ghost" data-role-select="${a.user_id}" style="cursor:pointer;padding:6px 8px;">
+              ${ROLES.map(r=>`<option value="${r}" ${a.role===r?'selected':''}>${escapeHtml(roleLabel(r))}</option>`).join('')}
+              ${isPending?`<option value="pending" selected>Pending</option>`:''}
+            </select>
+            <button class="btn-sm gold" data-save-role="${a.user_id}" style="padding:6px 8px;">${ICON.check}</button>
+            ${a.email?`<button class="btn-sm ghost" data-reset-pass="${escapeHtml(a.email)}" style="padding:6px 8px;" title="Send password reset email">${ICON.key}</button>`:''}
+            ${!isSelf?`<button class="btn-sm danger" data-del-account="${a.user_id}" data-del-name="${escapeHtml(a.full_name||a.email||'this officer')}" style="padding:6px 8px;">${ICON.trash}</button>`:''}
           </div>
         </div>
-      `).join('')}
+      `;}).join('')
+      }
     </div>
   `;
 }
@@ -1121,32 +1137,70 @@ export function attachAccountsEvents(){
     const val = parseFloat(document.getElementById('duesAmountInput').value);
     if(isNaN(val) || val<0){ showToast('Enter a valid amount'); return; }
     state.duesAmount = val;
-    lastSyncedRaw['treasury_dues_amount'] = JSON.stringify(val);
     await saveShared('treasury_dues_amount', val);
     showToast('Dues amount updated');
     render();
   };
-  const addBtn = document.getElementById('addAccountBtn');
-  if(addBtn) addBtn.onclick = ()=>{ state.modal={type:'account', data:{name:'',username:'',role:'treasurer'}}; render(); };
-  document.querySelectorAll('[data-reset-pass]').forEach(b=>{
-    b.onclick = ()=>{
-      const a = state.accounts.find(x=>x.id===b.dataset.resetPass);
-      state.modal={type:'resetpass', data:{id:a.id, name:a.name, username:a.username}};
+
+  document.querySelectorAll('[data-save-role]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(b.disabled) return;
+      const userId = b.dataset.saveRole;
+      const select = document.querySelector(`[data-role-select="${userId}"]`);
+      const newRole = select.value;
+      const target = state.officerRoles.find(a=>a.user_id===userId);
+      if(target && target.role==='mayor' && newRole!=='mayor'){
+        const mayorCount = state.officerRoles.filter(a=>a.role==='mayor').length;
+        if(mayorCount<=1){ showToast("Can't demote the only Mayor — assign someone else as Mayor first"); return; }
+      }
+      b.disabled = true;
+      try{
+        const { error } = await sb.from('officer_roles').update({ role: newRole }).eq('user_id', userId);
+        if(error) throw error;
+        state.officerRoles = await fetchOfficerRoles();
+        showToast('Role updated');
+      }catch(e){
+        showToast(e.message || 'Could not update role');
+      }
+      b.disabled = false;
       render();
     };
   });
+
+  document.querySelectorAll('[data-reset-pass]').forEach(b=>{
+    b.onclick = async ()=>{
+      if(b.disabled) return;
+      b.disabled = true;
+      try{
+        const { error } = await sb.auth.resetPasswordForEmail(b.dataset.resetPass);
+        if(error) throw error;
+        showToast('Password reset email sent');
+      }catch(e){
+        showToast(e.message || 'Could not send reset email');
+      }
+      b.disabled = false;
+    };
+  });
+
   document.querySelectorAll('[data-del-account]').forEach(b=>{
     b.onclick = async ()=>{
-      const target = state.accounts.find(a=>a.id===b.dataset.delAccount);
-      if(!confirm(`Remove the account for "${target.name}"?`)) return;
-      let blocked = false;
-      await mutateShared('treasury_accounts', latest=>{
-        const mayorCount = latest.filter(a=>a.role==='mayor').length;
-        if(target.role==='mayor' && mayorCount<=1){ blocked=true; return latest; }
-        return latest.filter(a=>a.id!==target.id);
-      });
-      if(blocked){ showToast("Can't remove the only Mayor account"); return; }
-      showToast('Account removed');
+      if(b.disabled) return;
+      const userId = b.dataset.delAccount;
+      const target = state.officerRoles.find(a=>a.user_id===userId);
+      if(!confirm(`Revoke access for "${b.dataset.delName}"? They can be re-added a role later if this was a mistake — this just removes their current role.`)) return;
+      if(target && target.role==='mayor'){
+        const mayorCount = state.officerRoles.filter(a=>a.role==='mayor').length;
+        if(mayorCount<=1){ showToast("Can't remove the only Mayor"); return; }
+      }
+      b.disabled = true;
+      try{
+        const { error } = await sb.from('officer_roles').delete().eq('user_id', userId);
+        if(error) throw error;
+        state.officerRoles = await fetchOfficerRoles();
+        showToast('Access revoked');
+      }catch(e){
+        showToast(e.message || 'Could not revoke access');
+      }
       render();
     };
   });
@@ -1160,44 +1214,11 @@ export function renderModal(){
   back.className='modal-back';
   back.id='modalBack';
   let inner='';
-  if(state.modal.type==='account'){
-    const d = state.modal.data;
-    inner = `
-      <button class="close-x" id="modalClose">${ICON.x}</button>
-      <h2 class="section-title">Add Account</h2>
-      <div class="field"><label>Full Name</label><input id="m_acc_name" value="${escapeHtml(d.name||'')}" placeholder="e.g. Maria Santos"/></div>
-      <div class="field"><label>Username</label><input id="m_acc_username" value="${escapeHtml(d.username||'')}" placeholder="e.g. maria.santos" autocapitalize="off"/></div>
-      <div class="field"><label>Starting Password</label><input type="password" id="m_acc_password" placeholder="At least 4 characters"/></div>
-      <div class="field">
-        <label>Role</label>
-        <select id="m_acc_role">
-          <option value="treasurer" ${d.role==='treasurer'?'selected':''}>Treasurer</option>
-          <option value="vice_mayor" ${d.role==='vice_mayor'?'selected':''}>Vice Mayor</option>
-          <option value="auditor" ${d.role==='auditor'?'selected':''}>Auditor</option>
-          <option value="mayor" ${d.role==='mayor'?'selected':''}>Mayor</option>
-        </select>
-      </div>
-      <div class="modal-actions">
-        <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
-        <button class="btn-primary" id="modalSave">Create Account</button>
-      </div>`;
-  } else if(state.modal.type==='resetpass'){
-    const d = state.modal.data;
-    inner = `
-      <button class="close-x" id="modalClose">${ICON.x}</button>
-      <h2 class="section-title">Reset Password</h2>
-      <p class="subtext">Set a new password for ${escapeHtml(d.name)} (@${escapeHtml(d.username)}).</p>
-      <div class="field"><label>New Password</label><input type="password" id="m_reset_password" placeholder="At least 4 characters"/></div>
-      <div class="modal-actions">
-        <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
-        <button class="btn-primary" id="modalSave">Save New Password</button>
-      </div>`;
-  } else if(state.modal.type==='selfpass'){
+  if(state.modal.type==='selfpass'){
     inner = `
       <button class="close-x" id="modalClose">${ICON.x}</button>
       <h2 class="section-title">Change Password</h2>
-      <div class="field"><label>Current Password</label><input type="password" id="m_cur_password"/></div>
-      <div class="field"><label>New Password</label><input type="password" id="m_new_password" placeholder="At least 4 characters"/></div>
+      <div class="field"><label>New Password</label><input type="password" id="m_new_password" placeholder="At least 8 characters"/></div>
       <div class="modal-actions">
         <button class="btn-sm ghost" id="modalCancel" style="flex:1;justify-content:center;">Cancel</button>
         <button class="btn-primary" id="modalSave">Update Password</button>
@@ -1261,54 +1282,18 @@ export function closeModal(){ state.modal=null; render(); }
 async function saveModal(){
   const type = state.modal.type;
   const d = state.modal.data;
-  if(type==='account'){
-    const name = document.getElementById('m_acc_name').value.trim();
-    const username = document.getElementById('m_acc_username').value.trim();
-    const password = document.getElementById('m_acc_password').value;
-    const role = document.getElementById('m_acc_role').value;
-    if(!name || !username || !password){ showToast('Please fill in every field'); return; }
-    if(password.length<4){ showToast('Password must be at least 4 characters'); return; }
-    const passwordHash = await hashPassword(username, password);
-    let taken = false;
-    await mutateShared('treasury_accounts', latest=>{
-      if(latest.some(a=>a.username.toLowerCase()===username.toLowerCase())){ taken=true; return latest; }
-      latest.push({id:'acc_'+Date.now(), name, username, role, passwordHash});
-      return latest;
-    });
-    if(taken){ showToast('That username is already taken'); return; }
-    showToast('Account created');
-    state.modal=null;
-    render();
-  } else if(type==='resetpass'){
-    const password = document.getElementById('m_reset_password').value;
-    if(!password || password.length<4){ showToast('Password must be at least 4 characters'); return; }
-    const passwordHash = await hashPassword(d.username, password);
-    let found = true;
-    await mutateShared('treasury_accounts', latest=>{
-      const acc = latest.find(a=>a.id===d.id);
-      if(!acc){ found=false; return latest; }
-      acc.passwordHash = passwordHash;
-      return latest;
-    });
-    showToast(found ? 'Password updated' : 'That account was removed elsewhere');
-    state.modal=null;
-    render();
-  } else if(type==='selfpass'){
-    const cur = document.getElementById('m_cur_password').value;
+  if(type==='selfpass'){
     const next = document.getElementById('m_new_password').value;
-    if(!next || next.length<4){ showToast('New password must be at least 4 characters'); return; }
-    const curHash = await hashPassword(state.session.username, cur);
-    const acc = state.accounts.find(a=>a.id===state.session.accountId);
-    if(!acc || acc.passwordHash!==curHash){ showToast('Current password is incorrect'); return; }
-    const nextHash = await hashPassword(state.session.username, next);
-    await mutateShared('treasury_accounts', latest=>{
-      const a = latest.find(x=>x.id===state.session.accountId);
-      if(a) a.passwordHash = nextHash;
-      return latest;
-    });
-    showToast('Password updated');
-    state.modal=null;
-    render();
+    if(!next || next.length<8){ showToast('New password must be at least 8 characters'); return; }
+    try{
+      const { error } = await sb.auth.updateUser({ password: next });
+      if(error) throw error;
+      showToast('Password updated');
+      state.modal=null;
+      render();
+    }catch(e){
+      showToast(e.message || 'Could not update password');
+    }
   } else if(type==='closeperiod'){
     const name = document.getElementById('m_period_name').value.trim();
     const confirmText = document.getElementById('m_period_confirm').value.trim();
