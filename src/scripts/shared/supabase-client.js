@@ -30,6 +30,27 @@ export function createSupabaseSync({ url, key, storageNamespace, onSaveError, ta
     }
   }
 
+  // Like loadShared, but doesn't collapse "the row is genuinely empty/
+  // missing" and "the request itself failed" into the same fallback value.
+  // loadShared's silent fallback is the right call for routine reads (a
+  // save failure mid-session shouldn't crash the app), but a caller about
+  // to make a CONSEQUENTIAL decision from an empty result — e.g. "no
+  // accounts exist, show the setup screen" — needs to tell a transient
+  // network hiccup apart from a real empty table, since acting on the
+  // wrong one (re-running setup over an account that's actually still
+  // there) overwrites real data. Returns { value, ok }; ok is false only
+  // when the request itself errored, not when the row is legitimately absent.
+  async function loadSharedStrict(dataKey, fallback) {
+    try {
+      const { data, error } = await sb.from(table).select('value').eq('key', dataKey).maybeSingle();
+      if (error) throw error;
+      return { value: data ? data.value : fallback, ok: true };
+    } catch (e) {
+      console.error('load failed', dataKey, e);
+      return { value: fallback, ok: false };
+    }
+  }
+
   async function saveShared(dataKey, value) {
     try {
       // Uses an RPC (save_shared_data) instead of a raw table upsert. The
@@ -115,5 +136,5 @@ export function createSupabaseSync({ url, key, storageNamespace, onSaveError, ta
     }, intervalMs);
   }
 
-  return { sb, loadShared, saveShared, makeMutateShared, loadPersonal, savePersonal, subscribeRealtime, startPolling };
+  return { sb, loadShared, loadSharedStrict, saveShared, makeMutateShared, loadPersonal, savePersonal, subscribeRealtime, startPolling };
 }

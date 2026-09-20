@@ -5,9 +5,24 @@
 import { state } from './state.js?v=1';
 import { DEFAULT_STANDARD } from './constants.js?v=2';
 import { render } from './router.js?v=1';
-import { loadShared, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js?v=4';
+import { loadShared, loadSharedStrict, saveShared, loadPersonal, subscribeRealtime, startSyncPolling, setLastSyncedRaw, checkConnectivity } from './sync.js?v=5';
 
 let liveSyncStarted = false;
+
+// The "no accounts yet" setup screen is destructive if shown by mistake —
+// submitting it overwrites whatever's actually in the accounts table. A
+// single failed read shouldn't be enough to trigger it, so retry a few
+// times (short backoff) before concluding the table is genuinely empty
+// rather than just temporarily unreachable.
+async function loadAccountsReliably(){
+  const maxAttempts = 3;
+  for(let attempt = 1; attempt <= maxAttempts; attempt++){
+    const result = await loadSharedStrict('accounts', []);
+    if(result.ok) return result;
+    if(attempt < maxAttempts) await new Promise(r => setTimeout(r, 600 * attempt));
+  }
+  return { value: [], ok: false };
+}
 
 async function init(){
   state.screen = 'loading';
@@ -21,13 +36,24 @@ async function init(){
     return;
   }
 
-  const [roster, standard, ledger, accounts, session] = await Promise.all([
+  const [roster, standard, ledger, accountsResult, session] = await Promise.all([
     loadShared('roster', []),
     loadShared('standard', DEFAULT_STANDARD),
     loadShared('ledger', []),
-    loadShared('accounts', []),
+    loadAccountsReliably(),
     loadPersonal('session', null),
   ]);
+  if(!accountsResult.ok){
+    // Every attempt failed — this is a real connectivity/read problem, not
+    // an empty table. Show the same retry screen as the checkConnectivity
+    // failure above rather than risking the setup screen overwriting a
+    // real account.
+    state.screen = 'load-error';
+    state.onRetryLoad = init;
+    render();
+    return;
+  }
+  const accounts = accountsResult.value;
   state.roster = roster;
   state.standard = standard && standard.length ? standard : DEFAULT_STANDARD;
   state.ledger = ledger;

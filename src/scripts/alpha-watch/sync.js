@@ -2,7 +2,7 @@
    Wires the shared supabase-client.js factory to Watch's own state and
    localStorage namespace. This is the only file in the app that talks to
    Supabase directly. */
-import { createSupabaseSync } from '../shared/supabase-client.js?v=2';
+import { createSupabaseSync } from '../shared/supabase-client.js?v=3';
 import { state } from './state.js?v=1';
 import { render, showToast } from './router.js?v=1';
 
@@ -20,6 +20,7 @@ const data = createSupabaseSync({
 
 export const sb = data.sb;
 export const loadShared = data.loadShared;
+export const loadSharedStrict = data.loadSharedStrict;
 export const saveShared = data.saveShared;
 export const mutateShared = data.makeMutateShared(state); // Watch's storage keys ARE its state property names, so no STATE_KEY_FOR needed
 export const loadPersonal = data.loadPersonal;
