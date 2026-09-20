@@ -9,7 +9,7 @@
 import { ICONS as ICON } from '../shared/icons.js?v=1';
 import { state } from './state.js?v=4';
 import { MAINTENANCE_MODE } from './constants.js?v=3';
-import { gateHTML, attachGateEvents, pendingHTML, attachPendingEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js?v=12';
+import { gateHTML, attachGateEvents, pendingHTML, attachPendingEvents, publicHTML, attachPublicEvents, appHTML, attachAppEvents, renderModal } from './screens.js?v=13';
 
 export function render() {
   const root = document.getElementById('root');

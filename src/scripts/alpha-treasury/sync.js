@@ -180,17 +180,29 @@ export async function officerSignIn(email, password) {
   if (error) throw new Error('Email or password is incorrect.');
   return data.user;
 }
+// Shared by both signup and sign-in: creates this user's officer_roles
+// row if one doesn't exist yet. Signup tries this immediately, but if
+// email confirmation is required, signUp() returns no active session —
+// so that attempt silently fails RLS (auth.uid() is null then). Calling
+// this again on the next successful sign-in (which always has a real
+// session) heals that gap instead of leaving the person stuck with no
+// row and no visible error.
+export async function ensureOfficerRoleRow(user, fullNameHint) {
+  const { data: existing } = await sb.from('officer_roles').select('user_id').eq('user_id', user.id).maybeSingle();
+  if (existing) return null;
+  const { count } = await sb.from('officer_roles').select('*', { count: 'exact', head: true });
+  const role = (count || 0) === 0 ? 'mayor' : 'pending';
+  const fullName = fullNameHint || (user.user_metadata && user.user_metadata.full_name) || user.email;
+  const { error: insErr } = await sb.from('officer_roles').insert({ user_id: user.id, email: user.email, full_name: fullName, role });
+  if (insErr) { console.error('ensureOfficerRoleRow insert failed', insErr); return null; }
+  return role;
+}
 export async function officerSignUp({ email, password, fullName }) {
   const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name: fullName } } });
   if (error) throw error;
   const user = data.user;
   if (!user) throw new Error('Account created — check your email to confirm, then sign in.');
-  // Self-insert: 'pending' unless this is truly the first-ever officer,
-  // in which case the RLS policy itself allows claiming 'mayor' directly.
-  const { count } = await sb.from('officer_roles').select('*', { count: 'exact', head: true });
-  const role = (count || 0) === 0 ? 'mayor' : 'pending';
-  const { error: insErr } = await sb.from('officer_roles').insert({ user_id: user.id, email, full_name: fullName, role });
-  if (insErr) console.error('officer_roles self-insert failed', insErr);
+  const role = await ensureOfficerRoleRow(user, fullName);
   return { user, role };
 }
 export async function officerSignOut() {

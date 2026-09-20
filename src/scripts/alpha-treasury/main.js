@@ -8,7 +8,7 @@
    in sync.js. That old key is intentionally never read here anymore. */
 import { state } from './state.js?v=4';
 import { render } from './router.js?v=4';
-import { loadShared, subscribeRealtime, startSyncPolling, setLastSyncedRaw, fetchQrCollections, fetchOfficerRoles, getCurrentAuthUser } from './sync.js?v=9';
+import { loadShared, subscribeRealtime, startSyncPolling, setLastSyncedRaw, fetchQrCollections, fetchOfficerRoles, getCurrentAuthUser, ensureOfficerRoleRow } from './sync.js?v=10';
 
 /* Extra wiring for the treasurer dashboard CTA */
 document.addEventListener('click', (e) => {
@@ -52,7 +52,12 @@ async function init() {
   }, 20000);
 
   if (authUser) {
-    const mine = state.officerRoles.find(r => r.user_id === authUser.id);
+    let mine = state.officerRoles.find(r => r.user_id === authUser.id);
+    if (!mine) {
+      await ensureOfficerRoleRow(authUser);
+      state.officerRoles = await fetchOfficerRoles();
+      mine = state.officerRoles.find(r => r.user_id === authUser.id);
+    }
     if (mine && mine.role && mine.role !== 'pending') {
       const role = mine.role === 'admin' ? 'mayor' : mine.role;
       state.session = { name: mine.full_name || authUser.email, role, username: mine.email || authUser.email, accountId: authUser.id, email: authUser.email };

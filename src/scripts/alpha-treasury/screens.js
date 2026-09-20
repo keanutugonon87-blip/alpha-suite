@@ -16,7 +16,7 @@ import {
   escapeHtml, todayISO, nowTimeHHMM, formatDate, formatTime, formatDateTime, formatPeso,
   initials, avatarHTML, resizeImageFile,
 } from './constants.js?v=3';
-import { saveShared, mutateShared, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, retrySync, fetchOfficerRoles, officerSignIn, officerSignUp, officerSignOut, sb } from './sync.js?v=9';
+import { saveShared, mutateShared, IS_EMBEDDED, deleteQrCollection, fetchQrCollections, retrySync, fetchOfficerRoles, officerSignIn, officerSignUp, officerSignOut, ensureOfficerRoleRow, sb } from './sync.js?v=10';
 import { render, showToast } from './router.js?v=4';
 
 /* ===================== auth (Supabase Auth + officer_roles) ===================== */
@@ -88,7 +88,12 @@ export function attachGateEvents(){
     try{
       const user = await officerSignIn(email, password);
       state.officerRoles = await fetchOfficerRoles();
-      const mine = state.officerRoles.find(r=>r.user_id===user.id);
+      let mine = state.officerRoles.find(r=>r.user_id===user.id);
+      if(!mine){
+        await ensureOfficerRoleRow(user);
+        state.officerRoles = await fetchOfficerRoles();
+        mine = state.officerRoles.find(r=>r.user_id===user.id);
+      }
       if(mine && mine.role && mine.role!=='pending'){
         const role = mine.role==='admin' ? 'mayor' : mine.role;
         state.session = { name: mine.full_name || user.email, role, username: mine.email || user.email, accountId: user.id, email: user.email };
