@@ -1,13 +1,10 @@
 /* Alpha Watch — sync.js
    Wires the shared supabase-client.js factory to Watch's own state and
    localStorage namespace. This is the only file in the app that talks to
-   Supabase directly. Also forwards treasury_* key updates to the embedded
-   Treasury module's own applyRemoteUpdate, since both apps share one
-   `shared_data` table. */
+   Supabase directly. */
 import { createSupabaseSync } from '../shared/supabase-client.js?v=2';
 import { state } from './state.js?v=1';
 import { render, showToast } from './router.js?v=1';
-import { Treasury } from './treasury-embed.js?v=1';
 
 const SUPABASE_URL = 'https://gxwgkbplscsduscoeoph.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd4d2drYnBsc2NzZHVzY29lb3BoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDA1MjgsImV4cCI6MjEwMjkxNjUyOH0.OViRrNPgfYFOXVvc0R3Cup66KAtC1Pzfh6SETAIkUn0';
@@ -25,7 +22,6 @@ export const sb = data.sb;
 export const loadShared = data.loadShared;
 export const saveShared = data.saveShared;
 export const mutateShared = data.makeMutateShared(state); // Watch's storage keys ARE its state property names, so no STATE_KEY_FOR needed
-export const makeMutateShared = data.makeMutateShared; // exposed so treasury-embed.js can bind its own (trState uses a different key mapping)
 export const loadPersonal = data.loadPersonal;
 export const savePersonal = data.savePersonal;
 
@@ -33,11 +29,6 @@ export const SYNC_KEYS = ['roster','standard','ledger','accounts'];
 let lastSyncedRaw = {};
 
 export function applyRemoteUpdate(key, value){
-  if(key.startsWith('treasury_')){
-    lastSyncedRaw[key] = JSON.stringify(value);
-    Treasury.applyRemoteUpdate(key, value);
-    return;
-  }
   if(!SYNC_KEYS.includes(key)) return;
   lastSyncedRaw[key] = JSON.stringify(value);
   state[key] = value;
@@ -90,8 +81,6 @@ export function subscribeRealtime(){
 
 export function startSyncPolling(){
   // Matches original behavior: polling only covers Watch's own 4 keys.
-  // treasury_* keys are picked up via the realtime subscription above,
-  // whose callback (applyRemoteUpdate) forwards them to Treasury.
   data.startPolling(SYNC_KEYS, {
     getLastRaw: (k) => lastSyncedRaw[k],
     onChange: (k, v) => applyRemoteUpdate(k, v),

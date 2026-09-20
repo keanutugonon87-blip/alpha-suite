@@ -1,9 +1,9 @@
 /* Alpha Watch — screens.js
    All render*HTML() and attach*Events() functions: setup/gate/public,
    nav shell, role dashboards, roster, standard, log, ledger, accounts,
-   modal, plus the Treasury tab's mount point. Mechanically split out of
-   the original single-file index__1_.html — logic is unchanged, only
-   wrapped in ES module imports/exports. */
+   modal. Mechanically split out of the original single-file
+   index__1_.html — logic is unchanged, only wrapped in ES module
+   imports/exports. */
 import { ICONS as ICON } from '../shared/icons.js?v=1';
 import {
   state, loginLockout, getStudentOffenseTimeline, getViolationSanction,
@@ -15,10 +15,9 @@ import {
   roleLabel, statusChipHTML, formatPeso, initials, avatarHTML, resizeImageFile,
   escapeHtml, todayISO, nowTimeHHMM, formatDateTime, emptyState,
 } from './constants.js?v=2';
-import { saveShared, mutateShared, savePersonal } from './sync.js?v=3';
+import { saveShared, mutateShared, savePersonal } from './sync.js?v=4';
 import { render, showToast } from './router.js?v=1';
 import { exportLedgerCSV, printLedgerReport } from './reports.js?v=1';
-import { Treasury } from './treasury-embed.js?v=1';
 
 /* ===================== current_dash ===================== */
 export function currentDashboardHTML(){
@@ -29,18 +28,6 @@ export function currentDashboardHTML(){
   if(role==='vice_mayor') return viceMayorDashboardHTML();
   return dashboardHTML();
 }
-/* ============== TREASURY (embedded, native — not an iframe) ==============
-   Alpha Treasury keeps its own separate accounts/login on purpose (Watch
-   and Treasury officers aren't the same account), but its actual UI is
-   ported in natively here as the `Treasury` module below, so it renders as
-   a normal tab inside Alpha Watch instead of a boxed-in iframe. It talks to
-   the same Supabase `shared_data` table (treasury_* keys) as the standalone
-   alpha-treasury.html, and reads the class roster live from Watch's own
-   `state.roster` rather than fetching it a second time. Everything is
-   wrapped in an IIFE so its internals (which reuse familiar names like
-   `state`, `render`, `ICON`, `escapeHtml`...) can never collide with Watch's
-   own identically-patterned code above. */
-
 /* ===================== runcountups ===================== */
 export function runCountUps(){
   document.querySelectorAll('[data-count]').forEach(el=>{
@@ -65,9 +52,6 @@ export function runCountUps(){
 export function navBtn(id,label,icon){
   return `<button data-tab="${id}" class="${state.tab===id?'active':''}">${icon}<span>${label}</span></button>`;
 }
-
-/* ===================== treasuryTabHTML ===================== */
-export function treasuryTabHTML(){ return '<div id="treasuryRoot"></div>'; }
 
 /* ===================== setup_gate ===================== */
 export function setupHTML(){
@@ -317,13 +301,12 @@ export function appHTML(){
       ${!isSails?navBtn('standard','The Standard',ICON.clipboard):''}
       ${(!isSails && !isMarshall && !isViceMayor)?navBtn('log','Log',ICON.plus):''}
       ${!isSails?navBtn('ledger','Ledger',ICON.list):''}
-      ${!isSails?navBtn('treasury','Treasury',ICON.cash):''}
       ${isMayor?navBtn('accounts','Accounts',ICON.key):''}
     </nav>`;
   const topbar = `
     <div class="topbar">
       <div class="brand"><div class="logo-chip"><img src="${LOGO_PATH}" alt="Alpha logo"/></div><div class="name"><b>ALPHA WATCH</b><span>Uphold the Standard</span></div></div>
-      <div class="who"><span class="chip">${roleLabel(state.session.role)}</span><button id="treasuryBtn" style="background:none;border:1px solid rgba(255,255,255,0.25);color:#d8d8ea;font-size:11px;padding:5px 10px;border-radius:20px;cursor:pointer;font-family:'Manrope',sans-serif;">Treasury</button><button id="changePassBtn">Password</button><button id="logoutBtn">Sign out</button></div>
+      <div class="who"><span class="chip">${roleLabel(state.session.role)}</span><button id="changePassBtn">Password</button><button id="logoutBtn">Sign out</button></div>
     </div>`;
   const topDesktop = `
     <div class="top-desktop">
@@ -331,7 +314,7 @@ export function appHTML(){
         <div class="logo-chip" style="width:42px;height:42px;"><img src="${LOGO_PATH}" alt="Alpha logo"/></div>
         <div><div style="font-family:'Cinzel',serif;font-size:13px;color:var(--ink-soft);">Signed in as</div><b style="font-size:16px;">${escapeHtml(state.session.name)}</b></div>
       </div>
-      <div class="who"><span class="chip">${roleLabel(state.session.role)}</span><button id="treasuryBtnD" style="background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:11px;padding:6px 12px;border-radius:20px;cursor:pointer;font-family:'Manrope',sans-serif;">Treasury</button><button id="changePassBtnD" style="background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:11px;padding:6px 12px;border-radius:20px;cursor:pointer;">Password</button><button id="logoutBtnD" style="background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:11px;padding:6px 12px;border-radius:20px;cursor:pointer;">Sign out</button></div>
+      <div class="who"><span class="chip">${roleLabel(state.session.role)}</span><button id="changePassBtnD" style="background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:11px;padding:6px 12px;border-radius:20px;cursor:pointer;">Password</button><button id="logoutBtnD" style="background:none;border:1px solid var(--line);color:var(--ink-soft);font-size:11px;padding:6px 12px;border-radius:20px;cursor:pointer;">Sign out</button></div>
     </div>`;
   let body='';
   if(state.tab==='dashboard') body = currentDashboardHTML();
@@ -339,7 +322,6 @@ export function appHTML(){
   else if(state.tab==='standard') body = standardHTML();
   else if(state.tab==='log') body = (isMarshall || isViceMayor) ? currentDashboardHTML() : logHTML();
   else if(state.tab==='ledger') body = ledgerHTML();
-  else if(state.tab==='treasury') body = treasuryTabHTML();
   else if(state.tab==='accounts') body = isMayor ? accountsHTML() : currentDashboardHTML();
 
   return `
@@ -360,15 +342,12 @@ export function attachAppEvents(){
   const lod = document.getElementById('logoutBtnD'); if(lod) lod.onclick = doLogout;
   const cp = document.getElementById('changePassBtn'); if(cp) cp.onclick = ()=>{ state.modal={type:'selfpass', data:{}}; render(); };
   const cpd = document.getElementById('changePassBtnD'); if(cpd) cpd.onclick = ()=>{ state.modal={type:'selfpass', data:{}}; render(); };
-  const tb = document.getElementById('treasuryBtn'); if(tb) tb.onclick = ()=>{ state.tab='treasury'; state.modal=null; render(); };
-  const tbd = document.getElementById('treasuryBtnD'); if(tbd) tbd.onclick = ()=>{ state.tab='treasury'; state.modal=null; render(); };
 
   if(state.tab==='roster') attachRosterEvents();
   if(state.tab==='standard') attachStandardEvents();
   if(state.tab==='log') attachLogEvents();
   if(state.tab==='ledger') attachLedgerEvents();
   if(state.tab==='accounts' && state.session.role==='mayor') attachAccountsEvents();
-  if(state.tab==='treasury') Treasury.mount(document.getElementById('treasuryRoot'));
   if(state.tab==='dashboard' && state.session.role==='sails') attachSailsDashboardEvents();
   if(state.tab==='dashboard' && state.session.role==='secretary') attachSecretaryDashboardEvents();
   if(state.tab==='dashboard' && state.session.role==='vice_mayor') attachViceMayorDashboardEvents();
