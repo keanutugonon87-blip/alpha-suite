@@ -9,7 +9,7 @@ export const LOGO_PATH = 'assets/logo.png';
    Set to true to lock the app down (blocks sign-in, the app itself, and
    the Public Standing Board) and show a generic "back soon" notice
    instead. Set back to false to reopen. */
-export const MAINTENANCE_MODE = true;
+export const MAINTENANCE_MODE = false;
 
 /* ============== Default data ============== */
 export const DEFAULT_STANDARD = [

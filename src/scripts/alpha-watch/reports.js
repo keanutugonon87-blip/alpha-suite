@@ -3,7 +3,7 @@
    HTML report. Both outputs share computeLedgerReportData() so they can
    never drift out of sync with each other. */
 import { state, getViolationOffenseNumber, getViolationSanction } from './state.js?v=1';
-import { roleLabel, formatDate, formatDateTime, todayISO, todayLongDate, ordinal, LOGO_PATH } from './constants.js?v=1';
+import { roleLabel, formatDate, formatDateTime, todayISO, todayLongDate, ordinal, LOGO_PATH } from './constants.js?v=2';
 
 // The xlsx export needs the logo as a base64 string (ExcelJS embeds images
 // by buffer, not URL) — fetched once from the real asset file and cached,
