@@ -6,7 +6,7 @@
 // =====================================================================
 import { qrToDataUrl } from './qr-render.js';
 
-const DASHBOARD_BASE_URL = 'https://keanutugonon87-blip.github.io/alpha-suite/student-dashboard';
+const DASHBOARD_BASE_URL = 'https://keanutugonon87-blip.github.io/alpha-suite/_qr-source/pages/student-dashboard.html';
 
 export async function buildReceiptPdf({ transaction, student, treasurerName }) {
   // eslint-disable-next-line no-undef
@@ -78,7 +78,9 @@ export async function buildReceiptPdf({ transaction, student, treasurerName }) {
   y += 28;
 
   // QR linking back to the transaction on the student's dashboard.
-  const qrUrl = `${DASHBOARD_BASE_URL}/${student.id}?txn=${transaction.id}`;
+  // The dashboard is login-gated and the static site has no path routing,
+  // so the receipt links to the page with a ?txn= query only.
+  const qrUrl = `${DASHBOARD_BASE_URL}?txn=${transaction.id}`;
   const qrDataUrl = await qrToDataUrl(qrUrl, 200);
   const qrSize = 90;
   doc.addImage(qrDataUrl, 'PNG', 160 - qrSize / 2, y, qrSize, qrSize);

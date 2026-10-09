@@ -28,7 +28,7 @@
   import { studentLogout } from '../js/auth.js';
   import { renderQrToCanvas, qrToDataUrl } from '../js/qr-render.js';
   import { getOutstandingDuesForStudent, getDuesHistoryForStudent, sweepOverdueInstances } from '../js/dues.js';
-  import { downloadReceiptPdf } from '../js/receipt.js';
+  import { downloadReceiptPdf } from '../js/receipt.js?v=2';
 
   const content = document.getElementById('content');
 
@@ -72,10 +72,23 @@
     }
 
     render(student, outstanding, history, transactions || [], myToken);
+    highlightTargetTransaction();
   }
 
   function statusBadge(status) {
     return `<span class="at-status at-status--${status}">${status}</span>`;
+  }
+
+  function highlightTargetTransaction() {
+    const targetId = new URLSearchParams(window.location.search).get('txn');
+    if (!targetId) return;
+    const row = document.getElementById(`txn-row-${targetId}`);
+    if (!row) return;
+    row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    row.style.transition = 'background-color 0.4s ease';
+    row.style.backgroundColor = 'rgba(184,134,47,0.18)';
+    row.style.borderRadius = '8px';
+    setTimeout(() => { row.style.backgroundColor = ''; }, 2600);
   }
 
   function render(student, outstanding, history, transactions, myToken) {
@@ -128,7 +141,7 @@
             : transactions
                 .map(
                   (t) => `
-              <div class="at-ledger-row">
+              <div class="at-ledger-row" id="txn-row-${t.id}">
                 <div>
                   <div class="at-desc">${t.purpose}</div>
                   <div class="at-meta">${new Date(t.collected_at).toLocaleString('en-PH')} · ${t.receipt_number}</div>
