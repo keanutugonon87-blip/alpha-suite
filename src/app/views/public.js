@@ -24,7 +24,9 @@ export async function renderPublic(root) {
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
-  let tab = 'fund', data = null, animated = false;
+  let tab = 'fund', data = null, animated = false, vf = 'open', vq = '';
+  const ord = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
+  const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };
@@ -46,8 +48,18 @@ export async function renderPublic(root) {
         <h3 style="margin:18px 2px 8px">Past collection periods</h3>
         ${(tre.past || []).length ? `<div class="card">${tre.past.map(p => `<button class="row" data-p="${p.id}" style="width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left;cursor:pointer"><div class="m"><b>${esc(p.name)}</b><small>Closed ${fmtDate(p.closed_at)}</small></div>
           <div style="text-align:right"><div class="amt">${peso(p.closing_balance)}</div><small class="muted">${peso(p.collections_total)} in · ${peso(p.expenses_total)} out</small></div></button>`).join('')}</div>` : '<div class="empty"><b>No closed periods</b>When the Mayor closes a collection period, its full record is kept here.</div>'}`,
-      standing: () => `<div class="card">${stand.length ? stand.map(s => `<div class="row"><div class="lead"><span class="ini">${esc(initials(s.name))}</span><b>${esc(s.name)}</b></div><span class="tag bad">${s.outstanding} outstanding</span></div>`).join('')
-        : '<div class="empty"><b>Everyone is in good standing</b>No outstanding violations right now.</div>'}</div>`,
+      standing: () => {
+        const all = data.viol || [], nOpen = all.filter(isOpen).length, nRes = all.length - nOpen;
+        const q = vq.trim().toLowerCase();
+        const list = all.filter(v => (vf === 'all' || (vf === 'open' ? isOpen(v) : !isOpen(v))) && (!q || v.name.toLowerCase().includes(q) || (v.standard || '').toLowerCase().includes(q)));
+        const row = v => `<div class="row"><div class="lead"><span class="ini">${esc(initials(v.name))}</span><div class="m"><b>${esc(v.name)}</b>
+          <small>${esc(v.standard)} · ${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : `${ord(v.offense)} offense: ₱25 fine`}</small></div></div>
+          <span class="tag ${isOpen(v) ? 'bad' : 'ok'}">${isOpen(v) ? 'Outstanding' : 'Resolved'}</span></div>`;
+        return `<div class="card pad" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px"><div><b style="font-size:1.4rem">${nOpen}</b><br><small class="muted">outstanding</small></div><div><b style="font-size:1.4rem">${nRes}</b><br><small class="muted">resolved</small></div><div><b style="font-size:1.4rem">${all.length}</b><br><small class="muted">total</small></div></div>
+          <div class="seg" id="vf" style="margin-bottom:8px">${[['open','Outstanding'],['done','Resolved'],['all','All']].map(([k,l]) => `<button data-vf="${k}" class="${vf === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <input id="vq" type="search" placeholder="Search name or violation" value="${esc(vq)}" aria-label="Search violations" style="width:100%;margin-bottom:10px">
+          <div class="card">${list.length ? list.map(row).join('') : '<div class="empty"><b>No matching records</b>Nothing to show for this filter.</div>'}</div>`;
+      },
       officers: () => `<div class="officers">${officers.map(o => `<div class="ocard"><div class="ph">${o.photo ? `<img src="${o.photo}" alt="${esc(o.name)}" style="object-position:${o.x}% ${o.y}%">` : esc(initials(o.name))}</div><div class="tx"><b>${esc(o.name)}</b><small>${esc(o.position)}</small></div></div>`).join('')}</div>`,
       learn: () => '',
       bulletin: () => `<iframe class="fb" src="${FB}" width="500" height="600" scrolling="yes" loading="lazy" title="Class Facebook page" allow="encrypted-media"></iframe>`,
@@ -57,17 +69,19 @@ export async function renderPublic(root) {
         <div class="copy"><small>Class fund balance</small><div class="big" id="bal">${peso(tre.balance)}</div>
           <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} student${stand.length > 1 ? 's' : ''} with open violations` : ' · everyone in good standing'}</p></div>
         <div class="ship">${SHIP}</div>${SEA}</div>
-      <div class="seg" role="tablist">${[['fund', 'Fund'], ['standing', 'Standing'], ['officers', 'Officers'], ['learn', 'Deck Watch'], ['bulletin', 'Bulletin']].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="tablist">${[['fund', 'Fund'], ['standing', 'Violations'], ['officers', 'Officers'], ['learn', 'Deck Watch'], ['bulletin', 'Bulletin']].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' ? '' : views[tab]()}</section>`;
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
     if (tab === 'learn') renderLearn(m.querySelector('#sec'));
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
+    m.querySelectorAll('[data-vf]').forEach(b => b.onclick = () => { vf = b.dataset.vf; paint(); });
+    const qi = m.querySelector('#vq'); if (qi) qi.oninput = () => { vq = qi.value; const pos = qi.selectionStart; paint(); const n = m.querySelector('#vq'); n.focus(); n.setSelectionRange(pos, pos); };
     m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => openPeriod(tre.past.find(p => p.id === b.dataset.p)));
   }
   async function load() {
     try {
-      const [o, t, s] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing'))]);
-      const first = !data; data = { off: o, tre: t, stand: s }; if (first || tab !== 'learn') paint();
+      const [o, t, s, vv] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing')), db(sb.rpc('v2_public_violations'))]);
+      const first = !data; data = { off: o, tre: t, stand: s, viol: vv }; if (first || tab !== 'learn') paint();
     } catch (e) { if (!data) m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div>`; }
   }
   await load();
