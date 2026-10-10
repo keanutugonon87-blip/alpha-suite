@@ -1,7 +1,7 @@
 /* QR helpers: scan student QR, print student QR cards, printable receipts. */
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
-import { sb, db, esc, peso, fmtDateTime, toast, modal, printHTML } from './core.js';
+import { sb, db, esc, peso, fmtDateTime, toast, modal, printHTML, blobToDataUrl } from './core.js';
 
 export const qrDataUrl = (text, size = 200) => QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'M' });
 
@@ -36,17 +36,41 @@ export function scanMember() {
   });
 }
 
+/* QR with the Alpha crest in the middle (error-correction H keeps it scannable). */
+const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+async function brandedQR(text, size, crestUrl) {
+  const base = await loadImg(await QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'H' }));
+  const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
+  x.drawImage(base, 0, 0, size, size);
+  const d = Math.round(size * 0.22), o = (size - d) / 2, r = d / 2 + 5;
+  x.fillStyle = '#fff'; x.beginPath(); x.arc(size / 2, size / 2, r, 0, 7); x.fill();
+  x.strokeStyle = '#d9a63c'; x.lineWidth = 3; x.stroke();
+  x.save(); x.beginPath(); x.arc(size / 2, size / 2, d / 2, 0, 7); x.clip(); x.drawImage(await loadImg(crestUrl), o, o, d, d); x.restore();
+  return c.toDataURL('image/png');
+}
+const CARD_CSS = `@page{margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.c{break-inside:avoid;border:2px solid #0c1f5c;border-radius:14px;overflow:hidden;text-align:center;background:linear-gradient(#fff,#f2f9fb);font-family:Atkinson Hyperlegible,Inter,sans-serif}
+.h{background:linear-gradient(135deg,#0c1f5c,#1d4fd8);color:#fff;padding:8px 6px 7px;border-bottom:3px solid #d9a63c}
+.h img{width:34px;height:34px;border-radius:50%;background:#fff;padding:2px;display:block;margin:0 auto 3px}
+.h b{display:block;font:700 12px Georgia,serif;letter-spacing:.18em}.h small{display:block;font-size:8px;letter-spacing:.08em;color:#dff1f8}
+.q{padding:9px 10px 4px}.q img{width:100%;display:block}
+.n{padding:2px 8px 4px}.n b{display:block;font-size:12px;color:#0c1f5c;line-height:1.2}.n small{font-size:10px;color:#2a7fb0}
+.f{font-size:7.5px;letter-spacing:.14em;color:#fff;background:#2a7fb0;padding:4px;text-transform:uppercase}`;
 export async function showMemberCards() {
   const members = await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active').order('full_name'));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
+  const crest = await blobToDataUrl(await (await fetch('assets/wolf-crest.png')).blob());
   const cards = [];
   for (const mem of members) {
-    try { cards.push({ mem, img: await qrDataUrl(await db(sb.rpc('v2_member_token', { p_member: mem.id })), 220) }); } catch (e) { toast(e.message, true); break; }
+    try { cards.push({ mem, img: await brandedQR(await db(sb.rpc('v2_member_token', { p_member: mem.id })), 320, crest) }); } catch (e) { toast(e.message, true); break; }
+    m.querySelector('#pg').textContent = `Generating ${cards.length}/${members.length}…`;
   }
+  const html = cards.map(c => `<div class="c"><div class="h"><img src="${crest}" alt=""><b>ALPHA</b><small>BSMT 1-ALPHA · BATCH 28 · PIT-COMED</small></div>
+    <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
   m.querySelector('#pg').textContent = `${cards.length} cards ready. Each code is private to that student — keep the printout safe.`;
-  m.querySelector('#g').innerHTML = '<button class="btn gold" id="pr" style="width:100%">Print / save as PDF</button>';
-  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>.g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.c{border:1px solid #999;border-radius:8px;padding:8px;text-align:center;break-inside:avoid}.c img{width:100%}.c b{display:block;font-size:12px}.c small{font-size:10px;color:#555}</style>
-    <div class="g">${cards.map(c => `<div class="c"><img src="${c.img}"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div>`).join('')}</div>`);
+  m.querySelector('#g').innerHTML = `<button class="btn gold" id="pr" style="width:100%;margin-bottom:12px">Print / save as PDF</button><style>${CARD_CSS}.g{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}</style><div class="g">${html}</div>`;
+  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="g">${html}</div>`);
 }
 
 export async function showReceipt(entryId) {
