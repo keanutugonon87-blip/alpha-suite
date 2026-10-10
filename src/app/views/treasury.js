@@ -1,4 +1,5 @@
-import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, downloadCSV, printHTML, askText, initials, dayLabel } from '../core.js';
+import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, initials, dayLabel } from '../core.js';
+import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
 
 const CATS_IN = ['Class Dues', 'Contribution', 'Fundraising', 'Donation', 'Other'];
@@ -43,7 +44,7 @@ export async function mountTreasury(el, ctx) {
         <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
           <select id="flt" style="width:auto;margin-left:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${rows(shown, true)}</div>
-        <div class="bar"><button class="btn ghost" id="csv">Export ledger (CSV)</button><button class="btn ghost" id="rep">Print period report</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
+        <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
     } else {
       body = past.length ? past.map(p => { const pe = entries.filter(e => e.period_id === p.id && e.status === 'approved');
         return `<div class="card"><div class="row" style="border:0;cursor:pointer" data-past="${p.id}"><div class="m"><b>${esc(p.name)}</b><small>Closed ${fmtDate(p.closed_at)} by ${esc(p.closed_by_name || '—')}</small></div>
@@ -64,9 +65,16 @@ export async function mountTreasury(el, ctx) {
     $('#scan')?.addEventListener('click', async () => { const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, { member: r.id }); } });
     $('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
     $('#close')?.addEventListener('click', () => closeForm(cur, bal, pendingN));
-    $('#csv')?.addEventListener('click', () => downloadCSV(`ledger-${new Date().toISOString().slice(0, 10)}.csv`,
-      [{ label: 'Date', get: e => fmtDateTime(e.occurred_at) }, { label: 'Type', key: 'kind' }, { label: 'Student / payee', key: 'who' }, { label: 'Category', key: 'category' }, { label: 'Charge', key: 'charge' }, { label: 'Purpose', key: 'purpose' },
-        { label: 'Amount', key: 'amount' }, { label: 'Method', key: 'method' }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Status', key: 'status' }, { label: 'Period', get: e => periods.find(p => p.id === e.period_id)?.name }], entries));
+    $('#csv')?.addEventListener('click', async () => {
+      const ok = entries.filter(e => e.status !== 'voided'), sum = k => ok.filter(e => e.kind === k && e.status === 'approved').reduce((a, e) => a + +e.amount, 0);
+      const pname = e => periods.find(p => p.id === e.period_id)?.name || '';
+      try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Treasury-Ledger-${new Date().toISOString().slice(0, 10)}.xlsx`, by: ctx.profile.full_name, sheets: [
+        { name: 'Ledger', title: 'Class Fund Ledger', subtitle: 'BSMT 1-Alpha · all periods', summary: [['Collected', sum('collection'), 'money'], ['Spent', sum('expense'), 'money'], ['Net', sum('collection') - sum('expense'), 'money'], ['Entries', entries.length]],
+          columns: [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Type', get: e => e.kind === 'expense' ? 'Expense' : 'Collection' }, { label: 'Student / payee', key: 'who', width: 28 }, { label: 'Category', key: 'category' }, { label: 'Charge', key: 'charge' },
+            { label: 'Purpose', key: 'purpose', width: 30 }, { label: 'Amount', key: 'amount', type: 'money' }, { label: 'Method', key: 'method' }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Status', key: 'status', type: 'status' }, { label: 'Period', get: pname, width: 24 }], rows: entries },
+        { name: 'Periods', title: 'Collection Periods', subtitle: 'Opening, collections, expenses and closing balance', columns: [{ label: 'Period', key: 'name', width: 30 }, { label: 'Status', key: 'status', type: 'status' }, { label: 'Opening', key: 'opening_balance', type: 'money' }, { label: 'Collected', get: p => p.status === 'closed' ? p.collections_total : entries.filter(e => e.period_id === p.id && e.kind === 'collection' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true },
+          { label: 'Spent', get: p => p.status === 'closed' ? p.expenses_total : entries.filter(e => e.period_id === p.id && e.kind === 'expense' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true }, { label: 'Closing balance', get: p => p.status === 'closed' ? p.closing_balance : bal, type: 'money' }], rows: periods }] }); toast('Excel ready'); }
+      catch (e) { toast(e.message, true); } });
     $('#rep')?.addEventListener('click', () => report(cur, curE.filter(e => e.status === 'approved'), bal));
     el.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { const p = periods.find(x => x.id === b.dataset.rep); report(p, entries.filter(e => e.period_id === p.id && e.status === 'approved'), p.closing_balance); });
     el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc).catch(e => toast(e.message, true)));
@@ -79,10 +87,18 @@ export async function mountTreasury(el, ctx) {
   function report(p, list, endBal) {
     const inn = list.filter(e => e.kind === 'collection'), out = list.filter(e => e.kind === 'expense');
     const sum = a => a.reduce((s, e) => s + +e.amount, 0);
-    const tbl = a => `<table><tr><th>Date</th><th>Name / payee</th><th>For</th><th class="r">Amount</th></tr>${a.map(e => `<tr><td>${fmtDate(e.occurred_at)}</td><td>${esc(e.who)}</td><td>${esc(e.charge || e.purpose || e.category)}</td><td class="r">${peso(e.amount)}</td></tr>`).join('')}</table>`;
-    printHTML(p.name, `<h1>${esc(p.name)}</h1><p>BSMT 1-Alpha · Class Fund report</p><div class="sum"><div>Opening<br><b>${peso(p.opening_balance)}</b></div><div>Collected<br><b>${peso(sum(inn))}</b></div><div>Spent<br><b>${peso(sum(out))}</b></div><div>Balance<br><b>${peso(endBal)}</b></div></div>
+    const tbl = a => `<table><thead><tr><th>Date</th><th>Name / payee</th><th>For</th><th class="r">Amount</th></tr></thead><tbody>${a.map(e => `<tr><td>${fmtDate(e.occurred_at)}</td><td>${esc(e.who)}</td><td>${esc(e.charge || e.purpose || e.category)}</td><td class="r">${peso(e.amount)}</td></tr>`).join('') || '<tr><td colspan="4">None</td></tr>'}</tbody></table>`;
+    const doPrint = () => printHTML(p.name, `${letterhead(p.name, 'Class Fund report · BSMT 1-Alpha')}<div class="sum"><div>Opening<b>${peso(p.opening_balance)}</b></div><div>Collected<b>${peso(sum(inn))}</b></div><div>Spent<b>${peso(sum(out))}</b></div><div>Balance<b>${peso(endBal)}</b></div></div>
       <h2>Collections (${inn.length})</h2>${tbl(inn)}<h2>Expenses (${out.length})</h2>${tbl(out)}
-      ${Object.keys(p.liquidation_notes || {}).length ? `<h2>Liquidation notes</h2>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}<p style="margin-top:30px">Prepared by: ${esc(ctx.profile.full_name)} · ${fmtDate(new Date())}</p>`);
+      ${Object.keys(p.liquidation_notes || {}).length ? `<h2>Liquidation notes</h2>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}<p style="margin-top:34px">Prepared by: <b>${esc(ctx.profile.full_name)}</b></p>`);
+    const doXlsx = async () => {
+      const cols = [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Name / payee', key: 'who', width: 28 }, { label: 'For', get: e => e.charge || e.purpose || e.category, width: 30 }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Amount', key: 'amount', type: 'money', total: true }];
+      const summary = [['Opening', +p.opening_balance || 0, 'money'], ['Collected', sum(inn), 'money'], ['Spent', sum(out), 'money'], ['Balance', +endBal || 0, 'money']];
+      try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Report-${p.name.replace(/[^\w]+/g, '-')}.xlsx`, by: ctx.profile.full_name, sheets: [
+        { name: 'Collections', title: p.name, subtitle: 'Class Fund report · collections', summary, columns: cols, rows: inn }, { name: 'Expenses', title: p.name, subtitle: 'Class Fund report · expenses', summary, columns: cols, rows: out }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); }
+    };
+    modal(`<h3>${esc(p.name)}</h3><p class="muted">Choose a format for this period's report.</p><div style="display:grid;gap:8px;margin-top:10px"><button class="btn gold" id="rp">Print / save as PDF</button><button class="btn" id="rx">Download Excel (.xlsx)</button><button class="btn ghost" id="rc">Cancel</button></div>`,
+      (m, close) => { m.querySelector('#rp').onclick = () => { close(); doPrint(); }; m.querySelector('#rx').onclick = () => { close(); doXlsx(); }; m.querySelector('#rc').onclick = close; });
   }
 
   async function showPhoto(id) {

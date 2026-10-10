@@ -1,4 +1,5 @@
-import { sb, db, watch, esc, toast, modal, skeleton, downloadCSV, uuid, confirmDialog } from '../core.js';
+import { sb, db, watch, esc, toast, modal, skeleton, uuid, confirmDialog } from '../core.js';
+import { exportXLSX } from '../xlsx.js';
 import { showMemberCards } from '../qr.js';
 
 export async function mountStudents(el, ctx) {
@@ -10,14 +11,18 @@ export async function mountStudents(el, ctx) {
     const shown = rows.filter(r => !q || (r.full_name + r.student_no).toLowerCase().includes(q.toLowerCase()));
     const pend = rows.filter(r => r.status === 'pending' || /^PENDING/i.test(r.student_no)).length;
     el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>Active students</small><b>${rows.filter(r => r.status === 'active').length}</b></div><div class="stat"><small>Missing Student ID</small><b>${pend}</b></div></div>
-      <div class="bar"><input id="q" class="grow" placeholder="Search name or ID…" value="${esc(q)}">${canEdit ? '<button class="btn gold" id="add">+ Add</button>' : ''}${canQR ? '<button class="btn" id="cards">QR cards</button>' : ''}<button class="btn ghost" id="csv">CSV</button></div>
+      <div class="bar"><input id="q" class="grow" placeholder="Search name or ID…" value="${esc(q)}">${canEdit ? '<button class="btn gold" id="add">+ Add</button>' : ''}${canQR ? '<button class="btn" id="cards">QR cards</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
       <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.full_name)} ${r.status !== 'active' ? `<span class="tag warn">${r.status}</span>` : ''}</b>
         <small>${/^PENDING/i.test(r.student_no) ? '<span style="color:var(--bad)">ID to follow up</span>' : esc(r.student_no)}${r.section ? ' · ' + esc(r.section) : ''}</small></div>
         <div style="display:flex;gap:4px">${canEdit ? `<button class="btn ghost sm" data-e="${r.id}">Edit</button>` : ''}</div></div>`).join('') || '<p class="empty">No students found.</p>'}</div>`;
     const qi = el.querySelector('#q'); qi.oninput = () => { q = qi.value; const p = qi.selectionStart; paint(); const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(p, p); };
     el.querySelector('#add')?.addEventListener('click', () => form(null));
     el.querySelector('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
-    el.querySelector('#csv').onclick = () => downloadCSV('students.csv', [{ label: 'Student ID', key: 'student_no' }, { label: 'Name', key: 'full_name' }, { label: 'Section', key: 'section' }, { label: 'Status', key: 'status' }], rows);
+    el.querySelector('#csv').onclick = async () => {
+      try { toast('Preparing Excel…'); await exportXLSX({ filename: 'Alpha-Student-Roster.xlsx', by: ctx.profile.full_name, sheets: [
+        { name: 'Roster', title: 'Class Roster', subtitle: 'BSMT 1-Alpha · Batch 28 · PIT-COMED', summary: [['Active', rows.filter(r => r.status === 'active').length], ['Total listed', rows.length], ['ID to follow up', pend]],
+          columns: [{ label: '#', get: r => rows.indexOf(r) + 1, type: 'int', width: 6 }, { label: 'Student ID', key: 'student_no', width: 18 }, { label: 'Name', key: 'full_name', width: 34 }, { label: 'Section', key: 'section', width: 24 }, { label: 'Status', get: r => /^PENDING/i.test(r.student_no) ? 'Pending' : r.status, type: 'status' }],
+          rows: rows.slice().sort((a, b) => a.full_name.localeCompare(b.full_name)) }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); } };
     el.querySelectorAll('[data-e]').forEach(b => b.onclick = () => form(rows.find(r => r.id === b.dataset.e)));
   }
 

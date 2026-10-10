@@ -1,4 +1,5 @@
-import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, downloadCSV, todayISO, confirmDialog } from '../core.js';
+import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog } from '../core.js';
+import { exportXLSX } from '../xlsx.js';
 
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
@@ -43,7 +44,7 @@ export async function mountWatch(el, ctx) {
     let body;
     if (tab === 'ledger') {
       const shown = viol.filter(v => !q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())).slice().reverse();
-      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? '<button class="btn gold" id="add">+ Report</button>' : ''}<button class="btn ghost" id="csv">CSV</button></div>
+      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? '<button class="btn gold" id="add">+ Report</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
@@ -59,7 +60,16 @@ export async function mountWatch(el, ctx) {
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
-    el.querySelector('#csv')?.addEventListener('click', () => downloadCSV('violation-ledger.csv', [{ label: 'Date', key: 'occurred_on' }, { label: 'Student', get: v => mname(v.member_id) }, { label: 'Standard', get: v => std(v.standard_id)?.title }, { label: 'Offense', get: v => num[v.id] ? sanction(num[v.id]) : '' }, { label: 'Status', key: 'status' }, { label: 'Reported by', key: 'reported_by' }, { label: 'Resolved by', key: 'resolved_by' }], viol));
+    el.querySelector('#csv')?.addEventListener('click', async () => {
+      const counted2 = viol.filter(v => !['awaiting_approval', 'rejected'].includes(v.status));
+      const byM = {}; counted2.forEach(v => { const o = byM[v.member_id] ||= { total: 0, open: 0 }; o.total++; if (v.status !== 'resolved') o.open++; });
+      try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Violation-Ledger-${new Date().toISOString().slice(0, 10)}.xlsx`, by: `${ctx.profile.full_name}`, sheets: [
+        { name: 'Violation Ledger', title: 'Violation Ledger', subtitle: 'BSMT 1-Alpha · Alpha Watch', summary: [['Outstanding', open.length], ['Awaiting approval', awaiting.length], ['Resolved', viol.filter(v => v.status === 'resolved').length], ['Total records', viol.length]],
+          columns: [{ label: 'Date', get: v => v.occurred_on, type: 'date' }, { label: 'Student', get: v => mname(v.member_id), width: 28 }, { label: 'Violation', get: v => std(v.standard_id)?.title, width: 28 }, { label: 'Offense', get: v => num[v.id] ? ordinal(num[v.id]) + ' offense' : '' },
+            { label: 'Sanction', get: v => num[v.id] ? (num[v.id] === 1 ? 'Verbal warning' : `Fine ₱${FINE}`) : 'Awaiting approval' }, { label: 'Status', get: v => (STATUS[v.status] || [v.status])[0], type: 'status' }, { label: 'Reported by', key: 'reported_by', width: 22 }, { label: 'Resolved by', key: 'resolved_by', width: 22 }], rows: viol.slice().sort((a, b) => b.occurred_on.localeCompare(a.occurred_on)) },
+        { name: 'Standing', title: 'Class Standing', subtitle: 'Outstanding violations per student', summary: [['Active students', members.filter(m => m.status === 'active').length], ['With outstanding', Object.values(byM).filter(o => o.open).length]],
+          columns: [{ label: 'Student', key: 'full_name', width: 30 }, { label: 'Section', key: 'section', width: 24 }, { label: 'Outstanding', get: m => byM[m.id]?.open || 0, type: 'int', total: true }, { label: 'All records', get: m => byM[m.id]?.total || 0, type: 'int', total: true }, { label: 'Standing', get: m => byM[m.id]?.open ? 'Outstanding' : 'Clear', type: 'status' }], rows: members.filter(m => m.status === 'active') }] }); toast('Excel ready'); }
+      catch (e) { toast(e.message, true); } });
     el.querySelector('#addStd')?.addEventListener('click', () => newStandard());
     // swipe a row right to approve / resolve it (touch screens)
     el.querySelectorAll('.row').forEach(row => {

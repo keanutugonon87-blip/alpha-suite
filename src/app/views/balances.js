@@ -1,4 +1,5 @@
-import { sb, db, watch, esc, peso, fmtDate, toast, modal, skeleton, downloadCSV, uuid } from '../core.js';
+import { sb, db, watch, esc, peso, fmtDate, toast, modal, skeleton, uuid } from '../core.js';
+import { exportXLSX } from '../xlsx.js';
 
 export async function mountBalances(el, ctx) {
   const canWrite = ctx.can('mayor', 'treasurer');
@@ -18,7 +19,7 @@ export async function mountBalances(el, ctx) {
       ${c ? `<div class="grid"><div class="stat gold"><small>Collected</small><b>${peso(totalPaid)}</b></div><div class="stat"><small>Still owed</small><b>${peso(totalDue - totalPaid)}</b></div><div class="stat"><small>Paid / owing</small><b>${paid.length} / ${owing.length}</b></div></div>
       <div class="prog"><i style="width:${totalDue ? Math.min(100, totalPaid / totalDue * 100) : 0}%"></i></div>
       <div class="bar" style="margin-top:12px"><select id="f" style="width:auto"><option value="owing">Owing</option><option value="paid">Paid</option><option value="all">Everyone</option></select>
-        <button class="btn ghost" id="csv">Export (CSV)</button>${canWrite ? `<button class="btn ghost" id="cls" style="margin-left:auto">${c.closed ? 'Reopen charge' : 'Close charge'}</button>` : ''}</div>
+        <button class="btn ghost" id="csv">Export (Excel)</button>${canWrite ? `<button class="btn ghost" id="cls" style="margin-left:auto">${c.closed ? 'Reopen charge' : 'Close charge'}</button>` : ''}</div>
       <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>Paid ${peso(r.paid)} of ${peso(r.due)}</small></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="tag ${r.owed <= 0 ? 'ok' : r.paid > 0 ? 'warn' : 'bad'}">${r.owed <= 0 ? 'paid' : r.paid > 0 ? 'owes ' + peso(r.owed) : 'unpaid'}</span>
         ${canWrite && r.owed > 0 && !c.closed ? `<button class="btn gold sm" data-c="${r.member_id}" data-a="${r.owed}">Collect</button>` : ''}</div></div>`).join('') || '<p class="empty">Nobody here.</p>'}</div>`
@@ -26,7 +27,11 @@ export async function mountBalances(el, ctx) {
     el.querySelector('#ch').onchange = e => { sel = e.target.value; draw(); };
     const f = el.querySelector('#f'); if (f) { f.value = only; f.onchange = () => { only = f.value; draw(); }; }
     el.querySelector('#new')?.addEventListener('click', newCharge);
-    el.querySelector('#csv')?.addEventListener('click', () => downloadCSV(`balances-${c.title}.csv`, [{ label: 'Student', key: 'name' }, { label: 'Charge', key: 'charge' }, { label: 'Due', key: 'due' }, { label: 'Paid', key: 'paid' }, { label: 'Owed', key: 'owed' }], rows));
+    el.querySelector('#csv')?.addEventListener('click', async () => {
+      try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Balances-${c.title.replace(/[^\w]+/g, '-')}.xlsx`, by: ctx.profile.full_name, sheets: [
+        { name: 'Balances', title: c.title, subtitle: `Per-student balances · ₱${c.amount} each${c.closed ? ' · closed' : ''}`, summary: [['Collected', totalPaid, 'money'], ['Still owed', totalDue - totalPaid, 'money'], ['Paid up', paid.length], ['Still owing', owing.length]],
+          columns: [{ label: 'Student', key: 'name', width: 32 }, { label: 'Due', key: 'due', type: 'money', total: true }, { label: 'Paid', key: 'paid', type: 'money', total: true }, { label: 'Owed', key: 'owed', type: 'money', total: true }, { label: 'Status', get: r => r.owed <= 0 ? 'Paid' : r.paid > 0 ? 'Owed' : 'Outstanding', type: 'status' }],
+          rows: rows.slice().sort((a, b) => (b.owed > 0) - (a.owed > 0) || a.name.localeCompare(b.name)) }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); } });
     el.querySelector('#cls')?.addEventListener('click', async () => { try { await db(sb.from('v2_charges').update({ closed: !c.closed }).eq('id', c.id)); toast(c.closed ? 'Reopened' : 'Closed'); } catch (e) { toast(e.message, true); } });
     el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { sessionStorage.setItem('alpha-prefill', JSON.stringify({ member: b.dataset.c, charge: sel, amount: b.dataset.a })); location.hash = '#/staff/treasury'; });
   }

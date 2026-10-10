@@ -164,12 +164,27 @@ export function downloadCSV(filename, columns, rows) {
   a.href = URL.createObjectURL(new Blob(['﻿' + text], { type: 'text/csv;charset=utf-8' })); a.download = filename; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
+const crestURL = () => new URL('assets/wolf-crest.png', location.href).href;
+export const letterhead = (title, sub = 'BSMT 1-Alpha · Batch 28 · PIT-COMED') => `<div class="lh"><img src="${crestURL()}" alt=""><div><b>ALPHA SUITE</b><h1>${esc(title)}</h1><small>${esc(sub)}</small></div></div>`;
 export function printHTML(title, body) {
   const w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to print', true);
-  w.document.write(`<!doctype html><title>${esc(title)}</title><style>body{font-family:Inter,sans-serif;max-width:760px;margin:24px auto;padding:0 14px;color:#14141f}
-   h1,h2{font-family:Georgia,serif}table{width:100%;border-collapse:collapse;margin:8px 0 18px}td,th{border-bottom:1px solid #ddd;padding:5px 6px;text-align:left;font-size:13px}
-   td.r,th.r{text-align:right}.row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #ddd}.sum{display:flex;gap:18px;flex-wrap:wrap}.sum div{border:1px solid #ccc;border-radius:8px;padding:8px 12px}</style>${body}`);
-  w.document.close(); setTimeout(() => w.print(), 400);
+  w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><style>
+   @page{margin:14mm 12mm 16mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
+   body{font-family:"Atkinson Hyperlegible",Calibri,Arial,sans-serif;max-width:780px;margin:0 auto;padding:0 14px;color:#14233f;position:relative}
+   body:before{content:"";position:fixed;inset:0;background:url(${crestURL()}) center 52%/56% no-repeat;opacity:.075;z-index:-1}
+   .lh{display:flex;gap:14px;align-items:center;background:linear-gradient(135deg,#0c1f5c,#1d4fd8);color:#fff;border-radius:14px;padding:12px 18px;margin:10px 0 16px;border-bottom:5px solid #d9a63c}
+   .lh img{width:62px;height:62px;border-radius:50%;background:#fff;padding:4px;border:3px solid #d9a63c;object-fit:contain}
+   .lh b{font:700 11px Georgia,serif;letter-spacing:.3em;color:#f1d58b}.lh h1{margin:2px 0;font:700 24px Georgia,serif;color:#fff}.lh small{color:#dff1f8}
+   h1,h2{font-family:Georgia,serif;color:#0c1f5c}h2{border-bottom:2px solid #d9a63c;padding-bottom:3px;margin:22px 0 6px;font-size:17px}
+   table{width:100%;border-collapse:collapse;margin:6px 0 16px}th{background:#0c1f5c;color:#fff;font-size:12px;letter-spacing:.04em}
+   td,th{padding:6px 8px;text-align:left;font-size:13px}td{border-bottom:1px solid #d6e6ee}tbody tr:nth-child(even) td,tr:nth-child(even) td{background:#f4fafc}
+   td.r,th.r{text-align:right}tr{break-inside:avoid}
+   .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid #d6e6ee}
+   .sum{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.sum div{flex:1;min-width:120px;background:#f2f9fb;border:1px solid #cfe3ec;border-top:4px solid #d9a63c;border-radius:10px;padding:8px 12px;font-size:12px;color:#2a7fb0;text-transform:uppercase;letter-spacing:.05em}
+   .sum b{display:block;font:700 18px Georgia,serif;color:#0c1f5c;text-transform:none;letter-spacing:0;margin-top:2px}
+   .foot{margin-top:28px;padding-top:8px;border-top:1px solid #cfe3ec;font-size:11px;color:#58708a;display:flex;justify-content:space-between}
+  </style>${body}<div class="foot"><span>ALPHA SUITE · BSMT 1-Alpha · Batch 28</span><span>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>`);
+  w.document.close(); setTimeout(() => w.print(), 700);
 }
 
 /* ---- auth ---- */
