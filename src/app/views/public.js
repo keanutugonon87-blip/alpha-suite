@@ -1,15 +1,30 @@
-import { sb, db, esc, peso, fmtDate, fmtDateTime, onSync, skeleton, modal, initials, dayLabel } from '../core.js';
+import { sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel } from '../core.js';
+import { renderLearn } from './learn.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
-const WAVE = '<svg viewBox="0 0 1200 46" preserveAspectRatio="none" aria-hidden="true"><path d="M0 24C150 4 300 4 450 22s300 20 450 2 225-14 300-4v26H0z"/></svg>';
+const PERIOD = 'q150 -26 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0';
+const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
+  <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
+const FLAG = '<svg viewBox="0 0 70 64" aria-label="Alpha signal flag"><rect x="0" y="0" width="3" height="64" rx="1.5" fill="#9a6f12"/><path d="M3 6H35V32H3z" fill="#fff" stroke="#0c1f5c" stroke-width="1"/><path d="M35 6H68L52 19 68 32H35z" fill="#1d4fd8" stroke="#0c1f5c" stroke-width="1"/></svg>';
+const SHIP = '<svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 24H62L54 34H11z" fill="#0c1f5c"/><rect x="6" y="14" width="10" height="10" fill="#d0453c"/><rect x="17" y="14" width="10" height="10" fill="#d9a63c"/><rect x="28" y="14" width="10" height="10" fill="#2a7fb0"/><rect x="42" y="8" width="12" height="16" fill="#fff" stroke="#0c1f5c"/><rect x="45" y="3" width="6" height="6" fill="#0c1f5c"/><rect x="44" y="11" width="8" height="3" fill="#2a7fb0"/></svg>';
+const SEA = `<div class="sea" aria-hidden="true"><svg class="w1" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 46 ${PERIOD} V110H0z" fill="#2a7fb0" fill-opacity=".28"/></svg>
+  <svg class="w2" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 62 ${PERIOD.replace('q150 -26', 'q150 24')} V110H0z" fill="#2a7fb0" fill-opacity=".42"/></svg>
+  <svg class="w3" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 82 q150 -20 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 V110H0z" fill="#fff"/></svg></div>`;
+const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+function countUp(el, to) {
+  if (reduceMotion()) { el.textContent = peso(to); return; }
+  const t0 = performance.now(), dur = 1100;
+  const step = t => { const k = Math.min(1, (t - t0) / dur), e = 1 - Math.pow(1 - k, 3); el.textContent = peso(to * e); if (k < 1) requestAnimationFrame(step); else el.textContent = peso(to); };
+  requestAnimationFrame(step);
+}
 
 export async function renderPublic(root) {
-  root.innerHTML = `<div class="top"><img src="assets/wolf-crest.png" alt=""><div class="t"><b>ALPHA SUITE</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>ALPHA SUITE</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">Officer sign in</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
-  let tab = 'fund', data = null;
+  let tab = 'fund', data = null, animated = false;
   const m = root.querySelector('#m');
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };
@@ -34,19 +49,25 @@ export async function renderPublic(root) {
       standing: () => `<div class="card">${stand.length ? stand.map(s => `<div class="row"><div class="lead"><span class="ini">${esc(initials(s.name))}</span><b>${esc(s.name)}</b></div><span class="tag bad">${s.outstanding} outstanding</span></div>`).join('')
         : '<div class="empty"><b>Everyone is in good standing</b>No outstanding violations right now.</div>'}</div>`,
       officers: () => `<div class="officers">${officers.map(o => `<div class="ocard"><div class="ph">${o.photo ? `<img src="${o.photo}" alt="${esc(o.name)}" style="object-position:${o.x}% ${o.y}%">` : esc(initials(o.name))}</div><div class="tx"><b>${esc(o.name)}</b><small>${esc(o.position)}</small></div></div>`).join('')}</div>`,
+      learn: () => '',
       bulletin: () => `<iframe class="fb" src="${FB}" width="500" height="600" scrolling="yes" loading="lazy" title="Class Facebook page" allow="encrypted-media"></iframe>`,
     };
-    m.innerHTML = `<div class="waterline"><img class="crest" src="assets/wolf-crest.png" alt=""><small>Class fund balance</small><div class="big">${peso(tre.balance)}</div>
-        <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} student${stand.length > 1 ? 's' : ''} with open violations` : ''}</p>${WAVE}</div>
-      <div class="seg" role="tablist">${[['fund', 'Fund'], ['standing', 'Standing'], ['officers', 'Officers'], ['bulletin', 'Bulletin']].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
-      <section>${views[tab]()}</section>`;
+    m.innerHTML = `<div class="hero"><div class="flag">${FLAG}</div>
+        <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="Alpha crest"></span></div>
+        <div class="copy"><small>Class fund balance</small><div class="big" id="bal">${peso(tre.balance)}</div>
+          <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} student${stand.length > 1 ? 's' : ''} with open violations` : ' · everyone in good standing'}</p></div>
+        <div class="ship">${SHIP}</div>${SEA}</div>
+      <div class="seg" role="tablist">${[['fund', 'Fund'], ['standing', 'Standing'], ['officers', 'Officers'], ['learn', 'Deck Watch'], ['bulletin', 'Bulletin']].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+      <section id="sec">${tab === 'learn' ? '' : views[tab]()}</section>`;
+    if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
+    if (tab === 'learn') renderLearn(m.querySelector('#sec'));
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     m.querySelectorAll('[data-p]').forEach(b => b.onclick = () => openPeriod(tre.past.find(p => p.id === b.dataset.p)));
   }
   async function load() {
     try {
       const [o, t, s] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing'))]);
-      data = { off: o, tre: t, stand: s }; paint();
+      const first = !data; data = { off: o, tre: t, stand: s }; if (first || tab !== 'learn') paint();
     } catch (e) { if (!data) m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div>`; }
   }
   await load();

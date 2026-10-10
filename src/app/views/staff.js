@@ -24,7 +24,7 @@ const TABS = [
 ];
 
 function authScreen(root, mode = 'in', msg = '', ok = false) {
-  root.innerHTML = `<div class="auth"><img src="assets/wolf-crest.png" alt="">
+  root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span>
     <h1 style="margin:10px 0 4px">ALPHA SUITE</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
     <form class="card" id="f">
       ${mode === 'up' ? '<label>Full name</label><input name="name" required autocomplete="name">' : ''}
@@ -59,7 +59,7 @@ function authScreen(root, mode = 'in', msg = '', ok = false) {
 }
 
 export function showRecovery(root) {
-  root.innerHTML = `<div class="auth"><img src="assets/wolf-crest.png" alt=""><h2 style="margin:10px 0">Set a new password</h2>
+  root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><h2 style="margin:10px 0">Set a new password</h2>
     <form class="card" id="f"><label>New password</label><input name="pw" type="password" minlength="6" required autocomplete="new-password">
     <button class="btn gold" style="width:100%;margin-top:14px">Save password</button><div class="err" id="msg"></div></form></div>`;
   root.querySelector('#f').onsubmit = async e => {
@@ -70,7 +70,7 @@ export function showRecovery(root) {
 }
 
 function pendingScreen(root, p) {
-  root.innerHTML = `<div class="auth"><img src="assets/wolf-crest.png" alt=""><h2 style="margin:10px 0">Waiting for approval</h2>
+  root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><h2 style="margin:10px 0">Waiting for approval</h2>
     <div class="card"><p>Signed in as <b>${esc(p.email)}</b>.</p><p class="muted">The Mayor needs to assign your officer role. This page updates by itself.</p><button class="btn ghost" id="out">Sign out</button></div></div>`;
   root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.hash = '#/'; location.reload(); };
   const iv = setInterval(async () => { try { const n = await getProfile(); if (n && n.role !== 'pending') location.reload(); } catch { /* keep waiting */ } }, 8000);
@@ -87,8 +87,8 @@ export async function renderStaff(root, tabId) {
   const ctx = { profile: p, can: (...r) => r.includes(p.role) };
   const tabs = TABS.filter(t => t.roles.includes(p.role));
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
-  root.innerHTML = `<div class="top"><img src="assets/wolf-crest.png" alt=""><div class="t"><b>ALPHA SUITE</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign out</button></div>
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>ALPHA SUITE</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out">Sign out</button></div>
     <div class="banner" id="bn" hidden></div>
     <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[t.id]}</svg><span>${t.label}</span></button>`).join('')}</nav><main id="view"></main></div>`;
   const off = onSync((s, d, q) => {
