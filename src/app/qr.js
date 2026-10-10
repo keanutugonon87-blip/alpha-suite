@@ -68,41 +68,50 @@ export function scanMember() {
   });
 }
 
-/* QR with the Alpha crest in the middle (error-correction H keeps it scannable). */
+/* QR with a faint, see-through Alpha wolf in the middle (error-correction H keeps it scannable). */
 const loadImg = src => new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
 async function brandedQR(text, size, crestUrl) {
   const base = await loadImg(await QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'H' }));
   const c = document.createElement('canvas'); c.width = c.height = size; const x = c.getContext('2d');
   x.drawImage(base, 0, 0, size, size);
-  const d = Math.round(size * 0.22), o = (size - d) / 2, r = d / 2 + 5;
-  x.fillStyle = '#fff'; x.beginPath(); x.arc(size / 2, size / 2, r, 0, 7); x.fill();
-  x.strokeStyle = '#d9a63c'; x.lineWidth = 3; x.stroke();
-  x.save(); x.beginPath(); x.arc(size / 2, size / 2, d / 2, 0, 7); x.clip(); x.drawImage(await loadImg(crestUrl), o, o, d, d); x.restore();
+  const crest = await loadImg(crestUrl), h = Math.round(size * 0.26), w = h * crest.width / crest.height;
+  x.globalAlpha = 0.42; x.drawImage(crest, (size - w) / 2, (size - h) / 2, w, h); x.globalAlpha = 1;
   return c.toDataURL('image/png');
+}
+/* "Dela Cruz, Ace" style key from a first-name-first name, ignoring Jr./Sr./III */
+const PARTS = new Set(['dela', 'de', 'del', 'delos', 'dela', 'san', 'santa', 'van', 'von', 'la', 'le']);
+export function surnameKey(full) {
+  const w = full.replace(/,/g, ' ').trim().split(/\s+/).filter(x => !/^(jr|sr|ii|iii|iv)\.?$/i.test(x));
+  let i = w.length - 1; while (i > 1 && PARTS.has(w[i - 1].toLowerCase())) i--;
+  return (w.slice(i).join(' ') + ', ' + w.slice(0, i).join(' ')).toLowerCase();
 }
 const CARD_CSS = `@page{margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.c{break-inside:avoid;border:2px solid #0c1f5c;border-radius:14px;overflow:hidden;text-align:center;background:linear-gradient(#fff,#f2f9fb);font-family:Atkinson Hyperlegible,Inter,sans-serif}
-.h{background:linear-gradient(135deg,#0c1f5c,#1d4fd8);color:#fff;padding:8px 6px 7px;border-bottom:3px solid #d9a63c}
-.h img{width:34px;height:34px;border-radius:50%;background:#fff;padding:2px;display:block;margin:0 auto 3px}
-.h b{display:block;font:700 12px Georgia,serif;letter-spacing:.18em}.h small{display:block;font-size:8px;letter-spacing:.08em;color:#dff1f8}
-.q{padding:9px 10px 4px}.q img{width:100%;display:block}
-.n{padding:2px 8px 4px}.n b{display:block;font-size:12px;color:#0c1f5c;line-height:1.2}.n small{font-size:10px;color:#2a7fb0}
-.f{font-size:7.5px;letter-spacing:.14em;color:#fff;background:#2a7fb0;padding:4px;text-transform:uppercase}`;
+.c{break-inside:avoid;border:2px solid #0c1f5c;border-radius:14px;overflow:hidden;text-align:center;background:#fff;font-family:Atkinson Hyperlegible,Inter,sans-serif}
+.h{background:#fff;padding:7px 10px 5px;border-bottom:3px solid #d9a63c}
+.h img{width:100%;display:block;height:auto}
+.h small{display:block;font-size:7.5px;letter-spacing:.14em;color:#2a7fb0;margin-top:1px}
+.q{padding:9px 10px 4px;background:linear-gradient(#fff,#f2f9fb)}.q img{width:100%;display:block}
+.n{padding:2px 8px 3px;background:#f2f9fb}.n b{display:block;font-size:12px;color:#0c1f5c;line-height:1.2}.n small{font-size:10px;color:#2a7fb0}
+.k{padding:3px 8px 6px;background:#f2f9fb}.k span{display:block;font:700 6px Atkinson Hyperlegible,sans-serif;letter-spacing:.16em;color:#9a6f12}
+.k code{display:block;font:5.6px/1.35 ui-monospace,Menlo,Consolas,monospace;color:#14233f;word-break:break-all}
+.f{font-size:7.5px;letter-spacing:.14em;color:#fff;background:#0c1f5c;padding:4px;text-transform:uppercase}`;
 export async function showMemberCards() {
-  const members = await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active').order('full_name'));
+  const members = (await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active'))).sort((a, b) => surnameKey(a.full_name).localeCompare(surnameKey(b.full_name)));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
-  const crest = await blobToDataUrl(await (await fetch('assets/wolf-crest.png')).blob());
+  const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
+  const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/alpha-wordmark.jpg')]);
   const cards = [];
   for (const mem of members) {
-    try { cards.push({ mem, img: await brandedQR(await db(sb.rpc('v2_member_token', { p_member: mem.id })), 320, crest) }); } catch (e) { toast(e.message, true); break; }
+    try { const code = await db(sb.rpc('v2_member_token', { p_member: mem.id })); cards.push({ mem, code, img: await brandedQR(code, 320, crest) }); } catch (e) { toast(e.message, true); break; }
     m.querySelector('#pg').textContent = `Generating ${cards.length}/${members.length}…`;
   }
-  const html = cards.map(c => `<div class="c"><div class="h"><img src="${crest}" alt=""><b>ALPHA</b><small>BSMT 1-ALPHA · BATCH 28 · PIT-COMED</small></div>
-    <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
-  m.querySelector('#pg').textContent = `${cards.length} cards ready. Each code is private to that student — keep the printout safe.`;
+  const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="ALPHA"><small>BSMT 1-ALPHA · BATCH 28 · PIT-COMED</small></div>
+    <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div>
+    <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
+  m.querySelector('#pg').textContent = `${cards.length} cards ready, in alphabetical order by last name. Each code is private to that student — keep the printout safe.`;
   m.querySelector('#g').innerHTML = `<button class="btn gold" id="pr" style="width:100%;margin-bottom:12px">Print / save as PDF</button><style>${CARD_CSS}.g{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}</style><div class="g">${html}</div>`;
-  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="g">${html}</div>`);
+  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="g">${html}</div>`, { plain: true });
 }
 
 export async function showReceipt(entryId) {

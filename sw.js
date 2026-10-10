@@ -1,4 +1,4 @@
-const V='alpha-PEZPTAH4',SHELL=["./","index.html","assets/build/app.PEZPTAH4.js","assets/build/app.LXR2VWYI.css","assets/wolf-crest.png","assets/icon-192.png","manifest.webmanifest"];
+const V='alpha-KLUMOZW6',SHELL=["./","index.html","assets/build/app.KLUMOZW6.js","assets/build/app.LXR2VWYI.css","assets/wolf-crest.png","assets/icon-192.png","manifest.webmanifest"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==V).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);
