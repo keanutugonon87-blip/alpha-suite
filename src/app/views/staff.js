@@ -1,0 +1,99 @@
+import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync } from '../core.js';
+import { mountTreasury } from './treasury.js';
+import { mountBalances } from './balances.js';
+import { mountStudents } from './students.js';
+import { mountWatch } from './watch.js';
+import { mountOfficers } from './officers.js';
+import { mountAccounts } from './accounts.js';
+
+const TABS = [
+  { id: 'treasury', label: 'Treasury', mount: mountTreasury, roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
+  { id: 'balances', label: 'Balances', mount: mountBalances, roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
+  { id: 'watch', label: 'Watch', mount: mountWatch, roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
+  { id: 'students', label: 'Students', mount: mountStudents, roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },
+  { id: 'officers', label: 'Officers', mount: mountOfficers, roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
+  { id: 'accounts', label: 'Accounts', mount: mountAccounts, roles: ['mayor', 'vice_mayor', 'auditor'] },
+];
+
+function authScreen(root, mode = 'in', msg = '', ok = false) {
+  root.innerHTML = `<div class="auth"><img src="assets/wolf-crest.png" alt="">
+    <h1 style="margin:10px 0 4px">ALPHA SUITE</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
+    <form class="card" id="f">
+      ${mode === 'up' ? '<label>Full name</label><input name="name" required autocomplete="name">' : ''}
+      <label>Email</label><input name="email" type="email" required autocomplete="email">
+      ${mode === 'forgot' ? '' : `<label>Password</label><input name="pw" type="password" minlength="6" required autocomplete="${mode === 'up' ? 'new-password' : 'current-password'}">`}
+      <button class="btn gold" style="width:100%;margin-top:14px">${{ in: 'Sign in', up: 'Create account', forgot: 'Send reset link' }[mode]}</button>
+      <div class="${ok ? 'muted' : 'err'}" id="msg" style="margin-top:8px">${esc(msg)}</div>
+      <p class="muted" style="text-align:center;margin:12px 0 0">
+        ${mode === 'in' ? '<a href="#" data-m="up">New officer? Create an account</a><br><a href="#" data-m="forgot">Forgot password?</a>' : '<a href="#" data-m="in">Back to sign in</a>'}</p>
+    </form><p><a href="#/">← Public page</a></p></div>`;
+  root.querySelectorAll('[data-m]').forEach(a => a.onclick = e => { e.preventDefault(); authScreen(root, a.dataset.m); });
+  root.querySelector('#f').onsubmit = async e => {
+    e.preventDefault();
+    const f = new FormData(e.target), btn = e.target.querySelector('button'), msgEl = root.querySelector('#msg'); btn.disabled = true; msgEl.textContent = '';
+    try {
+      const email = f.get('email').trim();
+      if (mode === 'forgot') {
+        const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+        if (error) throw error; return authScreen(root, 'in', 'If that email has an account, a reset link is on its way.', true);
+      }
+      if (mode === 'up') {
+        const { data, error } = await sb.auth.signUp({ email, password: f.get('pw'), options: { data: { full_name: f.get('name').trim() } } });
+        if (error) throw error;
+        if (!data.session) return authScreen(root, 'in', 'Account created. Confirm your email if asked, then sign in. The Mayor will assign your role.', true);
+      } else {
+        const { error } = await sb.auth.signInWithPassword({ email, password: f.get('pw') });
+        if (error) throw error;
+      }
+      location.hash = '#/staff'; location.reload();
+    } catch (x) { msgEl.className = 'err'; msgEl.textContent = /fetch/i.test(x.message) ? 'No connection. Check your network and try again.' : x.message; btn.disabled = false; }
+  };
+}
+
+export function showRecovery(root) {
+  root.innerHTML = `<div class="auth"><img src="assets/wolf-crest.png" alt=""><h2 style="margin:10px 0">Set a new password</h2>
+    <form class="card" id="f"><label>New password</label><input name="pw" type="password" minlength="6" required autocomplete="new-password">
+    <button class="btn gold" style="width:100%;margin-top:14px">Save password</button><div class="err" id="msg"></div></form></div>`;
+  root.querySelector('#f').onsubmit = async e => {
+    e.preventDefault();
+    const { error } = await sb.auth.updateUser({ password: new FormData(e.target).get('pw') });
+    if (error) root.querySelector('#msg').textContent = error.message; else { location.hash = '#/staff'; location.reload(); }
+  };
+}
+
+function pendingScreen(root, p) {
+  root.innerHTML = `<div class="auth"><img src="assets/wolf-crest.png" alt=""><h2 style="margin:10px 0">Waiting for approval</h2>
+    <div class="card"><p>Signed in as <b>${esc(p.email)}</b>.</p><p class="muted">The Mayor needs to assign your officer role. This page updates by itself.</p><button class="btn ghost" id="out">Sign out</button></div></div>`;
+  root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.hash = '#/'; location.reload(); };
+  const iv = setInterval(async () => { try { const n = await getProfile(); if (n && n.role !== 'pending') location.reload(); } catch { /* keep waiting */ } }, 8000);
+  return () => clearInterval(iv);
+}
+
+export async function renderStaff(root, tabId) {
+  let p;
+  try { p = await getProfile(); }
+  catch (e) { root.innerHTML = `<div class="auth"><div class="card"><b>Couldn't reach the database.</b><p class="muted">${esc(e.message)}</p><button class="btn" id="r">Retry</button></div></div>`; root.querySelector('#r').onclick = () => location.reload(); return; }
+  if (!p) return void authScreen(root);
+  if (p.role === 'pending') return pendingScreen(root, p);
+
+  const ctx = { profile: p, can: (...r) => r.includes(p.role) };
+  const tabs = TABS.filter(t => t.roles.includes(p.role));
+  const cur = tabs.find(t => t.id === tabId) || tabs[0];
+  root.innerHTML = `<div class="top"><img src="assets/wolf-crest.png" alt=""><div class="t"><b>ALPHA SUITE</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign out</button></div>
+    <div class="banner" id="bn" hidden></div>
+    <div class="tabs">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}">${t.label}</button>`).join('')}</div><main id="view"></main>`;
+  const off = onSync((s, d, q) => {
+    const c = root.querySelector('#sync'), bn = root.querySelector('#bn'); if (!c) return; c.className = 'chip ' + s;
+    c.querySelector('span').textContent = (q ? `${q} waiting · ` : '') + { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || '';
+    bn.hidden = !q; bn.textContent = q ? `${q} entr${q > 1 ? 'ies are' : 'y is'} saved on this device and will be sent when you're back online.` : '';
+  });
+  root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.hash = '#/'; location.reload(); };
+  root.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.t; });
+  const view = root.querySelector('#view');
+  let stop = null;
+  try { stop = await cur.mount(view, ctx); }
+  catch (e) { console.error(e); view.innerHTML = `<div class="card"><b>Couldn't load ${cur.label}.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button></div>`; }
+  flushQueue();
+  return () => { off(); stop && stop(); };
+}

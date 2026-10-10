@@ -1,0 +1,8 @@
+{
+  "name": "alpha-suite",
+  "private": true,
+  "type": "module",
+  "scripts": { "build": "node build.mjs" },
+  "dependencies": { "@supabase/supabase-js": "2.45.4", "qrcode": "1.5.3", "jsqr": "1.4.0" },
+  "devDependencies": { "esbuild": "0.24.0" }
+}
