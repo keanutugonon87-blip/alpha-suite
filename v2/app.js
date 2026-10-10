@@ -62,7 +62,7 @@ async function shell(p) {
     cur = id; location.hash = id; cleanup && cleanup(); cleanup = null;
     document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.t === id));
     const view = document.getElementById('view'); view.innerHTML = '<p class="empty">Loading…</p>';
-    try { const mod = await import(`./${id}.js?v=1`); cleanup = await mod.mount(view, ctx); }
+    try { const mod = await import(`./${id}.js?v=2`); cleanup = await mod.mount(view, ctx); }
     catch (e) { console.error(e); view.innerHTML = `<div class="card"><b>Couldn't load this section.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button></div>`; }
   };
   document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => go(b.dataset.t));

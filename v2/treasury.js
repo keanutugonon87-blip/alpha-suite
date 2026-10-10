@@ -1,4 +1,5 @@
 import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, resizeImage } from './lib.js?v=1';
+import { scanMember, showMemberCards, showReceipt as showPrintReceipt } from './qr.js?v=1';
 
 const CATS_IN = ['Class Dues','Contribution','Fundraising','Donation','Other'];
 const CATS_OUT = ['Supplies','Printing','Event Expenses','Transportation','Snacks / Food','Other'];
@@ -35,7 +36,7 @@ export async function mount(el, ctx) {
         <small>${esc(e.category)}${e.purpose?` · ${esc(e.purpose)}`:''} · ${fmtDateTime(e.occurred_at)}${e.receipt_no?` · ${esc(e.receipt_no)}`:''}${e.method==='gcash'?' · GCash':''}${e.void_reason?` · voided: ${esc(e.void_reason)}`:''}</small></div>
         <div style="text-align:right"><div class="amt ${e.kind==='expense'?'out':'in'}">${e.kind==='expense'?'−':'+'}${peso(e.amount)}</div>
         <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px">
-          ${e.hasReceipt?`<button class="btn ghost sm" data-rcpt="${e.id}">Photo</button>`:''}
+          ${e.hasReceipt?`<button class="btn ghost sm" data-rcpt="${e.id}">Photo</button>`:''}${e.kind==='collection'&&e.status==='approved'?`<button class="btn ghost sm" data-print="${e.id}">Receipt</button>`:''}
           ${showActions&&isMayor&&e.status==='pending'?`<button class="btn gold sm" data-ok="${e.id}">Approve</button>`:''}
           ${showActions&&canWrite&&e.status!=='voided'?`<button class="btn ghost sm" data-void="${e.id}">Void</button>`:''}</div></div></div>`).join('')
       : '<p class="empty">No entries.</p>';
@@ -45,7 +46,7 @@ export async function mount(el, ctx) {
       const shown = curEntries.filter(e => filter === 'all' ? true : filter === 'pending' ? e.status === 'pending' : e.kind === filter);
       body = `<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
         <div class="stat"><small>Collected</small><b>${peso(coll)}</b></div><div class="stat"><small>Spent</small><b>${peso(exp)}</b></div></div>
-        <div class="bar" style="margin-top:14px">${canWrite?`<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="addOut">+ Expense</button>`:''}
+        <div class="bar" style="margin-top:14px">${canWrite?`<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>`:''}
           <select id="flt" style="width:auto;margin-left:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN?` (${pendingN})`:''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${list(shown, true)}</div>
         ${isMayor?`<button class="btn danger" id="close">Close collection period…</button>`:''}`;
@@ -61,6 +62,9 @@ export async function mount(el, ctx) {
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { view = b.dataset.v; draw(); });
     el.querySelectorAll('[data-past]').forEach(b => b.onclick = () => { openPast = openPast === b.dataset.past ? null : b.dataset.past; draw(); });
     el.querySelector('#addIn')?.addEventListener('click', () => entryForm('collection', cur));
+    el.querySelector('#scan')?.addEventListener('click', async () => { const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, r.id); } });
+    el.querySelector('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
+    el.querySelectorAll('[data-print]').forEach(b => b.onclick = () => showPrintReceipt(b.dataset.print).catch(e => toast(e.message, true)));
     el.querySelector('#addOut')?.addEventListener('click', () => entryForm('expense', cur));
     el.querySelector('#close')?.addEventListener('click', () => closeForm(cur, bal, pendingN));
     el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.from('v2_entries').update({ status: 'approved', approved_by_name: ctx.profile.full_name }).eq('id', b.dataset.ok)); toast('Approved'); } catch (e) { toast(e.message, true); } });
@@ -78,10 +82,10 @@ export async function mount(el, ctx) {
     } catch (e) { toast(e.message, true); }
   }
 
-  function entryForm(kind, cur) {
+  function entryForm(kind, cur, prefMember) {
     const cats = kind === 'collection' ? CATS_IN : CATS_OUT;
     modal(`<h3>${kind === 'collection' ? 'Record collection' : 'Record expense'}</h3><form id="ef">
-      ${kind === 'collection' ? `<label>Student</label><select name="member" required><option value="">Select…</option>${members.map(m => `<option value="${m.id}">${esc(m.full_name)}</option>`).join('')}</select>`
+      ${kind === 'collection' ? `<label>Student</label><select name="member" required><option value="">Select…</option>${members.map(m => `<option value="${m.id}"${m.id===prefMember?' selected':''}>${esc(m.full_name)}</option>`).join('')}</select>`
         : `<label>Paid to / vendor</label><input name="payer" required>`}
       <label>Category</label><select name="cat">${cats.map(c => `<option>${c}</option>`).join('')}</select>
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal">
@@ -98,10 +102,11 @@ export async function mount(el, ctx) {
             const id = crypto.randomUUID(); let path = null; const file = f.get('img');
             if (file && file.size) { const blob = await resizeImage(file); path = `${id}.jpg`; const { error } = await sb.storage.from('v2-receipts').upload(path, blob, { contentType: 'image/jpeg' }); if (error) throw error; }
             const mem = f.get('member');
-            await db(sb.from('v2_entries').insert({ id, period_id: cur.id, kind, category: f.get('cat'), member_id: mem || null, payer_name: f.get('payer') || null,
+            const saved = await db(sb.from('v2_entries').insert({ id, period_id: cur.id, kind, category: f.get('cat'), member_id: mem || null, payer_name: f.get('payer') || null,
               amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', receipt_image: path,
-              recorded_by_name: ctx.profile.full_name, status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }));
+              recorded_by_name: ctx.profile.full_name, status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }).select('id,receipt_no').single());
             toast(isMayor ? 'Saved' : 'Saved — waiting for Mayor approval'); close();
+            if (kind === 'collection' && isMayor) showPrintReceipt(saved.id).catch(() => {});
           } catch (e) { m.querySelector('#er').textContent = e.message; btn.disabled = false; btn.textContent = 'Save'; }
         };
       });
