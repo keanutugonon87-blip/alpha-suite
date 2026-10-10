@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, toast, ROLE_LABEL, ROLES, fmtDateTime } from '../core.js';
+import { sb, db, watch, esc, toast, ROLE_LABEL, ROLES, fmtDateTime, confirmDialog } from '../core.js';
 export async function mountAccounts(el, ctx) {
   const isMayor = ctx.can('mayor');
   let tab = 'people';
@@ -18,7 +18,7 @@ export async function mountAccounts(el, ctx) {
     el.querySelectorAll('select[data-u]').forEach(s => s.onchange = async () => {
       try { await db(sb.from('v2_profiles').update({ role: s.value, updated_at: new Date().toISOString() }).eq('user_id', s.dataset.u)); toast('Role updated'); } catch (e) { toast(e.message, true); draw(); } });
     el.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
-      if (!confirm('Remove this officer profile? They will need the Mayor to approve them again.')) return;
+      if (!await confirmDialog('They will need your approval again before they can use the app.', { ok: 'Move to pending', danger: true, title: 'Remove this officer\'s access?' })) return;
       try { await db(sb.from('v2_profiles').update({ role: 'pending' }).eq('user_id', b.dataset.del)); toast('Moved back to pending'); } catch (e) { toast(e.message, true); } });
   }
   await draw();

@@ -23,18 +23,40 @@ export const uuid = () => crypto.randomUUID();
 export function toast(msg, bad = false) {
   let t = document.getElementById('toast');
   if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
-  t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '');
+  t.setAttribute('role', 'status'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.className = '', 3400);
 }
 export function modal(html, onMount) {
   const m = document.createElement('div'); m.className = 'modal';
-  m.innerHTML = `<div class="sheet">${html}</div>`;
-  const close = () => m.remove();
+  m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  const prev = document.activeElement;
+  const close = () => { document.removeEventListener('keydown', onKey); m.remove(); prev && prev.focus && prev.focus(); };
+  const onKey = e => { if (e.key === 'Escape') close(); };
   m.addEventListener('mousedown', e => { if (e.target === m) close(); });
+  document.addEventListener('keydown', onKey);
   document.body.appendChild(m);
+  const first = m.querySelector('input:not([type=file]),select,textarea,button'); first && first.focus && first.focus({ preventScroll: true });
   onMount && onMount(m, close);
   return m;
 }
+/* In-app replacements for confirm() / prompt(): resolve true/false and text/null. */
+export function confirmDialog(message, { ok = 'Confirm', danger = false, title = 'Are you sure?' } = {}) {
+  return new Promise(res => modal(`<h3>${esc(title)}</h3><p class="muted">${esc(message)}</p>
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ${danger ? 'danger' : 'gold'}" id="y" style="flex:1">${esc(ok)}</button><button class="btn ghost" id="n">Cancel</button></div>`, (m, close) => {
+    m.querySelector('#y').onclick = () => { close(); res(true); }; m.querySelector('#n').onclick = () => { close(); res(false); };
+    m.addEventListener('mousedown', e => { if (e.target === m) res(false); });
+  }));
+}
+export function askText(title, label, { ok = 'Save', placeholder = '' } = {}) {
+  return new Promise(res => modal(`<h3>${esc(title)}</h3><form id="f"><label>${esc(label)}</label><input name="v" required placeholder="${esc(placeholder)}">
+    <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">${esc(ok)}</button><button type="button" class="btn ghost" id="n">Cancel</button></div></form>`, (m, close) => {
+    m.querySelector('#f').onsubmit = e => { e.preventDefault(); const v = new FormData(e.target).get('v').trim(); close(); res(v || null); };
+    m.querySelector('#n').onclick = () => { close(); res(null); };
+    m.addEventListener('mousedown', e => { if (e.target === m) res(null); });
+  }));
+}
+export const initials = n => String(n || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(w => w[0]).join('').toUpperCase();
+export const dayLabel = d => new Date(d).toLocaleDateString('en-PH', { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric', timeZone: 'Asia/Manila' });
 export const skeleton = (n = 4) => Array.from({ length: n }, () => '<div class="skel"></div>').join('');
 
 /* ---- sync status ---- */

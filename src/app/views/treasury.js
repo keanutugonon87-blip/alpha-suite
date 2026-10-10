@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, downloadCSV, printHTML } from '../core.js';
+import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, downloadCSV, printHTML, askText, initials, dayLabel } from '../core.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
 
 const CATS_IN = ['Class Dues', 'Contribution', 'Fundraising', 'Donation', 'Other'];
@@ -25,21 +25,22 @@ export async function mountTreasury(el, ctx) {
     const coll = ok.filter(e => e.kind === 'collection').reduce((s, e) => s + +e.amount, 0), exp = ok.filter(e => e.kind === 'expense').reduce((s, e) => s + +e.amount, 0);
     const bal = +cur.opening_balance + coll - exp, pendingN = curE.filter(e => e.status === 'pending').length;
 
-    const rows = (arr, actions) => arr.length ? arr.map(e => `<div class="row"><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span></b>
-      <small>${esc(e.charge || e.category)}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''} · ${fmtDateTime(e.occurred_at)}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small></div>
-      <div style="text-align:right"><div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div>
-      <div style="display:flex;gap:4px;justify-content:flex-end;margin-top:4px;flex-wrap:wrap">
-        ${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}
-        ${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}
-        ${actions && isMayor && e.status === 'pending' ? `<button class="btn gold sm" data-ok="${e.id}">Approve</button>` : ''}
-        ${actions && canWrite && e.status !== 'voided' ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>`).join('') : '<p class="empty">No entries.</p>';
+    const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span></b>
+      <small>${esc(e.charge || e.category)}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
+      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && isMayor && e.status === 'pending' ? `<button class="btn gold sm" data-ok="${e.id}">Approve</button>` : ''}${actions && canWrite && e.status !== 'voided' ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
+      <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
+    const rows = (arr, actions) => {
+      if (!arr.length) return '<div class="empty"><b>Nothing here yet</b>Entries you record will show up in this list.</div>';
+      const g = new Map(); arr.forEach(e => { const k = dayLabel(e.occurred_at); g.set(k, [...(g.get(k) || []), e]); });
+      return [...g].map(([d, es]) => `<div class="dayhead">${esc(d)}</div>${es.map(e => rowHTML(e, actions)).join('')}`).join('');
+    };
 
     let body;
     if (view === 'current') {
       const shown = curE.filter(e => filter === 'all' || (filter === 'pending' ? e.status === 'pending' : e.kind === filter));
       body = `<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
         <div class="stat"><small>Collected</small><b>${peso(coll)}</b></div><div class="stat"><small>Spent</small><b>${peso(exp)}</b></div></div>
-        <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button>` : ''}
+        <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
           <select id="flt" style="width:auto;margin-left:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${rows(shown, true)}</div>
         <div class="bar"><button class="btn ghost" id="csv">Export ledger (CSV)</button><button class="btn ghost" id="rep">Print period report</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
@@ -50,13 +51,15 @@ export async function mountTreasury(el, ctx) {
           ${openPast === p.id ? `<div style="margin-top:8px">${rows(pe, false)}${Object.keys(p.liquidation_notes || {}).length ? `<h4 style="margin:12px 0 4px">Liquidation notes</h4>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p class="muted" style="margin:2px 0"><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}
           <div class="bar" style="margin-top:10px"><button class="btn ghost sm" data-rep="${p.id}">Print report</button></div></div>` : ''}</div>`; }).join('') : '<p class="empty">No past periods yet.</p>';
     }
-    el.innerHTML = `<div class="bar"><button class="btn ${view === 'current' ? '' : 'ghost'}" data-v="current">Current</button><button class="btn ${view === 'past' ? '' : 'ghost'}" data-v="past">Past periods (${past.length})</button>${canWrite ? '<button class="btn ghost" id="cards" style="margin-left:auto">QR cards</button>' : ''}</div>${body}`;
+    el.innerHTML = `<div class="seg"><button data-v="current" class="${view === 'current' ? 'on' : ''}">Current period</button><button data-v="past" class="${view === 'past' ? 'on' : ''}">Past periods (${past.length})</button></div>${body}
+      ${canWrite && view === 'current' ? '<button class="btn gold fab" id="fab">+ Collection</button>' : ''}`;
 
     const $ = s => el.querySelector(s);
     const flt = $('#flt'); if (flt) { flt.value = filter; flt.onchange = () => { filter = flt.value; draw(); }; }
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { view = b.dataset.v; draw(); });
     el.querySelectorAll('[data-past]').forEach(b => b.onclick = () => { openPast = openPast === b.dataset.past ? null : b.dataset.past; draw(); });
     $('#addIn')?.addEventListener('click', () => entryForm('collection', cur));
+    $('#fab')?.addEventListener('click', () => entryForm('collection', cur));
     $('#addOut')?.addEventListener('click', () => entryForm('expense', cur));
     $('#scan')?.addEventListener('click', async () => { const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, { member: r.id }); } });
     $('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
@@ -69,7 +72,7 @@ export async function mountTreasury(el, ctx) {
     el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc).catch(e => toast(e.message, true)));
     el.querySelectorAll('[data-img]').forEach(b => b.onclick = () => showPhoto(b.dataset.img));
     el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.from('v2_entries').update({ status: 'approved', approved_by_name: ctx.profile.full_name }).eq('id', b.dataset.ok)); toast('Approved'); } catch (e) { toast(e.message, true); } });
-    el.querySelectorAll('[data-void]').forEach(b => b.onclick = () => { const r = prompt('Reason for voiding this entry?'); if (!r) return;
+    el.querySelectorAll('[data-void]').forEach(b => b.onclick = async () => { const r = await askText('Void this entry', 'Reason', { ok: 'Void entry' }); if (!r) return;
       db(sb.from('v2_entries').update({ status: 'voided', void_reason: r }).eq('id', b.dataset.void)).then(() => toast('Voided')).catch(e => toast(e.message, true)); });
   }
 

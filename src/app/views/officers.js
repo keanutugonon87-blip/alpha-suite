@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, toast, modal, resizeImage, blobToDataUrl } from '../core.js';
+import { sb, db, watch, esc, toast, modal, resizeImage, blobToDataUrl, confirmDialog } from '../core.js';
 export async function mountOfficers(el, ctx) {
   el.innerHTML = '<div class="skel"></div><div class="skel"></div>';
   const can = ctx.can('mayor','vice_mayor','secretary','pio');
@@ -15,7 +15,7 @@ export async function mountOfficers(el, ctx) {
       <label>Credentials</label><textarea name="c" rows="4">${esc(o?.credentials)}</textarea><label>Photo</label><input name="i" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button>${o ? '<button type="button" class="btn danger" id="rm">Delete</button>' : ''}<button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
       (m, close) => { m.querySelector('#cx').onclick = close;
-        m.querySelector('#rm')?.addEventListener('click', async () => { if (!confirm('Delete this officer?')) return; try { await db(sb.from('v2_officers').delete().eq('id', o.id)); close(); draw(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
+        m.querySelector('#rm')?.addEventListener('click', async () => { if (!await confirmDialog('They will be removed from the public page.', { ok: 'Delete', danger: true, title: 'Delete this officer?' })) return; try { await db(sb.from('v2_officers').delete().eq('id', o.id)); close(); draw(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
         m.querySelector('#of').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
           try { const row = { full_name: f.get('n'), position: f.get('p'), credentials: f.get('c'), updated_at: new Date().toISOString() };
             const file = f.get('i'); if (file && file.size) row.photo = await blobToDataUrl(await resizeImage(file, 400, 0.7));

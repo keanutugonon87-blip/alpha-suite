@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, toast, modal, skeleton, downloadCSV, uuid } from '../core.js';
+import { sb, db, watch, esc, toast, modal, skeleton, downloadCSV, uuid, confirmDialog } from '../core.js';
 import { showMemberCards } from '../qr.js';
 
 export async function mountStudents(el, ctx) {
@@ -28,7 +28,7 @@ export async function mountStudents(el, ctx) {
       <select name="st">${['active', 'pending', 'inactive'].map(x => `<option${(s?.status || 'active') === x ? ' selected' : ''}>${x}</option>`).join('')}</select>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button>${s && canQR ? '<button type="button" class="btn ghost" id="rv">Replace QR</button>' : ''}<button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
-      m.querySelector('#rv')?.addEventListener('click', async () => { if (!confirm('The old printed QR for this student will stop working. Continue?')) return;
+      m.querySelector('#rv')?.addEventListener('click', async () => { if (!await confirmDialog('The old printed QR for this student will stop working.', { ok: 'Replace QR', title: 'Replace this QR code?' })) return;
         try { await db(sb.from('v2_members').update({ token_version: s.token_version + 1 }).eq('id', s.id)); toast('QR replaced — print a new card'); close(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
       m.querySelector('#sf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
         const row = { full_name: f.get('n').trim(), student_no: f.get('i').trim(), section: f.get('s').trim() || null, status: f.get('st'), updated_at: new Date().toISOString() };

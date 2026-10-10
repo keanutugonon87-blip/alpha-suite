@@ -6,6 +6,14 @@ import { mountWatch } from './watch.js';
 import { mountOfficers } from './officers.js';
 import { mountAccounts } from './accounts.js';
 
+const ICON = {
+  treasury: '<path d="M4 7h16v11H4z"/><path d="M4 11h16"/><path d="M8 15h3"/>',
+  balances: '<path d="M5 20V10M12 20V4M19 20v-7"/>',
+  watch: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',
+  students: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3 3 0 010 5.5M18 14.5c1.8.7 3 2.4 3 5.5"/>',
+  officers: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.3 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
+  accounts: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
+};
 const TABS = [
   { id: 'treasury', label: 'Treasury', mount: mountTreasury, roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
   { id: 'balances', label: 'Balances', mount: mountBalances, roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
@@ -82,7 +90,7 @@ export async function renderStaff(root, tabId) {
   root.innerHTML = `<div class="top"><img src="assets/wolf-crest.png" alt=""><div class="t"><b>ALPHA SUITE</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out" style="color:#fff;border-color:rgba(255,255,255,.3)">Sign out</button></div>
     <div class="banner" id="bn" hidden></div>
-    <div class="tabs">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}">${t.label}</button>`).join('')}</div><main id="view"></main>`;
+    <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[t.id]}</svg><span>${t.label}</span></button>`).join('')}</nav><main id="view"></main></div>`;
   const off = onSync((s, d, q) => {
     const c = root.querySelector('#sync'), bn = root.querySelector('#bn'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = (q ? `${q} waiting · ` : '') + { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || '';

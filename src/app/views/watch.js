@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, downloadCSV, todayISO } from '../core.js';
+import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, downloadCSV, todayISO, confirmDialog } from '../core.js';
 
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
@@ -61,13 +61,13 @@ export async function mountWatch(el, ctx) {
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
     el.querySelector('#csv')?.addEventListener('click', () => downloadCSV('violation-ledger.csv', [{ label: 'Date', key: 'occurred_on' }, { label: 'Student', get: v => mname(v.member_id) }, { label: 'Standard', get: v => std(v.standard_id)?.title }, { label: 'Offense', get: v => num[v.id] ? sanction(num[v.id]) : '' }, { label: 'Status', key: 'status' }, { label: 'Reported by', key: 'reported_by' }, { label: 'Resolved by', key: 'resolved_by' }], viol));
     el.querySelector('#addStd')?.addEventListener('click', () => newStandard());
-    el.querySelectorAll('[data-rs]').forEach(b => b.onclick = () => { if (confirm('Remove this standard? Past records keep it.')) db(sb.from('v2_standards').update({ active: false }).eq('id', b.dataset.rs)).then(draw).catch(e => toast(e.message, true)); });
+    el.querySelectorAll('[data-rs]').forEach(b => b.onclick = async () => { if (await confirmDialog('Past records keep it.', { ok: 'Remove standard', danger: true, title: 'Remove this standard?' })) db(sb.from('v2_standards').update({ active: false }).eq('id', b.dataset.rs)).then(draw).catch(e => toast(e.message, true)); });
     el.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, a = b.dataset.act;
       const patch = { approve:{ status:'pending' }, reject:{ status:'rejected' }, reqres:{ status:'resolve_requested', resolve_requested_by:`${r} ${name}` },
         forward:{ status:'resolve_forwarded', forwarded_by:`${r} ${name}` }, resolve:{ status:'resolved', resolved_by:`${r} ${name}` } }[a];
       try {
-        if (a === 'del') { if (!confirm('Delete this record permanently?')) return; await db(sb.from('v2_violations').delete().eq('id', id)); }
+        if (a === 'del') { if (!await confirmDialog('This record will be removed permanently.', { ok: 'Delete', danger: true })) return; await db(sb.from('v2_violations').delete().eq('id', id)); }
         else await db(sb.from('v2_violations').update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id));
         toast('Updated'); } catch (e) { toast(e.message, true); } });
   }
