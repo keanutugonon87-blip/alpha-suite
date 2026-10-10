@@ -1,5 +1,7 @@
-import { sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel } from '../core.js';
+import { sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast } from '../core.js';
 import { renderLearn } from './learn.js';
+import { t, getLang, setLang } from '../i18n.js';
+import { scanRaw, readQRFromFile } from '../qr.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const PERIOD = 'q150 -26 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0';
@@ -18,9 +20,41 @@ function countUp(el, to) {
   requestAnimationFrame(step);
 }
 
+const ME = 'alpha-me';
+const ordn = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
+function renderMe(host) {
+  const get = () => { try { return localStorage.getItem(ME) || ''; } catch { return ''; } };
+  const put = v => { try { v ? localStorage.setItem(ME, v) : localStorage.removeItem(ME); } catch { /* ignore */ } };
+  async function show(token) {
+    host.innerHTML = skeleton(3);
+    try {
+      const { data, error } = await sb.rpc('v2_self_check', { p_token: token }); if (error) throw error;
+      put(token);
+      const owed = data.balances.reduce((a, b) => a + +b.owed, 0), open = data.violations.filter(v => v.status !== 'resolved');
+      host.innerHTML = `<div class="card pad"><small>${t('hello')}</small><h2 style="margin:2px 0 8px">${esc(data.name)}</h2>
+        <div style="font-size:1.15rem;font-weight:700;color:var(${owed ? '--bad' : '--ok'})">${owed ? `${t('owed')} ${peso(owed)}` : '✓ ' + t('clear')}</div></div>
+        <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small></div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
+        <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : ordn(v.offense) + ' offense: ₱25 fine'}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
+        <p style="text-align:center"><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
+      host.querySelector('#fg').onclick = () => { put(''); start(); };
+    } catch (e) { put(''); start(e.message); }
+  }
+  function start(err = '') {
+    host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${t('mytitle')}</h3><p class="muted">${t('mydesc')}</p>
+      <div style="display:grid;gap:8px;max-width:320px;margin:14px auto 0"><button class="btn gold" id="sc">${t('scan')}</button>
+      <label class="btn ghost" style="cursor:pointer">${t('photo')}<input id="ph" type="file" accept="image/*" hidden></label>
+      <button class="btn ghost" id="pa">${t('paste')}</button></div><div class="err" id="er" style="margin-top:10px">${esc(err)}</div></div>`;
+    const go = async fn => { try { const tk = await fn(); if (tk) show(tk); } catch (e) { host.querySelector('#er').textContent = e.message; } };
+    host.querySelector('#sc').onclick = () => go(() => scanRaw());
+    host.querySelector('#ph').onchange = e => e.target.files[0] && go(() => readQRFromFile(e.target.files[0]));
+    host.querySelector('#pa').onclick = () => go(() => { const v = prompt('Paste the code under your QR (starts with A1.)'); return v && v.trim(); });
+  }
+  const saved = get(); saved ? show(saved) : start();
+}
+
 export async function renderPublic(root) {
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>ALPHA SUITE</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">Officer sign in</a></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
@@ -28,11 +62,12 @@ export async function renderPublic(root) {
   const ord = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
+  root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); renderPublic(root); };
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };
   const entryRow = e => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.payer))}</span>
     <div class="m"><b>${esc(e.payer || '—')}</b><small>${esc(e.purpose || e.category)}</small></div></div><span class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</span></div>`;
-  const grouped = list => list.length ? [...byDay(list)].map(([d, es]) => `<div class="dayhead">${esc(d)}</div>${es.map(entryRow).join('')}`).join('') : '<div class="empty"><b>No entries yet</b>Collections and expenses show up here as soon as they are approved.</div>';
+  const grouped = list => list.length ? [...byDay(list)].map(([d, es]) => `<div class="dayhead">${esc(d)}</div>${es.map(entryRow).join('')}`).join('') : `<div class="empty"><b>${t('noentries')}</b>${t('noentriesd')}</div>`;
 
   function openPeriod(p) {
     const list = (data.tre.entries || []).filter(e => e.period_id === p.id);
@@ -44,8 +79,10 @@ export async function renderPublic(root) {
     const { off: officers, tre, stand } = data;
     const cur = tre.open ? (tre.entries || []).filter(e => e.period_id === tre.open.id) : [];
     const views = {
-      fund: () => `<div class="card pad" style="padding-bottom:6px"><h3 style="margin-bottom:2px">${esc(tre.open?.name || 'Current period')}</h3>${grouped(cur)}</div>
-        <h3 style="margin:18px 2px 8px">Past collection periods</h3>
+      fund: () => `${(data.prog || []).length ? `<div class="card pad"><h3 style="margin-bottom:8px">${t('progress')}</h3>${data.prog.map(p => { const pc = p.total ? Math.round(p.paid / p.total * 100) : 0;
+          return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(p.charge)} · ${peso(p.amount)}</b><span class="muted">${p.paid}/${p.total} ${t('paid')}</span></div><div class="prog"><i style="width:${pc}%"></i></div></div>`; }).join('')}</div>` : ''}
+        <div class="card pad" style="padding-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="margin-bottom:2px">${esc(tre.open?.name || 'Current period')}</h3><button class="btn ghost sm" id="shf">${t('share')}</button></div>${grouped(cur)}</div>
+        <h3 style="margin:18px 2px 8px">${t('past')}</h3>
         ${(tre.past || []).length ? `<div class="card">${tre.past.map(p => `<button class="row" data-p="${p.id}" style="width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left;cursor:pointer"><div class="m"><b>${esc(p.name)}</b><small>Closed ${fmtDate(p.closed_at)}</small></div>
           <div style="text-align:right"><div class="amt">${peso(p.closing_balance)}</div><small class="muted">${peso(p.collections_total)} in · ${peso(p.expenses_total)} out</small></div></button>`).join('')}</div>` : '<div class="empty"><b>No closed periods</b>When the Mayor closes a collection period, its full record is kept here.</div>'}`,
       standing: () => {
@@ -54,25 +91,29 @@ export async function renderPublic(root) {
         const list = all.filter(v => (vf === 'all' || (vf === 'open' ? isOpen(v) : !isOpen(v))) && (!q || v.name.toLowerCase().includes(q) || (v.standard || '').toLowerCase().includes(q)));
         const row = v => `<div class="row"><div class="lead"><span class="ini">${esc(initials(v.name))}</span><div class="m"><b>${esc(v.name)}</b>
           <small>${esc(v.standard)} · ${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : `${ord(v.offense)} offense: ₱25 fine`}</small></div></div>
-          <span class="tag ${isOpen(v) ? 'bad' : 'ok'}">${isOpen(v) ? 'Outstanding' : 'Resolved'}</span></div>`;
-        return `<div class="card pad" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px"><div><b style="font-size:1.4rem">${nOpen}</b><br><small class="muted">outstanding</small></div><div><b style="font-size:1.4rem">${nRes}</b><br><small class="muted">resolved</small></div><div><b style="font-size:1.4rem">${all.length}</b><br><small class="muted">total</small></div></div>
-          <div class="seg" id="vf" style="margin-bottom:8px">${[['open','Outstanding'],['done','Resolved'],['all','All']].map(([k,l]) => `<button data-vf="${k}" class="${vf === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-          <input id="vq" type="search" placeholder="Search name or violation" value="${esc(vq)}" aria-label="Search violations" style="width:100%;margin-bottom:10px">
-          <div class="card">${list.length ? list.map(row).join('') : '<div class="empty"><b>No matching records</b>Nothing to show for this filter.</div>'}</div>`;
+          <span class="tag ${isOpen(v) ? 'bad' : 'ok'}">${isOpen(v) ? t('outstanding') : t('resolved')}</span></div>`;
+        return `<div class="card pad" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px"><div><b style="font-size:1.4rem">${nOpen}</b><br><small class="muted">${t('outstanding').toLowerCase()}</small></div><div><b style="font-size:1.4rem">${nRes}</b><br><small class="muted">${t('resolved').toLowerCase()}</small></div><div><b style="font-size:1.4rem">${all.length}</b><br><small class="muted">${t('total')}</small></div><button class="btn ghost sm" id="shv" style="margin-left:auto;align-self:center">${t('share')}</button></div>
+          <div class="seg" id="vf" style="margin-bottom:8px">${[['open',t('outstanding')],['done',t('resolved')],['all',t('all')]].map(([k,l]) => `<button data-vf="${k}" class="${vf === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <input id="vq" type="search" placeholder="${t('search')}" value="${esc(vq)}" aria-label="Search violations" style="width:100%;margin-bottom:10px">
+          <div class="card">${list.length ? list.map(row).join('') : `<div class="empty"><b>${t('nomatch')}</b></div>`}</div>`;
       },
       officers: () => `<div class="officers">${officers.map(o => `<div class="ocard"><div class="ph">${o.photo ? `<img src="${o.photo}" alt="${esc(o.name)}" style="object-position:${o.x}% ${o.y}%">` : esc(initials(o.name))}</div><div class="tx"><b>${esc(o.name)}</b><small>${esc(o.position)}</small></div></div>`).join('')}</div>`,
+      me: () => '',
       learn: () => '',
       bulletin: () => `<iframe class="fb" src="${FB}" width="500" height="600" scrolling="yes" loading="lazy" title="Class Facebook page" allow="encrypted-media"></iframe>`,
     };
-    m.innerHTML = `<div class="hero"><div class="flag">${FLAG}</div>
+    m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}<div class="hero"><div class="flag">${FLAG}</div>
         <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="Alpha crest"></span></div>
-        <div class="copy"><small>Class fund balance</small><div class="big" id="bal">${peso(tre.balance)}</div>
-          <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} student${stand.length > 1 ? 's' : ''} with open violations` : ' · everyone in good standing'}</p></div>
+        <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
+          <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p></div>
         <div class="ship">${SHIP}</div>${SEA}</div>
-      <div class="seg" role="tablist">${[['fund', 'Fund'], ['standing', 'Violations'], ['officers', 'Officers'], ['learn', 'Deck Watch'], ['bulletin', 'Bulletin']].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
-      <section id="sec">${tab === 'learn' ? '' : views[tab]()}</section>`;
+      <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+      <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
     if (tab === 'learn') renderLearn(m.querySelector('#sec'));
+    if (tab === 'me') renderMe(m.querySelector('#sec'));
+    m.querySelector('#shf')?.addEventListener('click', () => share({ title: 'BSMT 1-Alpha class fund', text: `BSMT 1-Alpha fund balance: ${peso(tre.balance)}.`, url: location.origin + location.pathname }));
+    m.querySelector('#shv')?.addEventListener('click', () => share({ title: 'BSMT 1-Alpha violations', text: 'BSMT 1-Alpha public violation ledger.', url: location.origin + location.pathname }));
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     m.querySelectorAll('[data-vf]').forEach(b => b.onclick = () => { vf = b.dataset.vf; paint(); });
     const qi = m.querySelector('#vq'); if (qi) qi.oninput = () => { vq = qi.value; const pos = qi.selectionStart; paint(); const n = m.querySelector('#vq'); n.focus(); n.setSelectionRange(pos, pos); };
@@ -80,8 +121,9 @@ export async function renderPublic(root) {
   }
   async function load() {
     try {
-      const [o, t, s, vv] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing')), db(sb.rpc('v2_public_violations'))]);
-      const first = !data; data = { off: o, tre: t, stand: s, viol: vv }; if (first || tab !== 'learn') paint();
+      const opt = p => db(p).catch(() => []);
+      const [o, tr, s, vv, ann, prog] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing')), db(sb.rpc('v2_public_violations')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_progress'))]);
+      const first = !data; data = { off: o, tre: tr, stand: s, viol: vv, ann, prog }; if (first || (tab !== 'learn' && tab !== 'me')) paint();
     } catch (e) { if (!data) m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div>`; }
   }
   await load();

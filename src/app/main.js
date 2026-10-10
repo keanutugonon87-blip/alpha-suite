@@ -28,3 +28,5 @@ sb.auth.onAuthStateChange(ev => {
   if (ev === 'SIGNED_OUT' && location.hash.startsWith('#/staff')) route();
 });
 route();
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));

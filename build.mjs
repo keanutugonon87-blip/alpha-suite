@@ -13,3 +13,15 @@ const js = outs.find(p => p.endsWith('.js')), css = outs.find(p => p.endsWith('.
 const html = readFileSync('src/index.template.html', 'utf8').replace('%JS%', js).replace('%CSS%', css);
 writeFileSync('index.html', html);
 console.log('built', js, css);
+
+// Service worker: app shell works offline; data calls always go to the network.
+const shell = ['./', 'index.html', js.replace(/^.*assets\//, 'assets/'), css.replace(/^.*assets\//, 'assets/'), 'assets/wolf-crest.png', 'assets/icon-192.png', 'manifest.webmanifest'];
+const ver = js.match(/app\.([A-Z0-9]+)\.js/)[1];
+writeFileSync('sw.js', `const V='alpha-${ver}',SHELL=${JSON.stringify(shell)};
+self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
+self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==V).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
+self.addEventListener('fetch',e=>{const r=e.request,u=new URL(r.url);
+  if(r.method!=='GET'||u.origin!==location.origin)return;
+  if(r.mode==='navigate'){e.respondWith(fetch(r).then(x=>{const c=x.clone();caches.open(V).then(h=>h.put('index.html',c));return x}).catch(()=>caches.match('index.html')));return}
+  e.respondWith(caches.match(r).then(m=>m||fetch(r).then(x=>{if(x.ok){const c=x.clone();caches.open(V).then(h=>h.put(r,c))}return x})))});
+`);

@@ -5,6 +5,7 @@ import { mountStudents } from './students.js';
 import { mountWatch } from './watch.js';
 import { mountOfficers } from './officers.js';
 import { mountAccounts } from './accounts.js';
+import { mountNotices } from './notices.js';
 
 const ICON = {
   treasury: '<path d="M4 7h16v11H4z"/><path d="M4 11h16"/><path d="M8 15h3"/>',
@@ -12,6 +13,7 @@ const ICON = {
   watch: '<path d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z"/>',
   students: '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6"/><path d="M16 5.5a3 3 0 010 5.5M18 14.5c1.8.7 3 2.4 3 5.5"/>',
   officers: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.3 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
+  notices: '<path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16 9a4 4 0 010 6"/>',
   accounts: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
 };
 const TABS = [
@@ -20,6 +22,7 @@ const TABS = [
   { id: 'watch', label: 'Watch', mount: mountWatch, roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
   { id: 'students', label: 'Students', mount: mountStudents, roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },
   { id: 'officers', label: 'Officers', mount: mountOfficers, roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
+  { id: 'notices', label: 'Notices', mount: mountNotices, roles: ['mayor', 'vice_mayor', 'secretary', 'pio'] },
   { id: 'accounts', label: 'Accounts', mount: mountAccounts, roles: ['mayor', 'vice_mayor', 'auditor'] },
 ];
 

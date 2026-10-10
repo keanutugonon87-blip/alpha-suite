@@ -160,3 +160,13 @@ label{display:block;font-size:.85rem;color:var(--soft);margin:12px 0 4px}
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}.ship{display:none}}
 @media(min-width:521px){.hero .copy{padding-top:62px}.hero{min-height:300px}}
 @media(max-width:430px){.chip span{display:none}.chip i{margin:0}.top .t small{display:none}.top .t b{letter-spacing:.06em;font-size:.95rem}}
+
+/* notices */
+.notices{display:grid;gap:8px;margin-bottom:12px}
+.notice{background:#fff;border:1px solid var(--line);border-left:5px solid var(--sea);border-radius:12px;padding:10px 14px;box-shadow:var(--shadow);animation:rise .5s both}
+.notice.pin{border-left-color:var(--brass);background:#fffaf0}.notice p{margin:4px 0 0;color:var(--soft)}
+.lb{counter-reset:lb}.lb .row:before{counter-increment:lb;content:counter(lb);font-weight:700;color:var(--brass);width:1.6em}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin:6px 0 2px}.chips button{border:1px solid var(--line);background:var(--sky);color:var(--navy);border-radius:99px;padding:5px 11px;cursor:pointer;font:inherit;font-size:.85rem}
+.swipe-hint{font-size:.78rem;color:var(--soft);text-align:center;margin:-6px 0 8px}
+@keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media(max-width:430px){.top .t b{font-size:.82rem;letter-spacing:.03em;white-space:nowrap}.top .btn.sm{padding:6px 9px;font-size:.8rem}.top{gap:6px}}

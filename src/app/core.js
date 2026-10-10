@@ -180,3 +180,10 @@ export async function getProfile() {
   if (error) throw error;
   return { ...(data || { user_id: session.user.id, email: session.user.email, full_name: session.user.email, role: 'pending' }) };
 }
+
+/* ---- share (native sheet on phones, link copy elsewhere) ---- */
+export async function share({ title, text, url }) {
+  const data = { title, text, url: url || location.href };
+  try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e.name === 'AbortError') return; }
+  try { await navigator.clipboard.writeText(`${text ? text + ' ' : ''}${data.url}`); toast('Link copied'); } catch { toast(data.url); }
+}

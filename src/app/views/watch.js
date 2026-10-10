@@ -44,7 +44,7 @@ export async function mountWatch(el, ctx) {
     if (tab === 'ledger') {
       const shown = viol.filter(v => !q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())).slice().reverse();
       body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? '<button class="btn gold" id="add">+ Report</button>' : ''}<button class="btn ghost" id="csv">CSV</button></div>
-        <div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
+        ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
       body = `<div class="card">${members.filter(m => m.status === 'active').map(m => `<div class="row"><div class="m"><b>${esc(m.full_name)}</b><small>${esc(m.section || '')}</small></div>
@@ -61,6 +61,14 @@ export async function mountWatch(el, ctx) {
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
     el.querySelector('#csv')?.addEventListener('click', () => downloadCSV('violation-ledger.csv', [{ label: 'Date', key: 'occurred_on' }, { label: 'Student', get: v => mname(v.member_id) }, { label: 'Standard', get: v => std(v.standard_id)?.title }, { label: 'Offense', get: v => num[v.id] ? sanction(num[v.id]) : '' }, { label: 'Status', key: 'status' }, { label: 'Reported by', key: 'reported_by' }, { label: 'Resolved by', key: 'resolved_by' }], viol));
     el.querySelector('#addStd')?.addEventListener('click', () => newStandard());
+    // swipe a row right to approve / resolve it (touch screens)
+    el.querySelectorAll('.row').forEach(row => {
+      const go = row.querySelector('[data-act=approve],[data-act=resolve]'); if (!go) return;
+      let x0 = null, y0 = 0;
+      row.addEventListener('touchstart', e => { x0 = e.touches[0].clientX; y0 = e.touches[0].clientY; }, { passive: true });
+      row.addEventListener('touchmove', e => { if (x0 === null) return; const dx = e.touches[0].clientX - x0; if (Math.abs(e.touches[0].clientY - y0) < 30 && dx > 0) row.style.transform = `translateX(${Math.min(dx, 90)}px)`; }, { passive: true });
+      row.addEventListener('touchend', e => { const dx = e.changedTouches[0].clientX - (x0 ?? 0); row.style.transform = ''; if (x0 !== null && dx > 90) go.click(); x0 = null; });
+    });
     el.querySelectorAll('[data-rs]').forEach(b => b.onclick = async () => { if (await confirmDialog('Past records keep it.', { ok: 'Remove standard', danger: true, title: 'Remove this standard?' })) db(sb.from('v2_standards').update({ active: false }).eq('id', b.dataset.rs)).then(draw).catch(e => toast(e.message, true)); });
     el.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, a = b.dataset.act;
@@ -72,14 +80,21 @@ export async function mountWatch(el, ctx) {
         toast('Updated'); } catch (e) { toast(e.message, true); } });
   }
 
+  const RK = 'alpha-recent-reports';
+  const recent = () => { try { return JSON.parse(localStorage.getItem(RK) || '[]'); } catch { return []; } };
+  const remember = (mi, si, members, standards) => { try {
+    const l = `${(members.find(x => x.id === mi) || {}).full_name || ''} · ${(standards.find(x => x.id === si) || {}).title || ''}`, k = `${mi}|${si}`;
+    localStorage.setItem(RK, JSON.stringify([[k, l], ...recent().filter(x => x[0] !== k)].slice(0, 4))); } catch { /* ignore */ } };
   function report(members, standards) {
     modal(`<h3>Report a violation</h3><form id="rf"><label>Student</label><select name="m" required><option value="">Select…</option>${members.filter(m=>m.status==='active').map(m=>`<option value="${m.id}">${esc(m.full_name)}</option>`).join('')}</select>
       <label>Standard</label><select name="s" required><option value="">Select…</option>${standards.map(s=>`<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select>
+      <div class="chips" id="rs">${recent().map(([k, l]) => `<button type="button" data-k="${k}">${esc(l)}</button>`).join('')}</div>
       <label>Date</label><input name="d" type="date" required value="${todayISO()}">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Submit</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
       (m, close) => { m.querySelector('#cx').onclick = close;
+        m.querySelectorAll('#rs [data-k]').forEach(b => b.onclick = () => { const [mi, si] = b.dataset.k.split('|'); m.querySelector('[name=m]').value = mi; m.querySelector('[name=s]').value = si; });
         m.querySelector('#rf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
-          try { const res = await safeWrite('v2_violations', { id: uuid(), member_id: f.get('m'), standard_id: f.get('s'), occurred_on: f.get('d'), reported_by: `${r} ${name}`, status: canApprove ? 'pending' : 'awaiting_approval' });
+          try { remember(f.get('m'), f.get('s'), members, standards); const res = await safeWrite('v2_violations', { id: uuid(), member_id: f.get('m'), standard_id: f.get('s'), occurred_on: f.get('d'), reported_by: `${r} ${name}`, status: canApprove ? 'pending' : 'awaiting_approval' });
             toast(res.queued ? 'No signal — saved on this device, will send automatically' : canApprove ? 'Recorded' : 'Submitted for approval'); close(); draw().catch(() => {}); } catch (x) { m.querySelector('#er').textContent = x.message; } }; });
   }
   function newStandard() {

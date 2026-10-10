@@ -5,6 +5,38 @@ import { sb, db, esc, peso, fmtDateTime, toast, modal, printHTML, blobToDataUrl 
 
 export const qrDataUrl = (text, size = 200) => QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'M' });
 
+/* Student self-check: returns the raw A1.… code from the camera, a photo, or null. */
+export function scanRaw(title = 'Scan your QR card') {
+  return new Promise(resolve => {
+    let stream = null, stop = false, done = false;
+    const finish = v => { if (done) return; done = true; stop = true; stream && stream.getTracks().forEach(t => t.stop()); m.remove(); resolve(v); };
+    const m = modal(`<h3>${esc(title)}</h3><video id="v" playsinline muted style="width:100%;border-radius:12px;background:#000;aspect-ratio:1"></video><p class="muted" id="st">Starting camera…</p><button class="btn ghost" id="cx" style="width:100%">Cancel</button>`, el => { el.querySelector('#cx').onclick = () => finish(null); });
+    (async () => {
+      const st = m.querySelector('#st'), v = m.querySelector('#v');
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        v.srcObject = stream; await v.play(); st.textContent = 'Point at your QR code';
+        const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+        const bd = 'BarcodeDetector' in window ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
+        while (!stop) {
+          let raw = null;
+          try { if (bd) raw = (await bd.detect(v))[0]?.rawValue; else { c.width = v.videoWidth; c.height = v.videoHeight; x.drawImage(v, 0, 0); const d = x.getImageData(0, 0, c.width, c.height); raw = jsQR(d.data, d.width, d.height)?.data; } } catch { /* next frame */ }
+          if (raw && raw.startsWith('A1.')) return finish(raw);
+          await new Promise(r => setTimeout(r, 250));
+        }
+      } catch (e) { st.textContent = 'Camera unavailable. Use a photo of your card or paste your code instead.'; }
+    })();
+  });
+}
+export async function readQRFromFile(file) {
+  const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = URL.createObjectURL(file); });
+  const k = Math.min(1, 1400 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = img.width * k; c.height = img.height * k;
+  const x = c.getContext('2d'); x.drawImage(img, 0, 0, c.width, c.height);
+  const d = x.getImageData(0, 0, c.width, c.height), r = jsQR(d.data, d.width, d.height);
+  if (!r) throw new Error('Could not find a QR code in that photo. Try a clearer, closer shot.');
+  return r.data;
+}
+
 export function scanMember() {
   return new Promise(resolve => {
     let stream = null, stop = false, done = false;
