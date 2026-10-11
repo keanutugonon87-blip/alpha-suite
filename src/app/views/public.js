@@ -1,4 +1,4 @@
-import { sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast } from '../core.js';
+import { FUNDS, fundLabel, sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast } from '../core.js';
 import { renderLearn } from './learn.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { scanRaw, readQRFromFile } from '../qr.js';
@@ -64,7 +64,7 @@ export async function renderPublic(root) {
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };
   const entryRow = e => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.payer))}</span>
-    <div class="m"><b>${esc(e.payer || '—')}</b><small>${esc(e.purpose || e.category)}</small></div></div><span class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</span></div>`;
+    <div class="m"><b>${esc(e.payer || '—')}</b><small>${esc(e.purpose || e.category)}${e.fund ? ' · ' + esc(fundLabel(e.fund)) : ''}</small></div></div><span class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</span></div>`;
   const grouped = list => list.length ? [...byDay(list)].map(([d, es]) => `<div class="dayhead">${esc(d)}</div>${es.map(entryRow).join('')}`).join('') : `<div class="empty"><b>${t('noentries')}</b>${t('noentriesd')}</div>`;
 
   function openPeriod(p) {
@@ -89,11 +89,16 @@ export async function renderPublic(root) {
       localStorage.setItem(seenKey, JSON.stringify(ids));
     } catch { /* storage unavailable */ }
   }
+  const fundCards = () => {
+    const rows = data.tre?.funds || [], by = Object.fromEntries(rows.map(r => [r.fund, r]));
+    const list = [...FUNDS.map(f => ({ k: f.k, label: f.label })), ...(by.none && (+by.none.collected || +by.none.spent) ? [{ k: 'none', label: 'Unassigned' }] : [])];
+    return `<div class="funds">${list.map(f => { const r = by[f.k] || {}, c = +r.collected || 0, s = +r.spent || 0; return `<div class="fund f-${f.k}"><b>${esc(f.label)}</b><div class="rem">${peso(c - s)}</div><small>${peso(c)} collected · ${peso(s)} spent</small></div>`; }).join('')}</div>`;
+  };
   function paint() {
     const { off: officers, tre, stand } = data;
     const cur = tre.open ? (tre.entries || []).filter(e => e.period_id === tre.open.id) : [];
     const views = {
-      fund: () => `${(data.prog || []).length ? `<div class="card pad"><h3 style="margin-bottom:8px">${t('progress')}</h3>${data.prog.map(p => { const pc = p.total ? Math.round(p.paid / p.total * 100) : 0;
+      fund: () => `${fundCards()}${(data.prog || []).length ? `<div class="card pad"><h3 style="margin-bottom:8px">${t('progress')}</h3>${data.prog.map(p => { const pc = p.total ? Math.round(p.paid / p.total * 100) : 0;
           return `<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(p.charge)} · ${peso(p.amount)}</b><span class="muted">${p.paid}/${p.total} ${t('paid')}</span></div><div class="prog"><i style="width:${pc}%"></i></div></div>`; }).join('')}</div>` : ''}
         <div class="card pad" style="padding-bottom:6px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><h3 style="margin-bottom:2px">${esc(tre.open?.name || 'Current period')}</h3><button class="btn ghost sm" id="shf">${t('share')}</button></div>${grouped(cur)}</div>
         <h3 style="margin:18px 2px 8px">${t('past')}</h3>

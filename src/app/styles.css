@@ -241,3 +241,9 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .pf-bio{margin:0;line-height:1.55;font-style:italic;max-width:62ch}
 .pf-empty{text-align:center;color:var(--soft);padding:12px 0}.pf-bd{text-align:center;color:var(--soft);margin:6px 0 0}
 .pendbox .rq{display:block}.pendbox .rq small{display:block;margin-top:2px}
+
+/* fund cards on the public Fund tab */
+.funds{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));margin-bottom:14px}
+.fund{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--sea);border-radius:var(--r-card);padding:12px 14px;box-shadow:var(--shadow)}
+.fund.f-sails{border-left-color:var(--brass)}.fund.f-campus{border-left-color:var(--navy)}.fund.f-none{border-left-color:var(--line)}
+.fund b{display:block;font-size:.92rem;color:var(--navy)}.fund .rem{font-family:var(--head);font-size:1.5rem;color:var(--navy);margin:2px 0}.fund small{color:var(--soft)}

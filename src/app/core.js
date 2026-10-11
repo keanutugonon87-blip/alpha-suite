@@ -202,3 +202,8 @@ export async function share({ title, text, url }) {
   try { if (navigator.share) { await navigator.share(data); return; } } catch (e) { if (e.name === 'AbortError') return; }
   try { await navigator.clipboard.writeText(`${text ? text + ' ' : ''}${data.url}`); toast('Link copied'); } catch { toast(data.url); }
 }
+
+/* fund types: every collection and expense belongs to one of these (or is Unassigned) */
+export const FUNDS = [{ k: 'class', label: 'Class Initiatives' }, { k: 'sails', label: 'SAILS Initiatives' }, { k: 'campus', label: 'Campus Wide Initiatives' }];
+export const fundLabel = k => FUNDS.find(f => f.k === k)?.label || 'Unassigned';
+export const fundOptions = (sel, blank = 'Unassigned') => `<option value="">${blank}</option>${FUNDS.map(f => `<option value="${f.k}"${f.k === sel ? ' selected' : ''}>${f.label}</option>`).join('')}`;

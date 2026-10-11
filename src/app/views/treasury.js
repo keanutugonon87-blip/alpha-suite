@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, initials, dayLabel } from '../core.js';
+import { fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, initials, dayLabel } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
 
@@ -15,19 +15,19 @@ export async function mountTreasury(el, ctx) {
       db(sb.from('v2_members').select('id,full_name').order('full_name')),
       db(sb.from('v2_charges').select('*').order('created_at')),
       db(sb.from('v2_periods').select('*').order('opened_at', { ascending: false })),
-      db(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false })),
+      db(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,fund,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false })),
       db(sb.from('v2_entries').select('id').not('receipt_image', 'is', null)),
     ]);
     members = mem; charges = chg; const hasImg = new Set(flags.map(r => r.id));
     const nameOf = id => members.find(m => m.id === id)?.full_name;
-    const entries = raw.map(e => ({ ...e, who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title }));
+    const entries = raw.map(e => ({ ...e, who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '' }));
     const cur = periods.find(p => p.status === 'open'); curPeriod = cur; const past = periods.filter(p => p.status === 'closed');
     const curE = entries.filter(e => e.period_id === cur.id), ok = curE.filter(e => e.status === 'approved');
     const coll = ok.filter(e => e.kind === 'collection').reduce((s, e) => s + +e.amount, 0), exp = ok.filter(e => e.kind === 'expense').reduce((s, e) => s + +e.amount, 0);
     const bal = +cur.opening_balance + coll - exp, pendingN = curE.filter(e => e.status === 'pending').length;
 
     const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span></b>
-      <small>${esc(e.charge || e.category)}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
+      <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
       <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && isMayor && e.status === 'pending' ? `<button class="btn gold sm" data-ok="${e.id}">Approve</button>` : ''}${actions && canWrite && e.status !== 'voided' ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
       <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
     const rows = (arr, actions) => {
@@ -70,7 +70,7 @@ export async function mountTreasury(el, ctx) {
       const pname = e => periods.find(p => p.id === e.period_id)?.name || '';
       try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Treasury-Ledger-${new Date().toISOString().slice(0, 10)}.xlsx`, by: ctx.profile.full_name, sheets: [
         { name: 'Ledger', title: 'Class Fund Ledger', subtitle: 'BSMT 1-Alpha · all periods', summary: [['Collected', sum('collection'), 'money'], ['Spent', sum('expense'), 'money'], ['Net', sum('collection') - sum('expense'), 'money'], ['Entries', entries.length]],
-          columns: [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Type', get: e => e.kind === 'expense' ? 'Expense' : 'Collection' }, { label: 'Student / payee', key: 'who', width: 28 }, { label: 'Category', key: 'category' }, { label: 'Charge', key: 'charge' },
+          columns: [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Type', get: e => e.kind === 'expense' ? 'Expense' : 'Collection' }, { label: 'Student / payee', key: 'who', width: 28 }, { label: 'Category', key: 'category' }, { label: 'Charge', key: 'charge' }, { label: 'Fund', get: e => fundLabel(e.fundK), width: 24 },
             { label: 'Purpose', key: 'purpose', width: 30 }, { label: 'Amount', key: 'amount', type: 'money' }, { label: 'Method', key: 'method' }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Status', key: 'status', type: 'status' }, { label: 'Period', get: pname, width: 24 }], rows: entries },
         { name: 'Periods', title: 'Collection Periods', subtitle: 'Opening, collections, expenses and closing balance', columns: [{ label: 'Period', key: 'name', width: 30 }, { label: 'Status', key: 'status', type: 'status' }, { label: 'Opening', key: 'opening_balance', type: 'money' }, { label: 'Collected', get: p => p.status === 'closed' ? p.collections_total : entries.filter(e => e.period_id === p.id && e.kind === 'collection' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true },
           { label: 'Spent', get: p => p.status === 'closed' ? p.expenses_total : entries.filter(e => e.period_id === p.id && e.kind === 'expense' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true }, { label: 'Closing balance', get: p => p.status === 'closed' ? p.closing_balance : bal, type: 'money' }], rows: periods }] }); toast('Excel ready'); }
@@ -87,15 +87,18 @@ export async function mountTreasury(el, ctx) {
   function report(p, list, endBal) {
     const inn = list.filter(e => e.kind === 'collection'), out = list.filter(e => e.kind === 'expense');
     const sum = a => a.reduce((s, e) => s + +e.amount, 0);
-    const tbl = a => `<table><thead><tr><th>Date</th><th>Name / payee</th><th>For</th><th class="r">Amount</th></tr></thead><tbody>${a.map(e => `<tr><td>${fmtDate(e.occurred_at)}</td><td>${esc(e.who)}</td><td>${esc(e.charge || e.purpose || e.category)}</td><td class="r">${peso(e.amount)}</td></tr>`).join('') || '<tr><td colspan="4">None</td></tr>'}</tbody></table>`;
+    const tbl = a => `<table><thead><tr><th>Date</th><th>Name / payee</th><th>For</th><th>Fund</th><th class="r">Amount</th></tr></thead><tbody>${a.map(e => `<tr><td>${fmtDate(e.occurred_at)}</td><td>${esc(e.who)}</td><td>${esc(e.charge || e.purpose || e.category)}</td><td>${esc(fundLabel(e.fundK))}</td><td class="r">${peso(e.amount)}</td></tr>`).join('') || '<tr><td colspan="5">None</td></tr>'}</tbody></table>`;
+    const byFund = [...FUNDS.map(f => f.k), ''].map(k => ({ name: fundLabel(k), collected: sum(inn.filter(e => (e.fundK || '') === k)), spent: sum(out.filter(e => (e.fundK || '') === k)) })).filter(r => r.collected || r.spent || r.name !== 'Unassigned').map(r => ({ ...r, net: r.collected - r.spent }));
+    const fundTbl = `<h2>By fund</h2><table><thead><tr><th>Fund</th><th class="r">Collected</th><th class="r">Spent</th><th class="r">Net</th></tr></thead><tbody>${byFund.map(r => `<tr><td>${esc(r.name)}</td><td class="r">${peso(r.collected)}</td><td class="r">${peso(r.spent)}</td><td class="r">${peso(r.net)}</td></tr>`).join('')}</tbody></table>`;
     const doPrint = () => printHTML(p.name, `${letterhead(p.name, 'Class Fund report · BSMT 1-Alpha')}<div class="sum"><div>Opening<b>${peso(p.opening_balance)}</b></div><div>Collected<b>${peso(sum(inn))}</b></div><div>Spent<b>${peso(sum(out))}</b></div><div>Balance<b>${peso(endBal)}</b></div></div>
-      <h2>Collections (${inn.length})</h2>${tbl(inn)}<h2>Expenses (${out.length})</h2>${tbl(out)}
+      ${fundTbl}<h2>Collections (${inn.length})</h2>${tbl(inn)}<h2>Expenses (${out.length})</h2>${tbl(out)}
       ${Object.keys(p.liquidation_notes || {}).length ? `<h2>Liquidation notes</h2>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}<p style="margin-top:34px">Prepared by: <b>${esc(ctx.profile.full_name)}</b></p>`);
     const doXlsx = async () => {
-      const cols = [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Name / payee', key: 'who', width: 28 }, { label: 'For', get: e => e.charge || e.purpose || e.category, width: 30 }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Amount', key: 'amount', type: 'money', total: true }];
+      const cols = [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Name / payee', key: 'who', width: 28 }, { label: 'For', get: e => e.charge || e.purpose || e.category, width: 30 }, { label: 'Fund', get: e => fundLabel(e.fundK), width: 24 }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Amount', key: 'amount', type: 'money', total: true }];
       const summary = [['Opening', +p.opening_balance || 0, 'money'], ['Collected', sum(inn), 'money'], ['Spent', sum(out), 'money'], ['Balance', +endBal || 0, 'money']];
       try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Report-${p.name.replace(/[^\w]+/g, '-')}.xlsx`, by: ctx.profile.full_name, sheets: [
-        { name: 'Collections', title: p.name, subtitle: 'Class Fund report · collections', summary, columns: cols, rows: inn }, { name: 'Expenses', title: p.name, subtitle: 'Class Fund report · expenses', summary, columns: cols, rows: out }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); }
+        { name: 'Collections', title: p.name, subtitle: 'Class Fund report · collections', summary, columns: cols, rows: inn }, { name: 'Expenses', title: p.name, subtitle: 'Class Fund report · expenses', summary, columns: cols, rows: out },
+          { name: 'By fund', title: p.name, subtitle: 'Collected and spent per fund', summary, columns: [{ label: 'Fund', key: 'name', width: 30 }, { label: 'Collected', key: 'collected', type: 'money', total: true }, { label: 'Spent', key: 'spent', type: 'money', total: true }, { label: 'Net', key: 'net', type: 'money', total: true }], rows: byFund }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); }
     };
     modal(`<h3>${esc(p.name)}</h3><p class="muted">Choose a format for this period's report.</p><div style="display:grid;gap:8px;margin-top:10px"><button class="btn gold" id="rp">Print / save as PDF</button><button class="btn" id="rx">Download Excel (.xlsx)</button><button class="btn ghost" id="rc">Cancel</button></div>`,
       (m, close) => { m.querySelector('#rp').onclick = () => { close(); doPrint(); }; m.querySelector('#rx').onclick = () => { close(); doXlsx(); }; m.querySelector('#rc').onclick = close; });
@@ -116,6 +119,7 @@ export async function mountTreasury(el, ctx) {
       ${kind === 'collection' ? `<label>Student</label><select name="member" required><option value="">Select…</option>${members.map(m => `<option value="${m.id}"${m.id === pre.member ? ' selected' : ''}>${esc(m.full_name)}</option>`).join('')}</select>
         <label>Charge (optional)</label><select name="charge"><option value="">— none —</option>${openCharges.map(c => `<option value="${c.id}" data-amt="${c.amount}"${c.id === pre.charge ? ' selected' : ''}>${esc(c.title)} (${peso(c.amount)})</option>`).join('')}</select>`
         : `<label>Paid to / vendor</label><input name="payer" required>`}
+      <div id="fw"><label>Fund</label><select name="fund">${fundOptions('')}</select></div>
       <label>Category</label><select name="cat">${cats.map(c => `<option>${c}</option>`).join('')}</select>
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
       <label>Purpose / note</label><input name="purpose">
@@ -125,12 +129,15 @@ export async function mountTreasury(el, ctx) {
       m.querySelector('#cx').onclick = close;
       const sel = m.querySelector('[name=method]'); if (sel) sel.onchange = () => m.querySelector('#gc').style.display = sel.value === 'gcash' ? 'block' : 'none';
       const chSel = m.querySelector('[name=charge]'), amt = m.querySelector('[name=amt]');
+      const fw = m.querySelector('#fw');
+      const syncFund = () => { if (chSel && chSel.value) { fw.style.display = 'none'; } else fw.style.display = ''; };
+      if (chSel) { chSel.addEventListener('change', syncFund); syncFund(); }
       if (chSel) chSel.onchange = () => { const o = chSel.selectedOptions[0]; if (o?.dataset.amt && !amt.value) amt.value = o.dataset.amt; if (o?.value) m.querySelector('[name=purpose]').value ||= o.textContent.replace(/ \(.*\)$/, ''); };
       m.querySelector('#ef').onsubmit = async ev => {
         ev.preventDefault(); const f = new FormData(ev.target), btn = ev.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Saving…';
         try {
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
-          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, payer_name: f.get('payer') || null,
+          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,
             status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }, photo);
           close();
