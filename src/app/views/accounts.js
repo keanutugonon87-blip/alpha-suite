@@ -65,10 +65,10 @@ export async function mountAccounts(el, ctx) {
       ${audit.length || ctx.can('auditor') ? `<button class="btn ${tab === 'audit' ? '' : 'ghost'}" data-k="audit">Audit log</button>` : ''}</div>
       ${tab === 'people' ? `${bar()}
       <h3 class="sec">Waiting for approval ${pend.length ? `<span class="badge">${pend.length}</span>` : ''}</h3>
-      <div class="card pendbox">${pend.map(p => `<div class="row"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small><small>Requested ${ago(p.created_at)}</small></div></div>
+      <div class="card pendbox">${pend.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small><small>Requested ${ago(p.created_at)}</small></div></div>
           ${isMayor ? `<div class="acts"><button class="btn gold sm" data-rv="${p.user_id}">Review</button><button class="btn ghost sm" data-rj="${p.user_id}">Reject</button></div>` : '<span class="tag warn">Pending</span>'}</div>`).join('') || '<p class="empty">No one is waiting. New sign-ups appear here.</p>'}</div>
       <h3 class="sec">Officers (${active.length})</h3>
-      <div class="card">${active.map(p => `<div class="row"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small>
+      <div class="card">${active.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small>
           <small>Joined ${fmtDate(p.created_at)}${changed(p) ? ` · role changed ${fmtDate(p.updated_at)}` : ''}</small></div></div>
         <div class="acts">${isMayor && p.user_id !== ctx.profile.user_id
           ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ROLES.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select><button class="btn danger sm" data-del="${p.user_id}">Remove</button>`
