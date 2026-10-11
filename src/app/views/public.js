@@ -6,11 +6,8 @@ import { heroScene } from '../scenes.js';
 import { pushState, enablePush, disablePush } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
-const PERIOD = 'q150 -26 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
-  <svg class="w2" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 62 ${PERIOD.replace('q150 -26', 'q150 24')} V110H0z" fill="#2a7fb0" fill-opacity=".42"/></svg>
-  <svg class="w3" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 82 q150 -20 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 V110H0z" fill="#fff"/></svg></div>`;
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function countUp(el, to) {
   if (reduceMotion()) { el.textContent = peso(to); return; }
