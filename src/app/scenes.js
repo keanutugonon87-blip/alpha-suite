@@ -53,7 +53,22 @@ const SCENES = {
     ${wave(112, '#5aa9cc', 'a', .6)}${wave(128, '#2a7fb0', 'b', .85)}${wave(144, '#0c1f5c', 'c', .8)}`],
 };
 
-export function sceneBanner(tab) {
-  const s = SCENES[tab]; if (!s) return '';
-  return `<div class="scene sc-${tab}" role="img" aria-label="${s[0]}"><svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${s[2]}</svg><div class="cap"><b>${s[0]}</b><small>${s[1]}</small></div></div>`;
+/* [skyTop, skyHorizon, horizon %, seaTop, seaBottom, dark?] — used to extend each scene sideways on wide screens */
+const META = {
+  fund: ['#bfe3f4', '#eaf7fc', 60, '#5aa9cc', '#0c1f5c', 0],
+  standing: ['#9fd0ea', '#e4f4fb', 70, '#5aa9cc', '#0c1f5c', 0],
+  me: ['#0c1f5c', '#0c1f5c', 59, '#102a74', '#102a74', 1],
+  officers: ['#a9d8ee', '#eaf7fc', 66, '#8a5a2b', '#6b431c', 0],
+  learn: ['#0c1f5c', '#2a5fa8', 62, '#0f2c78', '#06194a', 1],
+  bulletin: ['#ffcf8a', '#fff1d6', 66, '#2a7fb0', '#0c1f5c', 0],
+};
+
+/* The scenery that fills the bottom of the landing hero card; it changes with the selected tab. */
+export function heroScene(tab) {
+  const s = SCENES[tab] || SCENES.fund, m = META[SCENES[tab] ? tab : 'fund'];
+  const bg = `linear-gradient(180deg,${m[0]} 0,${m[1]} ${m[2] - 2}%,${m[3]} ${m[2]}%,${m[4]} 100%)`;
+  return {
+    top: m[0], dark: !!m[5], name: s[0],
+    html: `<div class="hscene" role="img" aria-label="${s[0]}" style="background:${bg}"><svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMax meet" aria-hidden="true">${s[2]}</svg></div>`,
+  };
 }

@@ -195,24 +195,25 @@ label{display:block;font-size:.85rem;color:var(--soft);margin:12px 0 4px}
 .splash .mark:after{content:"";position:absolute;inset:12px;border-radius:50%;border:2px solid transparent;border-top-color:var(--brass);animation:sp 2.2s linear infinite}
 @media(prefers-reduced-motion:reduce){.splash .ring,.splash .mark:after{animation:none}}
 
-/* ---- maritime scene banners (one per landing tab) ---- */
-.scene{position:relative;height:150px;border-radius:var(--r-card);overflow:hidden;margin:0 0 14px;border:1px solid var(--line);box-shadow:var(--shadow)}
-.scene svg{position:absolute;inset:0;width:100%;height:100%;display:block}
-.scene .cap{position:absolute;left:0;right:0;bottom:0;padding:26px 14px 10px;background:linear-gradient(180deg,transparent,rgba(12,31,92,.62));color:#fff}
-.scene .cap b{display:block;font-family:var(--head);letter-spacing:.08em;font-size:1.05rem;text-shadow:0 1px 3px rgba(0,0,0,.4)}
-.scene .cap small{color:#e6f3f9;opacity:.95}
-.scene .wv{animation:scn 9s ease-in-out infinite alternate}.scene .wv.b{animation-duration:7s;animation-direction:alternate-reverse}.scene .wv.c{animation-duration:5.5s}
+/* ---- hero scenery: the bottom of the landing card changes with each tab ---- */
+.hero{display:flex;flex-direction:column;justify-content:space-between;padding:22px 20px 0!important;min-height:0!important}
+.hero .copy{padding-bottom:18px}
+.hscene{position:relative;z-index:1;height:clamp(125px,38vw,190px);margin:0 -20px;display:flex;justify-content:center;pointer-events:none}
+.hscene svg{height:100%;width:auto;max-width:100%;display:block;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+@media(max-width:560px){.hscene svg{-webkit-mask-image:none;mask-image:none;width:100%}}
+.hero .emblem:before{content:"";position:absolute;inset:6%;border-radius:50%;background:radial-gradient(circle,rgba(255,255,255,.55),transparent 68%)}
+.hero.dk .copy small,.hero.dk .copy p{color:#d6e8f6}.hero.dk .big{color:#fff;text-shadow:0 2px 6px rgba(0,0,0,.35)}
+.hscene .wv{animation:scn 9s ease-in-out infinite alternate}.hscene .wv.b{animation-duration:7s;animation-direction:alternate-reverse}.hscene .wv.c{animation-duration:5.5s}
 @keyframes scn{to{transform:translateX(-30px)}}
-.scene .cl{animation:cld 40s linear infinite alternate}@keyframes cld{to{transform:translateX(26px)}}
-.scene .gull{animation:gl 5s ease-in-out infinite alternate}@keyframes gl{to{transform:translate(14px,-6px)}}
-.scene .shipbob{animation:sb 3.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}@keyframes sb{50%{transform:translateY(-2px) rotate(1.4deg)}}
-.scene .buoy{animation:sb 2.6s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}
-.scene .beam{animation:bm 4s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:0 50%}@keyframes bm{to{opacity:.15}}
-.scene .helm{animation:hm 14s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 50%}@keyframes hm{to{transform:rotate(40deg)}}
-.scene .flagw{animation:fw 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:0 50%}@keyframes fw{50%{transform:skewY(3deg) scaleX(.96)}}
-.scene .tw{animation:tw 3s ease-in-out infinite alternate}.scene .tw2{animation:tw 2.2s ease-in-out infinite alternate-reverse}@keyframes tw{to{opacity:.35}}
-.scene .sun{animation:sn 6s ease-in-out infinite alternate}@keyframes sn{to{transform:translateY(-6px)}}
-@media(prefers-reduced-motion:reduce){.scene *{animation:none!important}}
+.hscene .cl{animation:cld 40s linear infinite alternate}@keyframes cld{to{transform:translateX(26px)}}
+.hscene .gull{animation:gl 5s ease-in-out infinite alternate}@keyframes gl{to{transform:translate(14px,-6px)}}
+.hscene .shipbob,.hscene .buoy{animation:sb 3.4s ease-in-out infinite;transform-box:fill-box;transform-origin:50% 100%}@keyframes sb{50%{transform:translateY(-2px) rotate(1.4deg)}}
+.hscene .beam{animation:bm 4s ease-in-out infinite alternate}@keyframes bm{to{opacity:.15}}
+.hscene .helm{animation:hm 14s ease-in-out infinite alternate;transform-box:fill-box;transform-origin:50% 50%}@keyframes hm{to{transform:rotate(40deg)}}
+.hscene .flagw{animation:fw 2.4s ease-in-out infinite;transform-box:fill-box;transform-origin:0 50%}@keyframes fw{50%{transform:skewY(3deg) scaleX(.96)}}
+.hscene .tw{animation:tw 3s ease-in-out infinite alternate}.hscene .tw2{animation:tw 2.2s ease-in-out infinite alternate-reverse}@keyframes tw{to{opacity:.35}}
+.hscene .sun{animation:sn 6s ease-in-out infinite alternate}@keyframes sn{to{transform:translateY(-6px)}}
+@media(prefers-reduced-motion:reduce){.hscene *{animation:none!important}}
 /* transparent crest: no disc or ring behind the wolf */
 .crest-ring{background:none!important;box-shadow:none!important}
 .crest-ring img{filter:drop-shadow(0 2px 4px rgba(12,31,92,.35))}

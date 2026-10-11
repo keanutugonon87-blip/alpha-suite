@@ -2,16 +2,13 @@ import { sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel
 import { renderLearn } from './learn.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { scanRaw, readQRFromFile } from '../qr.js';
-import { sceneBanner } from '../scenes.js';
+import { heroScene } from '../scenes.js';
 import { pushState, enablePush, disablePush } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const PERIOD = 'q150 -26 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
-const FLAG = '<svg viewBox="0 0 70 64" aria-label="Alpha signal flag"><rect x="0" y="0" width="3" height="64" rx="1.5" fill="#9a6f12"/><path d="M3 6H35V32H3z" fill="#fff" stroke="#0c1f5c" stroke-width="1"/><path d="M35 6H68L52 19 68 32H35z" fill="#1d4fd8" stroke="#0c1f5c" stroke-width="1"/></svg>';
-const SHIP = '<svg viewBox="0 0 64 36" aria-hidden="true"><path d="M2 24H62L54 34H11z" fill="#0c1f5c"/><rect x="6" y="14" width="10" height="10" fill="#d0453c"/><rect x="17" y="14" width="10" height="10" fill="#d9a63c"/><rect x="28" y="14" width="10" height="10" fill="#2a7fb0"/><rect x="42" y="8" width="12" height="16" fill="#fff" stroke="#0c1f5c"/><rect x="45" y="3" width="6" height="6" fill="#0c1f5c"/><rect x="44" y="11" width="8" height="3" fill="#2a7fb0"/></svg>';
-const SEA = `<div class="sea" aria-hidden="true"><svg class="w1" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 46 ${PERIOD} V110H0z" fill="#2a7fb0" fill-opacity=".28"/></svg>
   <svg class="w2" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 62 ${PERIOD.replace('q150 -26', 'q150 24')} V110H0z" fill="#2a7fb0" fill-opacity=".42"/></svg>
   <svg class="w3" viewBox="0 0 2400 110" preserveAspectRatio="none"><path d="M0 82 q150 -20 300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 t300 0 V110H0z" fill="#fff"/></svg></div>`;
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -120,13 +117,14 @@ export async function renderPublic(root) {
       learn: () => '',
       bulletin: () => `<iframe class="fb" src="${FB}" width="500" height="600" scrolling="yes" loading="lazy" title="Class Facebook page" allow="encrypted-media"></iframe>`,
     };
-    m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}<div class="hero"><div class="flag">${FLAG}</div>
+    const hs = heroScene(tab);
+    m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}<div class="hero ${hs.dark ? 'dk' : ''}" style="background:${hs.top}">
         <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="Alpha crest"></span></div>
         <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
           <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p></div>
-        <div class="ship">${SHIP}</div>${SEA}</div>
+        ${hs.html}</div>
       <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
-      ${sceneBanner(tab)}<section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
+      <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
     if (tab === 'learn') renderLearn(m.querySelector('#sec'));
     if (tab === 'me') renderMe(m.querySelector('#sec'));
