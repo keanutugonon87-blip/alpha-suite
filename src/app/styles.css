@@ -190,3 +190,7 @@ label{display:block;font-size:.85rem;color:var(--soft);margin:12px 0 4px}
 .row.stk .acts .tag{margin-left:0}
 @media(min-width:700px){.row.stk{flex-direction:row;align-items:center}.row.stk .lead{align-items:center}.row.stk .acts{margin:0}.row.stk .acts select{flex:none;width:auto}}
 .alertbar .btn{white-space:nowrap;flex:none}
+.splash .mark{position:relative;width:184px;height:184px;display:grid;place-items:center}
+.splash .ring{position:absolute;inset:0;width:auto;height:auto;border:2px dashed var(--sea);border-radius:50%;opacity:.6;animation:sp 14s linear infinite}
+.splash .mark:after{content:"";position:absolute;inset:12px;border-radius:50%;border:2px solid transparent;border-top-color:var(--brass);animation:sp 2.2s linear infinite}
+@media(prefers-reduced-motion:reduce){.splash .ring,.splash .mark:after{animation:none}}
