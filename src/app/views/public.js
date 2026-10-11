@@ -2,6 +2,7 @@ import { sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel
 import { renderLearn } from './learn.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { scanRaw, readQRFromFile } from '../qr.js';
+import { sceneBanner } from '../scenes.js';
 import { pushState, enablePush, disablePush } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
@@ -125,7 +126,7 @@ export async function renderPublic(root) {
           <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p></div>
         <div class="ship">${SHIP}</div>${SEA}</div>
       <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
-      <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
+      ${sceneBanner(tab)}<section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
     if (tab === 'learn') renderLearn(m.querySelector('#sec'));
     if (tab === 'me') renderMe(m.querySelector('#sec'));
