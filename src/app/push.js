@@ -12,13 +12,13 @@ export async function pushState() {
   try { const reg = await navigator.serviceWorker.getRegistration(); if (reg && await reg.pushManager.getSubscription()) return 'on'; } catch { /* treat as off */ }
   return 'off';
 }
-export async function enablePush() {
+export async function enablePush(staff = false) {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Notifications were not allowed. You can change this in your browser settings.');
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(KEY) });
   const j = sub.toJSON();
-  const { error } = await sb.rpc('v2_push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+  const { error } = await sb.rpc(staff ? 'v2_push_subscribe_staff' : 'v2_push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
   if (error) throw error;
 }
 export async function disablePush() {

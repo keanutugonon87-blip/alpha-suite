@@ -171,3 +171,13 @@ label{display:block;font-size:.85rem;color:var(--soft);margin:12px 0 4px}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(max-width:430px){.top .t b{font-size:.82rem;letter-spacing:.03em;white-space:nowrap}.top .btn.sm{padding:6px 9px;font-size:.8rem}.top{gap:6px}}
 .alertbar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px dashed var(--sea);border-radius:12px;padding:8px 12px;margin-bottom:12px;font-size:.92rem;color:var(--navy)}
+
+/* accounts */
+.sec{margin:16px 2px 8px;display:flex;align-items:center;gap:8px}
+.badge{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:var(--flag,#d0453c);color:#fff;font-size:.75rem;font-weight:700}
+.pendbox{border:2px solid var(--brass);background:#fffaf0}
+.rq{display:flex;gap:12px;align-items:center;background:var(--sky);border-radius:12px;padding:10px 12px;margin:8px 0 4px}.rq .em{font-weight:700;color:var(--navy);word-break:break-all}
+.roles{display:grid;gap:6px;margin:6px 0}.rl{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--line);border-radius:12px;padding:8px 10px;cursor:pointer;background:#fff}
+.rl:has(input:checked){border-color:var(--sea);background:var(--sky)}.rl input{width:auto;margin-top:4px}.rl small{display:block;color:var(--soft)}
+.ck{display:flex;gap:10px;align-items:flex-start;margin-top:10px;font-weight:400}.ck input{width:auto;margin-top:3px}
+.ck input,.rl input{width:18px;height:18px;padding:0;border:0;box-shadow:none;flex:none}
