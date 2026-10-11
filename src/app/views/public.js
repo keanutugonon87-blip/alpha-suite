@@ -8,6 +8,7 @@ import { pushState, enablePush, disablePush } from '../push.js';
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
+const TABS = ['fund', 'standing', 'me', 'officers', 'learn', 'bulletin'];
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function countUp(el, to) {
   if (reduceMotion()) { el.textContent = peso(to); return; }
@@ -54,7 +55,7 @@ export async function renderPublic(root) {
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
-  let pstate = 'unsupported', tab = 'fund', data = null, animated = false, vf = 'open', vq = '';
+  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'fund', data = null, animated = false, vf = 'open', vq = '';
   const ord = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
@@ -122,6 +123,16 @@ export async function renderPublic(root) {
         ${hs.html}</div>
       <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
+    {
+      /* the compass answers the tap: swing to this tab's bearing, fade the scenery, ease the sky colour */
+      const rose = m.querySelector('.rose'), hero = m.querySelector('.hero'), hsc = m.querySelector('.hscene');
+      const prev = ang; ang += ((TABS.indexOf(tab) * 60 - ang + 540) % 360) - 180;
+      if (rose && !reduceMotion()) { rose.style.transform = `rotate(${prev}deg)`; requestAnimationFrame(() => requestAnimationFrame(() => { rose.style.transform = `rotate(${ang}deg)`; })); }
+      else if (rose) rose.style.transform = `rotate(${ang}deg)`;
+      if (hero && lastTop && lastTop !== hs.top && !reduceMotion()) { hero.style.background = lastTop; hero.style.transition = 'background .7s ease'; requestAnimationFrame(() => requestAnimationFrame(() => { hero.style.background = hs.top; })); }
+      if (hsc && lastTab && lastTab !== tab && !reduceMotion()) hsc.classList.add('swap');
+      lastTab = tab; lastTop = hs.top;
+    }
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
     if (tab === 'learn') renderLearn(m.querySelector('#sec'));
     if (tab === 'me') renderMe(m.querySelector('#sec'));
