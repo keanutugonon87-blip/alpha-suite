@@ -98,7 +98,7 @@ function buildSheet(wb, spec, imgs, meta) {
 
   // footer note
   tr++; ws.mergeCells(tr, 1, tr, n);
-  const f = ws.getCell(tr, 1); f.value = `Prepared by ${meta.by} · ${meta.date} · ALPHA SUITE, BSMT 1-Alpha`; f.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF6B7280' } };
+  const f = ws.getCell(tr, 1); f.value = `Prepared by ${meta.by} · ${meta.date} · Alpha ’28, BSMT 1-Alpha`; f.font = { name: 'Calibri', size: 9, italic: true, color: { argb: 'FF6B7280' } };
 
   // faded crest watermark centred behind the table
   const px = widths.reduce((a, w) => a + w * 7 + 5, 0), wmW = Math.min(360, px * 0.6), wmH = wmW * 1.337;
@@ -109,13 +109,13 @@ function buildSheet(wb, spec, imgs, meta) {
   ws.views = [{ showGridLines: false, state: 'frozen', ySplit: hr, topLeftCell: `A${hr + 1}` }];
   if (rows.length) ws.autoFilter = { from: { row: hr, column: 1 }, to: { row: end, column: n } };
   ws.pageSetup = { orientation: n > 6 ? 'landscape' : 'portrait', paperSize: 9, fitToPage: true, fitToWidth: 1, fitToHeight: 0, horizontalCentered: true, printTitlesRow: `${hr}:${hr}`, margins: { left: .4, right: .4, top: .6, bottom: .7, header: .3, footer: .3 } };
-  ws.headerFooter = { oddFooter: '&L&8ALPHA SUITE · BSMT 1-Alpha&C&8Page &P of &N&R&8&D' };
+  ws.headerFooter = { oddFooter: '&L&8Alpha ’28 · BSMT 1-Alpha&C&8Page &P of &N&R&8&D' };
 }
 
-export async function exportXLSX({ filename, sheets, by = '', creator = 'ALPHA SUITE' }) {
+export async function exportXLSX({ filename, sheets, by = '', creator = 'Alpha ’28' }) {
   const [{ default: ExcelJS }, imgs] = await Promise.all([import('exceljs'), crestAssets()]);
   const wb = new ExcelJS.Workbook(); wb.creator = creator; wb.created = new Date(); wb.title = sheets[0].title;
-  const meta = { by: by || 'ALPHA SUITE', date: new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) };
+  const meta = { by: by || 'Alpha ’28', date: new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }) };
   sheets.forEach(sp => buildSheet(wb, sp, imgs, meta));
   const buf = await wb.xlsx.writeBuffer();
   const a = document.createElement('a');

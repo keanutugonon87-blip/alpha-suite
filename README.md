@@ -1,4 +1,4 @@
-# Alpha Suite — BSMT 1-Alpha (Batch 28, PIT-COMED)
+# Alpha ’28 — BSMT 1-Alpha (Batch 28, PIT-COMED)
 
 One app, one address: https://keanutugonon87-blip.github.io/alpha-suite/
 

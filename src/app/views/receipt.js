@@ -1,6 +1,6 @@
 import { sb, esc, peso, fmtDateTime, share } from '../core.js';
 export async function renderReceipt(root, { code, legacy }) {
-  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>ALPHA SUITE</b><small>Receipt verification</small></div><a class="btn ghost sm" style="text-decoration:none" href="#/">Home</a></div><main><p class="empty">Checking…</p></main>`;
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>Receipt verification</small></div><a class="btn ghost sm" style="text-decoration:none" href="#/">Home</a></div><main><p class="empty">Checking…</p></main>`;
   const m = root.querySelector('main');
   try {
     const { data, error } = legacy ? await sb.rpc('v2_verify_legacy_receipt', { p_txn: legacy }) : await sb.rpc('v2_verify_receipt', { p_code: code });

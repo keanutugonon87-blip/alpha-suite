@@ -28,7 +28,7 @@ const TABS = [
 
 function authScreen(root, mode = 'in', msg = '', ok = false) {
   root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span>
-    <h1 style="margin:10px 0 4px">ALPHA SUITE</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
+    <h1 style="margin:10px 0 4px">Alpha ’28</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
     <form class="card" id="f">
       ${mode === 'up' ? '<label>Full name</label><input name="name" required autocomplete="name">' : ''}
       <label>Email</label><input name="email" type="email" required autocomplete="email">
@@ -90,7 +90,7 @@ export async function renderStaff(root, tabId) {
   const ctx = { profile: p, can: (...r) => r.includes(p.role) };
   const tabs = TABS.filter(t => t.roles.includes(p.role));
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
-  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>ALPHA SUITE</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out">Sign out</button></div>
     <div class="banner" id="bn" hidden></div>
     <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[t.id]}</svg><span>${t.label}</span></button>`).join('')}</nav><main id="view"></main></div>`;

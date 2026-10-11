@@ -1,4 +1,4 @@
-/* Alpha Suite — core: database client, formatting, UI helpers, live updates,
+/* Alpha ’28 — core: database client, formatting, UI helpers, live updates,
    offline write queue, and exports. Everything else imports from here. */
 import { createClient } from '@supabase/supabase-js';
 
@@ -165,7 +165,7 @@ export function downloadCSV(filename, columns, rows) {
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
 }
 const crestURL = () => new URL('assets/wolf-crest.png', location.href).href;
-export const letterhead = (title, sub = 'BSMT 1-Alpha · Batch 28 · PIT-COMED') => `<div class="lh"><img src="${crestURL()}" alt=""><div><b>ALPHA SUITE</b><h1>${esc(title)}</h1><small>${esc(sub)}</small></div></div>`;
+export const letterhead = (title, sub = 'BSMT 1-Alpha · Batch 28 · PIT-COMED') => `<div class="lh"><img src="${crestURL()}" alt=""><div><b>Alpha ’28</b><h1>${esc(title)}</h1><small>${esc(sub)}</small></div></div>`;
 export function printHTML(title, body, { plain = false } = {}) {
   const w = window.open('', '_blank'); if (!w) return toast('Allow pop-ups to print', true);
   w.document.write(`<!doctype html><meta charset="utf-8"><title>${esc(title)}</title><style>
@@ -183,7 +183,7 @@ export function printHTML(title, body, { plain = false } = {}) {
    .sum{display:flex;gap:10px;flex-wrap:wrap;margin:8px 0}.sum div{flex:1;min-width:120px;background:#f2f9fb;border:1px solid #cfe3ec;border-top:4px solid #d9a63c;border-radius:10px;padding:8px 12px;font-size:12px;color:#2a7fb0;text-transform:uppercase;letter-spacing:.05em}
    .sum b{display:block;font:700 18px Georgia,serif;color:#0c1f5c;text-transform:none;letter-spacing:0;margin-top:2px}
    .foot{margin-top:28px;padding-top:8px;border-top:1px solid #cfe3ec;font-size:11px;color:#58708a;display:flex;justify-content:space-between}
-  </style>${body}${plain ? '' : `<div class="foot"><span>ALPHA SUITE · BSMT 1-Alpha · Batch 28</span><span>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>`}`);
+  </style>${body}${plain ? '' : `<div class="foot"><span>Alpha ’28 · BSMT 1-Alpha · Batch 28</span><span>${new Date().toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' })}</span></div>`}`);
   w.document.close(); setTimeout(() => w.print(), 700);
 }
 
