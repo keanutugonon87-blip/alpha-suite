@@ -170,3 +170,4 @@ label{display:block;font-size:.85rem;color:var(--soft);margin:12px 0 4px}
 .swipe-hint{font-size:.78rem;color:var(--soft);text-align:center;margin:-6px 0 8px}
 @keyframes rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
 @media(max-width:430px){.top .t b{font-size:.82rem;letter-spacing:.03em;white-space:nowrap}.top .btn.sm{padding:6px 9px;font-size:.8rem}.top{gap:6px}}
+.alertbar{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border:1px dashed var(--sea);border-radius:12px;padding:8px 12px;margin-bottom:12px;font-size:.92rem;color:var(--navy)}
