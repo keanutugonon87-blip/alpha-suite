@@ -253,3 +253,7 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .fchip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.72);color:var(--navy);border-radius:999px;padding:4px 10px;font-size:.78rem;line-height:1.2}
 .fchip i{width:8px;height:8px;border-radius:50%;background:var(--sea)}.fchip.f-sails i{background:var(--brass)}.fchip.f-campus i{background:var(--navy)}.fchip.f-none i{background:#9aa9b8}
 .fchip b{font-variant-numeric:tabular-nums}
+
+/* scenery runs edge to edge: backdrops extend past the artwork, so wide screens show one continuous scene */
+.hscene{background:none!important}
+.hscene svg{overflow:visible;-webkit-mask-image:none!important;mask-image:none!important}
