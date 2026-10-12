@@ -142,6 +142,7 @@ export async function renderPublic(root) {
       else if (rose) rose.style.transform = `rotate(${ang}deg)`;
       if (hero && lastTop && lastTop !== hs.top && !reduceMotion()) { hero.style.background = lastTop; hero.style.transition = 'background .7s ease'; requestAnimationFrame(() => requestAnimationFrame(() => { hero.style.background = hs.top; })); }
       if (hsc && lastTab && lastTab !== tab && !reduceMotion()) hsc.classList.add('swap');
+      hsc?.querySelector('video.hvid')?.addEventListener('playing', e => { e.target.parentNode.classList.add('vid'); }, { once: true });
       lastTab = tab; lastTop = hs.top;
     }
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }

@@ -62,12 +62,21 @@ const SCENES = {
 
 /* [skyTop, skyHorizon, horizon %, seaTop, seaBottom, dark?] — used to extend each scene sideways on wide screens */
 const META = {
-  fund: ['#bfe3f4', '#eaf7fc', 60, '#5aa9cc', '#0c1f5c', 0],
-  standing: ['#9fd0ea', '#e4f4fb', 70, '#5aa9cc', '#0c1f5c', 0],
+  fund: ['#9fd6ee', '#eaf7fc', 60, '#5aa9cc', '#0c1f5c', 0],
+  standing: ['#7fb8de', '#e4f4fb', 70, '#5aa9cc', '#0c1f5c', 0],
   me: ['#0c1f5c', '#0c1f5c', 59, '#102a74', '#102a74', 1],
-  officers: ['#a9d8ee', '#eaf7fc', 66, '#8a5a2b', '#6b431c', 0],
-  learn: ['#0c1f5c', '#2a5fa8', 62, '#0f2c78', '#06194a', 1],
-  bulletin: ['#ffcf8a', '#fff1d6', 66, '#2a7fb0', '#0c1f5c', 0],
+  officers: ['#9fd6ee', '#eaf7fc', 66, '#8a5a2b', '#6b431c', 0],
+  learn: ['#06143f', '#2a5fa8', 62, '#0f2c78', '#06194a', 1],
+  bulletin: ['#f9c36d', '#fff1d6', 66, '#2a7fb0', '#0c1f5c', 0],
+};
+
+/* A looping video per tab sits on top of the SVG scene (kept as the fallback). Static poster when motion is reduced or data saver is on. */
+const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+const saveData = () => { try { return !!navigator.connection?.saveData; } catch { return false; } };
+const media = k => {
+  if (saveData()) return '';
+  if (reduceMotion()) return `<img class="hvid" src="assets/scenes/${k}.jpg" alt="" decoding="async">`;
+  return `<video class="hvid" src="assets/scenes/${k}.mp4" poster="assets/scenes/${k}.jpg" autoplay muted loop playsinline preload="auto" aria-hidden="true" disablepictureinpicture></video>`;
 };
 
 /* The scenery that fills the bottom of the landing hero card; it changes with the selected tab. */
@@ -76,6 +85,6 @@ export function heroScene(tab) {
   const bg = `linear-gradient(180deg,${m[0]} 0,${m[1]} ${m[2] - 2}%,${m[3]} ${m[2]}%,${m[4]} 100%)`;
   return {
     top: m[0], dark: !!m[5], name: s[0],
-    html: `<div class="hscene" role="img" aria-label="${s[0]}" style="background:${bg}"><svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMax meet" aria-hidden="true">${s[2]}</svg></div>`,
+    html: `<div class="hscene" role="img" aria-label="${s[0]}" style="background:${bg}">${media(SCENES[tab] ? tab : 'fund')}<svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMax meet" aria-hidden="true">${s[2]}</svg></div>`,
   };
 }
