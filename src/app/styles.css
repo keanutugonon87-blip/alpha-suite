@@ -247,3 +247,9 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .fund{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--sea);border-radius:var(--r-card);padding:12px 14px;box-shadow:var(--shadow)}
 .fund.f-sails{border-left-color:var(--brass)}.fund.f-campus{border-left-color:var(--navy)}.fund.f-none{border-left-color:var(--line)}
 .fund b{display:block;font-size:.92rem;color:var(--navy)}.fund .rem{font-family:var(--head);font-size:1.5rem;color:var(--navy);margin:2px 0}.fund small{color:var(--soft)}
+
+/* per-fund amounts under the hero balance */
+.fchips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.fchip{display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,.72);color:var(--navy);border-radius:999px;padding:4px 10px;font-size:.78rem;line-height:1.2}
+.fchip i{width:8px;height:8px;border-radius:50%;background:var(--sea)}.fchip.f-sails i{background:var(--brass)}.fchip.f-campus i{background:var(--navy)}.fchip.f-none i{background:#9aa9b8}
+.fchip b{font-variant-numeric:tabular-nums}

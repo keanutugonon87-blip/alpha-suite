@@ -94,6 +94,11 @@ export async function renderPublic(root) {
     const list = [...FUNDS.map(f => ({ k: f.k, label: f.label })), ...(by.none && (+by.none.collected || +by.none.spent) ? [{ k: 'none', label: 'Unassigned' }] : [])];
     return `<div class="funds">${list.map(f => { const r = by[f.k] || {}, c = +r.collected || 0, s = +r.spent || 0; return `<div class="fund f-${f.k}"><b>${esc(f.label)}</b><div class="rem">${peso(c - s)}</div><small>${peso(c)} collected · ${peso(s)} spent</small></div>`; }).join('')}</div>`;
   };
+  const fundChips = () => {
+    const rows = data.tre?.funds || [], by = Object.fromEntries(rows.map(r => [r.fund, r]));
+    const list = [...FUNDS, ...(by.none && (+by.none.collected || +by.none.spent) ? [{ k: 'none', label: 'Unassigned' }] : [])];
+    return `<div class="fchips">${list.map(f => { const r = by[f.k] || {}; return `<span class="fchip f-${f.k}"><i></i>${esc(f.label)} <b>${peso((+r.collected || 0) - (+r.spent || 0))}</b></span>`; }).join('')}</div>`;
+  };
   function paint() {
     const { off: officers, tre, stand } = data;
     const cur = tre.open ? (tre.entries || []).filter(e => e.period_id === tre.open.id) : [];
@@ -125,7 +130,7 @@ export async function renderPublic(root) {
     m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}<div class="hero ${hs.dark ? 'dk' : ''}" style="background:${hs.top}">
         <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="Alpha crest"></span></div>
         <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
-          <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p></div>
+          <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p>${fundChips()}</div>
         ${hs.html}</div>
       <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;

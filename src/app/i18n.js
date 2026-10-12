@@ -5,7 +5,7 @@ export const setLang = l => { try { localStorage.setItem(KEY, l); } catch { /* i
 const D = {
   signin: ['Officer sign in', 'Pag-sign in sa opisyal'],
   fund: ['Fund', 'Pondo'], viol: ['Violations', 'Paglapas'], me: ['My Status', 'Akong Status'], officers: ['Officers', 'Mga Opisyal'], learn: ['Deck Watch', 'Deck Watch'], bulletin: ['Bulletin', 'Balita'],
-  balance: ['Class fund balance', 'Balanse sa pondo sa klase'],
+  balance: ['Total balance, all funds', 'Kinatibuk-ang balanse, tanang pondo'],
   good: ['everyone in good standing', 'tanan maayo ang kahimtang'],
   openv: ['with open violations', 'adunay wala pa masulbad nga paglapas'],
   past: ['Past collection periods', 'Naglabay nga koleksyon'],
