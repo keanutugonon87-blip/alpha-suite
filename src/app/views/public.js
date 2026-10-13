@@ -1,10 +1,10 @@
-import { FUNDS, fundLabel, sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast } from '../core.js';
+import { FUNDS, fundLabel, sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast, printHTML, letterhead } from '../core.js';
 import { renderLearn } from './learn.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { scanRaw, readQRFromFile } from '../qr.js';
 import { showOfficerProfile } from '../profile.js';
 import { heroScene, warmScenes } from '../scenes.js';
-import { pushState, enablePush, disablePush } from '../push.js';
+import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
@@ -20,6 +20,44 @@ function countUp(el, to) {
 
 const ME = 'alpha-me';
 const ordn = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
+
+/* Balance reminders: a student links their own phone to their QR card, so the Treasurer can remind only those who still owe. */
+async function remBox(rm, token) {
+  if (!rm) return;
+  const bar = (txt, btn = '') => { rm.innerHTML = `<div class="alertbar" style="margin:10px 0"><span>🔔 ${txt}</span>${btn}</div>`; };
+  const ps = await pushState();
+  if (ps === 'on') { try { await linkDevice(token); bar(t('remOn')); } catch { rm.innerHTML = ''; } }
+  else if (ps === 'off') {
+    bar(t('remOff'), `<button class="btn gold sm" id="ron">${t('turnOn')}</button>`);
+    rm.querySelector('#ron').onclick = async e => { e.target.disabled = true; try { await enablePush(false, token); toast(t('remOn')); } catch (x) { toast(x.message, true); } remBox(rm, token); };
+  } else if (ps === 'ios-install') bar(t('alertIos'));
+  else if (ps === 'denied') bar(t('alertDenied'));
+}
+
+/* A student's own statement of account (what they paid and what they still owe), printable as a PDF. */
+async function statement(token) {
+  let d;
+  try { const { data, error } = await sb.rpc('v2_self_statement', { p_token: token }); if (error) throw error; d = data; }
+  catch (e) { return toast(/function|schema cache/i.test(e.message) ? 'Statements are not switched on yet. Ask the Mayor.' : e.message, true); }
+  const paid = d.payments.filter(p => p.status === 'approved').reduce((a, p) => a + +p.amount, 0), owe = d.balances.reduce((a, b) => a + +b.owed, 0);
+  const rows = d.payments.map(p => `<div class="row"><div class="m"><b>${esc(p.for)}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : ''}${p.fund ? ' · ' + esc(fundLabel(p.fund)) : ''}${p.status === 'pending' ? ' · awaiting approval' : ''}</small></div><b>${peso(p.amount)}</b></div>`).join('') || `<p class="empty">${t('stmtNone')}</p>`;
+  const owing = d.balances.filter(b => +b.owed > 0 && !b.closed).map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small></div><span class="tag bad">${peso(b.owed)}</span></div>`).join('');
+  modal(`<h3>${t('stmtTitle')}</h3><p class="muted" style="margin:0 0 8px">${esc(d.name)}${d.student_no && !/^PENDING/.test(d.student_no) ? ' · ' + esc(d.student_no) : ''}</p>
+    <div class="grid"><div class="stat gold"><small>${t('stmtPaid')}</small><b>${peso(paid)}</b></div><div class="stat"><small>${t('stmtOwe')}</small><b>${peso(owe)}</b></div></div>
+    <div class="card" style="margin-top:10px;max-height:44vh;overflow:auto">${rows}</div>${owing ? `<div class="card">${owing}</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="sp" style="flex:1">${t('stmtPrint')}</button><button class="btn ghost" id="sc">${t('stmtClose')}</button></div>`,
+    (m, close) => {
+      m.querySelector('#sc').onclick = close;
+      m.querySelector('#sp').onclick = () => {
+        const tbl = `<table><thead><tr><th>Date</th><th>For</th><th>Receipt no.</th><th>Verify code</th><th class="r">Amount</th></tr></thead><tbody>${d.payments.map(p => `<tr><td>${fmtDate(p.at)}</td><td>${esc(p.for)}${p.fund ? ' · ' + esc(fundLabel(p.fund)) : ''}</td><td>${esc(p.receipt_no || '—')}${p.status === 'pending' ? ' (awaiting approval)' : ''}</td><td>${esc(p.code || '—')}</td><td class="r">${peso(p.amount)}</td></tr>`).join('') || '<tr><td colspan="5">No payments yet</td></tr>'}</tbody></table>`;
+        const ow = d.balances.filter(b => +b.owed > 0 && !b.closed);
+        printHTML('Statement - ' + d.name, `${letterhead('Statement of account', d.name + ' · BSMT 1-Alpha · Batch 28')}<div class="sum"><div>Payments made<b>${peso(paid)}</b></div><div>Still owed<b>${peso(owe)}</b></div></div>
+          <h2>Payments</h2>${tbl}${ow.length ? `<h2>Still owed</h2><table><thead><tr><th>Charge</th><th class="r">Paid</th><th class="r">Due</th><th class="r">Owed</th></tr></thead><tbody>${ow.map(b => `<tr><td>${esc(b.charge)}</td><td class="r">${peso(b.paid)}</td><td class="r">${peso(b.due)}</td><td class="r">${peso(b.owed)}</td></tr>`).join('')}</tbody></table>` : '<p>✓ All charges are paid up.</p>'}
+          <p style="font-size:11px;color:#58708a">Receipts can be checked at ${esc(location.origin + location.pathname)}#/receipt/&lt;code&gt;. Printed ${new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}.</p>`);
+      };
+    });
+}
+
 function renderMe(host) {
   const get = () => { try { return localStorage.getItem(ME) || ''; } catch { return ''; } };
   const put = v => { try { v ? localStorage.setItem(ME, v) : localStorage.removeItem(ME); } catch { /* ignore */ } };
@@ -33,8 +71,11 @@ function renderMe(host) {
         <div style="font-size:1.15rem;font-weight:700;color:var(${owed ? '--bad' : '--ok'})">${owed ? `${t('owed')} ${peso(owed)}` : '✓ ' + t('clear')}</div></div>
         <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small></div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
         <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : ordn(v.offense) + ' offense: ₱25 fine'}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
-        <p style="text-align:center"><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
+        <div id="rm"></div>
+        <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st">${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
       host.querySelector('#fg').onclick = () => { put(''); start(); };
+      host.querySelector('#st').onclick = () => statement(token);
+      remBox(host.querySelector('#rm'), token);
     } catch (e) { put(''); start(e.message); }
   }
   function start(err = '') {

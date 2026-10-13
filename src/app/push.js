@@ -12,16 +12,25 @@ export async function pushState() {
   try { const reg = await navigator.serviceWorker.getRegistration(); if (reg && await reg.pushManager.getSubscription()) return 'on'; } catch { /* treat as off */ }
   return 'off';
 }
-export async function enablePush(staff = false) {
+export async function enablePush(staff = false, token = '') {
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Notifications were not allowed. You can change this in your browser settings.');
   const reg = await navigator.serviceWorker.ready;
   const sub = (await reg.pushManager.getSubscription()) || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64(KEY) });
   const j = sub.toJSON();
-  const { error } = await sb.rpc(staff ? 'v2_push_subscribe_staff' : 'v2_push_subscribe', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth });
+  const args = { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth };
+  const { error } = token ? await sb.rpc('v2_push_subscribe_member', { ...args, p_token: token }) : await sb.rpc(staff ? 'v2_push_subscribe_staff' : 'v2_push_subscribe', args);
   if (error) throw error;
 }
 export async function disablePush() {
   const reg = await navigator.serviceWorker.getRegistration(), sub = reg && await reg.pushManager.getSubscription();
   if (sub) { await sb.rpc('v2_push_unsubscribe', { p_endpoint: sub.endpoint }); await sub.unsubscribe(); }
+}
+/* Link this phone to a student (only when they open My Status and turn reminders on) so balance reminders reach them. */
+export async function linkDevice(token) {
+  const reg = await navigator.serviceWorker.getRegistration(), sub = reg && await reg.pushManager.getSubscription();
+  if (!sub) return false;
+  const j = sub.toJSON();
+  const { error } = await sb.rpc('v2_push_subscribe_member', { p_endpoint: j.endpoint, p_p256dh: j.keys.p256dh, p_auth: j.keys.auth, p_token: token });
+  if (error) throw error; return true;
 }

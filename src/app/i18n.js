@@ -22,6 +22,8 @@ const D = {
   pin: ['Notice', 'Pahibalo'],
   alertOff: ['Get a phone alert for every new notice', 'Padad-an og alerto sa matag bag-ong pahibalo'], turnOn: ['Turn on', 'I-on'], turnOff: ['Turn off', 'I-off'], alertOn: ['Alerts are on for this device', 'Naka-on ang alerto sa kini nga device'],
   alertIos: ['On iPhone: tap Share, then Add to Home Screen, open Alpha from there, and turn alerts on.', 'Sa iPhone: i-tap ang Share, Add to Home Screen, ablihi ang Alpha gikan didto, ug i-on ang alerto.'],
+  remOff: ['Remind me on this phone when I still owe a payment', 'Pahinumdoman ko sa phone kung naa pa koy utang'], remOn: ['Payment reminders are on for this phone', 'Naka-on ang pahinumdom sa bayronon sa kini nga phone'],
+  stmt: ['My statement', 'Akong statement'], stmtTitle: ['Statement of account', 'Statement sa akong account'], stmtPaid: ['Payments made', 'Mga bayad na'], stmtOwe: ['Still owed', 'Utang pa'], stmtNone: ['No payments yet', 'Wala pay bayad'], stmtPrint: ['Print / save as PDF', 'I-print / i-save isip PDF'], stmtClose: ['Close', 'Sirhi'],
   alertDenied: ['Alerts are blocked in your browser settings.', 'Gi-block ang alerto sa browser settings.'],
 };
 export const t = k => (D[k] || [k, k])[getLang() === 'ceb' ? 1 : 0];

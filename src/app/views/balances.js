@@ -1,8 +1,8 @@
-import { sb, db, watch, esc, peso, fmtDate, toast, modal, skeleton, uuid, fundOptions, fundLabel } from '../core.js';
+import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, uuid, fundOptions, fundLabel } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 
 export async function mountBalances(el, ctx) {
-  const canWrite = ctx.can('mayor', 'treasurer');
+  const canWrite = ctx.can('mayor', 'treasurer'), canRemind = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor');
   let sel = null, only = 'owing';
   el.innerHTML = skeleton(5);
 
@@ -19,7 +19,7 @@ export async function mountBalances(el, ctx) {
       ${c ? `<div class="grid"><div class="stat gold"><small>Collected</small><b>${peso(totalPaid)}</b></div><div class="stat"><small>Still owed</small><b>${peso(totalDue - totalPaid)}</b></div><div class="stat"><small>Paid / owing</small><b>${paid.length} / ${owing.length}</b></div></div>
       <div class="prog"><i style="width:${totalDue ? Math.min(100, totalPaid / totalDue * 100) : 0}%"></i></div>
       <div class="bar" style="margin-top:12px"><select id="f" style="width:auto"><option value="owing">Owing</option><option value="paid">Paid</option><option value="all">Everyone</option></select>
-        <button class="btn ghost" id="csv">Export (Excel)</button>${canWrite ? `<button class="btn ghost" id="fnd" style="margin-left:auto">Fund: ${esc(fundLabel(c.fund))}</button><button class="btn ghost" id="cls" >${c.closed ? 'Reopen charge' : 'Close charge'}</button>` : ''}</div>
+        <button class="btn ghost" id="csv">Export (Excel)</button>${canRemind && !c.closed && owing.length ? '<button class="btn" id="rem">🔔 Remind those who owe</button>' : ''}${canWrite ? `<button class="btn ghost" id="fnd" style="margin-left:auto">Fund: ${esc(fundLabel(c.fund))}</button><button class="btn ghost" id="cls" >${c.closed ? 'Reopen charge' : 'Close charge'}</button>` : ''}</div>
       <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>Paid ${peso(r.paid)} of ${peso(r.due)}</small></div>
         <div style="display:flex;align-items:center;gap:8px"><span class="tag ${r.owed <= 0 ? 'ok' : r.paid > 0 ? 'warn' : 'bad'}">${r.owed <= 0 ? 'paid' : r.paid > 0 ? 'owes ' + peso(r.owed) : 'unpaid'}</span>
         ${canWrite && r.owed > 0 && !c.closed ? `<button class="btn gold sm" data-c="${r.member_id}" data-a="${r.owed}">Collect</button>` : ''}</div></div>`).join('') || '<p class="empty">Nobody here.</p>'}</div>`
@@ -27,6 +27,7 @@ export async function mountBalances(el, ctx) {
     el.querySelector('#ch').onchange = e => { sel = e.target.value; draw(); };
     const f = el.querySelector('#f'); if (f) { f.value = only; f.onchange = () => { only = f.value; draw(); }; }
     el.querySelector('#new')?.addEventListener('click', newCharge);
+    el.querySelector('#rem')?.addEventListener('click', () => remind(c));
     el.querySelector('#csv')?.addEventListener('click', async () => {
       try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Balances-${c.title.replace(/[^\w]+/g, '-')}.xlsx`, by: ctx.profile.full_name, sheets: [
         { name: 'Balances', title: c.title, subtitle: `${fundLabel(c.fund)} · ₱${c.amount} each${c.closed ? ' · closed' : ''}`, summary: [['Collected', totalPaid, 'money'], ['Still owed', totalDue - totalPaid, 'money'], ['Paid up', paid.length], ['Still owing', owing.length]],
@@ -35,6 +36,26 @@ export async function mountBalances(el, ctx) {
     el.querySelector('#fnd')?.addEventListener('click', () => modal(`<h3>Fund for ${esc(c.title)}</h3><p class="muted">Every collection under this charge follows it.</p><form id="ff"><select name="fu">${fundOptions(c.fund)}</select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => { m.querySelector('#cx').onclick = close; m.querySelector('#ff').onsubmit = async e => { e.preventDefault(); try { await db(sb.from('v2_charges').update({ fund: new FormData(e.target).get('fu') || null }).eq('id', c.id)); toast('Fund updated'); close(); } catch (x) { m.querySelector('#er').textContent = x.message; } }; }));
     el.querySelector('#cls')?.addEventListener('click', async () => { try { await db(sb.from('v2_charges').update({ closed: !c.closed }).eq('id', c.id)); toast(c.closed ? 'Reopened' : 'Closed'); } catch (e) { toast(e.message, true); } });
     el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { sessionStorage.setItem('alpha-prefill', JSON.stringify({ member: b.dataset.c, charge: sel, amount: b.dataset.a })); location.hash = '#/staff/treasury'; });
+  }
+
+
+  /* Payment reminder: a phone alert with each student's own amount, only to students who linked their phone in My Status. */
+  async function remind(c) {
+    let st;
+    try { st = await db(sb.rpc('v2_reminder_status', { p_charge: c.id })); }
+    catch (e) { return toast(/function|schema cache/i.test(e.message) ? 'Reminders are not switched on in the database yet.' : e.message, true); }
+    const recent = st.last && Date.now() - new Date(st.last) < 6 * 3600e3;
+    modal(`<h3>Remind those who owe</h3><p class="muted" style="margin:0 0 10px">${esc(c.title)} · ${peso(c.amount)} each</p>
+      <div class="grid"><div class="stat"><small>Still owe</small><b>${st.owing}</b></div><div class="stat gold"><small>Can be reached</small><b>${st.reachable}</b></div></div>
+      <p class="muted" style="margin:10px 0 0">Each student gets a phone alert with their own amount. Only students who turned on reminders in <b>My Status</b> can be reached${st.owing - st.reachable > 0 ? `, so ${st.owing - st.reachable} will not get this one. Ask them to open My Status and turn reminders on` : ''}.</p>
+      ${st.last ? `<p class="muted" style="margin:6px 0 0">Last reminder: ${fmtDateTime(st.last)}${recent ? ' (wait a few hours before sending another)' : ''}</p>` : ''}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="rs" style="flex:1" ${st.reachable && !recent ? '' : 'disabled'}>Send to ${st.reachable} ${st.reachable === 1 ? 'student' : 'students'}</button><button class="btn ghost" id="rc">Cancel</button></div><div class="err" id="er"></div>`,
+      (m, close) => {
+        m.querySelector('#rc').onclick = close;
+        m.querySelector('#rs').onclick = async e => { e.target.disabled = true;
+          try { const r = await db(sb.rpc('v2_send_reminder', { p_charge: c.id })); toast(`Reminder sent to ${r.reached} ${r.reached === 1 ? 'student' : 'students'}`); close(); }
+          catch (x) { m.querySelector('#er').textContent = x.message; e.target.disabled = false; } };
+      });
   }
 
   function newCharge() {

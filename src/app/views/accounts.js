@@ -51,6 +51,8 @@ export async function mountAccounts(el, ctx) {
   async function draw() {
     const people = await db(sb.from('v2_profiles').select('*').order('created_at'));
     const audit = ctx.can('mayor', 'auditor', 'vice_mayor') ? await db(sb.from('v2_audit').select('at,actor_name,action,table_name,row_id').order('at', { ascending: false }).limit(80)) : [];
+    let files = [], bErr = '';
+    if (tab === 'backups' && canAlert) { const r = await sb.storage.from('v2-backups').list('', { limit: 50, sortBy: { column: 'name', order: 'desc' } }); files = (r.data || []).filter(f => f.name.startsWith('alpha28-backup-')); bErr = r.error ? r.error.message : ''; }
     const pend = people.filter(p => p.role === 'pending'), active = people.filter(p => p.role !== 'pending');
     const bar = () => {
       if (!canAlert) return '';
@@ -62,7 +64,7 @@ export async function mountAccounts(el, ctx) {
       return '';
     };
     el.innerHTML = `<div class="bar"><button class="btn ${tab === 'people' ? '' : 'ghost'}" data-k="people">Accounts${pend.length ? ` <span class="badge">${pend.length}</span>` : ''}</button>
-      ${audit.length || ctx.can('auditor') ? `<button class="btn ${tab === 'audit' ? '' : 'ghost'}" data-k="audit">Audit log</button>` : ''}</div>
+      ${audit.length || ctx.can('auditor') ? `<button class="btn ${tab === 'audit' ? '' : 'ghost'}" data-k="audit">Audit log</button>` : ''}${canAlert ? `<button class="btn ${tab === 'backups' ? '' : 'ghost'}" data-k="backups">Backups</button>` : ''}</div>
       ${tab === 'people' ? `${bar()}
       <h3 class="sec">Waiting for approval ${pend.length ? `<span class="badge">${pend.length}</span>` : ''}</h3>
       <div class="card pendbox">${pend.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small><small>Requested ${ago(p.created_at)}</small></div></div>
@@ -73,6 +75,10 @@ export async function mountAccounts(el, ctx) {
         <div class="acts">${isMayor && p.user_id !== ctx.profile.user_id
           ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ROLES.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select><button class="btn danger sm" data-del="${p.user_id}">Remove</button>`
           : `<span class="tag ok">${ROLE_LABEL[p.role]}${p.user_id === ctx.profile.user_id ? ' (you)' : ''}</span>`}</div></div>`).join('')}</div>`
+      : tab === 'backups' ? `<p class="muted" style="margin:0 0 10px">A full copy of every record is saved automatically each Monday at 3 AM and the newest 12 are kept. Passwords, device keys and inline receipt photos are left out.</p>
+        <div class="bar"><button class="btn gold" id="bnow">Back up now</button></div>
+        <div class="card">${files.map(f => { const m = f.name.match(/(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})/); const when = m ? new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+08:00`) : null;
+          return `<div class="row"><div class="m"><b>${when ? fmtDateTime(when) : esc(f.name)}</b><small>${f.metadata?.size ? Math.max(1, Math.round(f.metadata.size / 1024)) + ' KB · ' : ''}${esc(f.name)}</small></div><button class="btn ghost sm" data-bk="${esc(f.name)}">Download</button></div>`; }).join('') || `<p class="empty">${bErr ? esc(bErr) : 'No backups yet. Tap Back up now to make the first one.'}</p>`}</div>`
       : `<div class="card">${audit.map(a => `<div class="row"><div class="m"><b>${esc(a.action)} · ${esc(a.table_name.replace('v2_', ''))}</b><small>${esc(a.actor_name || 'system')} · ${fmtDateTime(a.at)}</small></div></div>`).join('') || '<p class="empty">Nothing logged yet.</p>'}</div>`}`;
     const by = id => people.find(p => p.user_id === id);
     el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { tab = b.dataset.k; draw(); });
@@ -83,6 +89,12 @@ export async function mountAccounts(el, ctx) {
       const p = by(s.dataset.u), to = s.value;
       if (!await confirmDialog(`${p.full_name} (${p.email}) will change from ${ROLE_LABEL[p.role]} to ${ROLE_LABEL[to]}.\n${ROLE_INFO[to] || ''}`, { ok: 'Change role', title: 'Change role?' })) return draw();
       try { await db(sb.from('v2_profiles').update({ role: to, updated_at: new Date().toISOString() }).eq('user_id', p.user_id)); toast('Role updated'); } catch (e) { toast(e.message, true); draw(); } });
+    el.querySelector('#bnow')?.addEventListener('click', async e => { e.target.disabled = true;
+      try { await db(sb.rpc('v2_backup_now')); toast('Backup started. It appears here in a few seconds.'); setTimeout(() => draw().catch(() => {}), 7000); }
+      catch (x) { toast(/function|schema cache/i.test(x.message) ? 'Backups are not switched on in the database yet.' : x.message, true); e.target.disabled = false; } });
+    el.querySelectorAll('[data-bk]').forEach(b => b.onclick = async () => {
+      const { data, error } = await sb.storage.from('v2-backups').createSignedUrl(b.dataset.bk, 120, { download: b.dataset.bk });
+      if (error) return toast(error.message, true); const a = document.createElement('a'); a.href = data.signedUrl; a.download = b.dataset.bk; a.click(); });
     el.querySelector('#pon')?.addEventListener('click', async e => { e.target.disabled = true; try { await enablePush(true); toast('Sign-up alerts are on'); } catch (x) { toast(x.message, true); } pstate = await pushState(); draw(); });
     el.querySelector('#poff')?.addEventListener('click', async () => { try { await disablePush(); } catch { /* ignore */ } pstate = await pushState(); draw(); });
   }

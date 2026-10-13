@@ -44,7 +44,7 @@ export async function mountTreasury(el, ctx) {
         <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
           <select id="flt" style="width:auto;margin-left:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${rows(shown, true)}</div>
-        <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
+        <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button><button class="btn ghost" id="mrep">Monthly report</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
     } else {
       body = past.length ? past.map(p => { const pe = entries.filter(e => e.period_id === p.id && e.status === 'approved');
         return `<div class="card"><div class="row" style="border:0;cursor:pointer" data-past="${p.id}"><div class="m"><b>${esc(p.name)}</b><small>Closed ${fmtDate(p.closed_at)} by ${esc(p.closed_by_name || '—')}</small></div>
@@ -76,12 +76,35 @@ export async function mountTreasury(el, ctx) {
           { label: 'Spent', get: p => p.status === 'closed' ? p.expenses_total : entries.filter(e => e.period_id === p.id && e.kind === 'expense' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true }, { label: 'Closing balance', get: p => p.status === 'closed' ? p.closing_balance : bal, type: 'money' }], rows: periods }] }); toast('Excel ready'); }
       catch (e) { toast(e.message, true); } });
     $('#rep')?.addEventListener('click', () => report(cur, curE.filter(e => e.status === 'approved'), bal));
+    $('#mrep')?.addEventListener('click', () => monthly(entries, periods));
     el.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { const p = periods.find(x => x.id === b.dataset.rep); report(p, entries.filter(e => e.period_id === p.id && e.status === 'approved'), p.closing_balance); });
     el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc).catch(e => toast(e.message, true)));
     el.querySelectorAll('[data-img]').forEach(b => b.onclick = () => showPhoto(b.dataset.img));
     el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.from('v2_entries').update({ status: 'approved', approved_by_name: ctx.profile.full_name }).eq('id', b.dataset.ok)); toast('Approved'); } catch (e) { toast(e.message, true); } });
     el.querySelectorAll('[data-void]').forEach(b => b.onclick = async () => { const r = await askText('Void this entry', 'Reason', { ok: 'Void entry' }); if (!r) return;
       db(sb.from('v2_entries').update({ status: 'voided', void_reason: r }).eq('id', b.dataset.void)).then(() => toast('Voided')).catch(e => toast(e.message, true)); });
+  }
+
+
+  /* Monthly report: every approved collection and expense in a calendar month, across periods, with fund totals. */
+  function monthly(entries, periods) {
+    const ok = entries.filter(e => e.status === 'approved');
+    const ym = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }).slice(0, 7);
+    const label = k => new Date(k + '-15T12:00:00+08:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
+    const months = [...new Set(ok.map(e => ym(e.occurred_at)))].sort().reverse(); const now = ym(new Date()); if (!months.includes(now)) months.unshift(now);
+    const net = a => a.reduce((s, e) => s + (e.kind === 'collection' ? +e.amount : -e.amount), 0);
+    modal(`<h3>Monthly report</h3><p class="muted">Every approved collection and expense in the month, across periods, with totals per fund.</p>
+      <label>Month</label><select id="mm">${months.map(k => `<option value="${k}">${label(k)}</option>`).join('')}</select>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="mgo" style="flex:1">Open report</button><button class="btn ghost" id="mcx">Cancel</button></div>`,
+      (m, close) => {
+        m.querySelector('#mcx').onclick = close;
+        m.querySelector('#mgo').onclick = () => {
+          const k = m.querySelector('#mm').value; close();
+          const first = periods.slice().sort((a, b) => new Date(a.opened_at) - new Date(b.opened_at))[0];
+          const opening = (+first?.opening_balance || 0) + net(ok.filter(e => ym(e.occurred_at) < k)), list = ok.filter(e => ym(e.occurred_at) === k);
+          report({ name: 'Monthly report - ' + label(k), opening_balance: opening, liquidation_notes: {} }, list, opening + net(list));
+        };
+      });
   }
 
   function report(p, list, endBal) {
