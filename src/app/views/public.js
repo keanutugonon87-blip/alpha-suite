@@ -3,7 +3,7 @@ import { renderLearn } from './learn.js';
 import { t, getLang, setLang } from '../i18n.js';
 import { scanRaw, readQRFromFile } from '../qr.js';
 import { showOfficerProfile } from '../profile.js';
-import { heroScene } from '../scenes.js';
+import { heroScene, warmScenes } from '../scenes.js';
 import { pushState, enablePush, disablePush } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
@@ -142,7 +142,8 @@ export async function renderPublic(root) {
       else if (rose) rose.style.transform = `rotate(${ang}deg)`;
       if (hero && lastTop && lastTop !== hs.top && !reduceMotion()) { hero.style.background = lastTop; hero.style.transition = 'background .7s ease'; requestAnimationFrame(() => requestAnimationFrame(() => { hero.style.background = hs.top; })); }
       if (hsc && lastTab && lastTab !== tab && !reduceMotion()) hsc.classList.add('swap');
-      hsc?.querySelector('video.hvid')?.addEventListener('playing', e => { e.target.parentNode.classList.add('vid'); }, { once: true });
+      hsc?.querySelectorAll('.hvid').forEach(v => v.addEventListener('error', () => hsc.classList.add('novid'), { once: true }));
+      warmScenes();
       lastTab = tab; lastTop = hs.top;
     }
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }

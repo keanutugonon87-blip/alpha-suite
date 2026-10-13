@@ -1,4 +1,4 @@
-const V='alpha-3UT5UF6V',SHELL=["./","index.html","assets/build/app.3UT5UF6V.js","assets/build/app.LLWXQ2HG.css","assets/wolf-crest.png","assets/icon-192.png","manifest.webmanifest"];
+const V='alpha-OZTQVJTI',SHELL=["./","index.html","assets/build/app.OZTQVJTI.js","assets/build/app.XYCLRNVG.css","assets/wolf-crest.png","assets/icon-192.png","manifest.webmanifest"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==V).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('push',e=>{let d={};try{d=e.data.json()}catch(x){}e.waitUntil(self.registration.showNotification(d.title||'Alpha ’28',{body:d.body||'',icon:'assets/icon-192.png',badge:'assets/favicon-32.png',data:{url:d.url||'./'}}))});

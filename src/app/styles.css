@@ -274,3 +274,14 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
   .hero.dk .hscene:after{background:linear-gradient(90deg,rgba(6,20,63,.55) 0,rgba(6,20,63,.28) 38%,rgba(6,20,63,0) 62%)}
   .hero .copy{padding-bottom:22px}
 }
+
+/* Scene swap: the drawn fallback only shows if the video cannot load, so no older artwork flashes on a tab change */
+.hscene.hasvid svg{visibility:hidden}
+.hscene.hasvid.novid svg{visibility:visible}
+.hscene.swap{animation:none}
+.hvid{background:transparent}
+/* Phones (portrait): a taller band with its own portrait-cropped footage */
+@media(max-width:639px){
+  .hscene{height:clamp(190px,64vw,300px)}
+  .hscene .hvid{object-position:center bottom}
+}

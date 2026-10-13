@@ -73,11 +73,21 @@ const META = {
 /* A looping video per tab sits on top of the SVG scene (kept as the fallback). Static poster when motion is reduced or data saver is on. */
 const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 const saveData = () => { try { return !!navigator.connection?.saveData; } catch { return false; } };
+const portrait = () => { try { return matchMedia('(max-width:639px)').matches; } catch { return false; } };
+const SCENE_KEYS = ['fund', 'standing', 'me', 'officers', 'learn', 'bulletin'];
+const src = (k, ext) => `assets/scenes/${k}${portrait() ? '-m' : ''}.${ext}`;
 const media = k => {
   if (saveData()) return '';
-  if (reduceMotion()) return `<img class="hvid" src="assets/scenes/${k}.jpg" alt="" decoding="async">`;
-  return `<video class="hvid" src="assets/scenes/${k}.mp4" poster="assets/scenes/${k}.jpg" autoplay muted loop playsinline preload="auto" aria-hidden="true" disablepictureinpicture></video>`;
+  if (reduceMotion()) return `<img class="hvid" src="${src(k, 'jpg')}" alt="" decoding="async">`;
+  return `<video class="hvid" src="${src(k, 'mp4')}" poster="${src(k, 'jpg')}" autoplay muted loop playsinline preload="auto" aria-hidden="true" disablepictureinpicture></video>`;
 };
+/* Warm the browser cache with every tab's still, so switching tabs never shows an empty or older frame. */
+let warmed = false;
+export function warmScenes() {
+  if (warmed || saveData()) return; warmed = true;
+  const go = () => SCENE_KEYS.forEach(k => { const i = new Image(); i.decoding = 'async'; i.src = src(k, 'jpg'); });
+  (window.requestIdleCallback || (f => setTimeout(f, 1200)))(go);
+}
 
 /* The scenery that fills the bottom of the landing hero card; it changes with the selected tab. */
 export function heroScene(tab) {
@@ -85,6 +95,6 @@ export function heroScene(tab) {
   const bg = `linear-gradient(180deg,${m[0]} 0,${m[1]} ${m[2] - 2}%,${m[3]} ${m[2]}%,${m[4]} 100%)`;
   return {
     top: m[0], dark: !!m[5], name: s[0],
-    html: `<div class="hscene" role="img" aria-label="${s[0]}" style="background:${bg}">${media(SCENES[tab] ? tab : 'fund')}<svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMax meet" aria-hidden="true">${s[2]}</svg></div>`,
+    html: `<div class="hscene${saveData() ? '' : ' hasvid'}" role="img" aria-label="${s[0]}" style="background:${bg}">${media(SCENES[tab] ? tab : 'fund')}<svg viewBox="0 0 400 160" preserveAspectRatio="xMidYMax meet" aria-hidden="true">${s[2]}</svg></div>`,
   };
 }
