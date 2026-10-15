@@ -76,7 +76,7 @@ const saveData = () => { try { return !!navigator.connection?.saveData; } catch 
 /* Scenery videos: Auto plays them except on mobile data (where the browser tells us), On always plays, Off shows stills only. */
 const SC = 'alpha-scenes';
 export const sceneMode = () => { try { const v = localStorage.getItem(SC); return v === 'on' || v === 'off' ? v : 'auto'; } catch { return 'auto'; } };
-export const nextSceneMode = () => { const n = { auto: 'on', on: 'off', off: 'auto' }[sceneMode()]; try { localStorage.setItem(SC, n); } catch { /* ignore */ } return n; };
+export const setSceneMode = v => { try { localStorage.setItem(SC, v); } catch { /* ignore */ } };
 const cellular = () => { try { const c = navigator.connection; return !!c && (c.type === 'cellular' || /^(slow-2g|2g|3g)$/.test(c.effectiveType || '')); } catch { return false; } };
 const stillOnly = () => sceneMode() === 'off' || (sceneMode() === 'auto' && cellular());
 const portrait = () => { try { return matchMedia('(max-width:639px)').matches; } catch { return false; } };

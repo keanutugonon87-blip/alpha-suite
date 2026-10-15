@@ -29,9 +29,16 @@ export function toast(msg, bad = false) {
 export function modal(html, onMount) {
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
+  const sheet = m.firstElementChild, heading = sheet.querySelector('h1,h2,h3'); if (heading) { heading.id = heading.id || 'mh' + Math.random().toString(36).slice(2, 7); sheet.setAttribute('aria-labelledby', heading.id); }
   const prev = document.activeElement;
   const close = () => { document.removeEventListener('keydown', onKey); m.remove(); prev && prev.focus && prev.focus(); };
-  const onKey = e => { if (e.key === 'Escape') close(); };
+  const onKey = e => {
+    if (e.key === 'Escape') return close();
+    if (e.key !== 'Tab') return;   // keep keyboard focus inside the open dialog
+    const f = [...sheet.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]):not([type=hidden]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(x => x.offsetParent !== null);
+    if (!f.length) return; const a = f[0], z = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === a) { e.preventDefault(); z.focus(); } else if (!e.shiftKey && document.activeElement === z) { e.preventDefault(); a.focus(); }
+  };
   m.addEventListener('mousedown', e => { if (e.target === m) close(); });
   document.addEventListener('keydown', onKey);
   document.body.appendChild(m);

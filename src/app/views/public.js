@@ -1,7 +1,8 @@
 import { FUNDS, fundLabel, sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast, printHTML, letterhead } from '../core.js';
 import { t, getLang, setLang } from '../i18n.js';
+import { getTheme, setTheme, getTextSize, setTextSize } from '../display.js';
 import { showOfficerProfile } from '../profile.js';
-import { heroScene, warmScenes, sceneMode, nextSceneMode } from '../scenes.js';
+import { heroScene, warmScenes, sceneMode, setSceneMode } from '../scenes.js';
 import { percentPaid } from '../money.js';
 import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
@@ -105,7 +106,7 @@ function renderMe(host) {
 
 export async function renderPublic(root) {
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="scn" title="Scenery videos: Auto plays them except on mobile data, On always, Off shows stills" aria-label="Scenery videos">🎞 ${{ auto: 'Auto', on: 'On', off: 'Off' }[sceneMode()]}</button><button class="btn ghost sm" id="txt" aria-label="Text size" title="Text size">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="txt" aria-label="Display: text size and dark mode" title="Text size, dark mode, scenery">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
@@ -114,8 +115,18 @@ export async function renderPublic(root) {
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
   root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); renderPublic(root); };
-  root.querySelector('#txt').onclick = () => { try { const cur = +(localStorage.getItem('alpha-text') || 100), nx = cur >= 130 ? 100 : cur + 15; localStorage.setItem('alpha-text', String(nx)); document.documentElement.style.fontSize = nx + '%'; toast(nx === 100 ? 'Normal text size' : 'Text size ' + nx + '%'); } catch { /* ignore */ } };
-  root.querySelector('#scn').onclick = () => { nextSceneMode(); renderPublic(root); };
+  root.querySelector('#txt').onclick = () => {
+    let sceneChanged = false; const th = getTheme(), sz = getTextSize(), on = (c, v) => c === v ? ' on' : '';
+    modal(`<h3>${t('display')}</h3><label>${t('textSize')}</label><div class="dispgrid" data-g="sz">${[[100, 'Aa'], [115, 'Aa+'], [130, 'Aa++']].map(([v, l]) => `<button class="btn ghost${on(sz, v)}" data-v="${v}" aria-pressed="${sz === v}">${l}</button>`).join('')}</div>
+      <label>${t('theme')}</label><div class="dispgrid" data-g="th">${[['auto', t('themeAuto')], ['light', t('themeLight')], ['dark', t('themeDark')]].map(([v, l]) => `<button class="btn ghost${on(th, v)}" data-v="${v}" aria-pressed="${th === v}">${l}</button>`).join('')}</div>
+      <label>${t('scenery')}</label><div class="dispgrid" data-g="sc">${[['auto', t('themeAuto')], ['on', t('sceneOn')], ['off', t('sceneOff')]].map(([v, l]) => `<button class="btn ghost${on(sceneMode(), v)}" data-v="${v}" aria-pressed="${sceneMode() === v}">${l}</button>`).join('')}</div>
+      <p class="muted" style="margin:-6px 0 12px;font-size:.85rem">${t('sceneHint')}</p>
+      <button class="btn ghost" id="dx" style="width:100%">${t('done')}</button>`, (m, close) => {
+      m.querySelector('#dx').onclick = () => { close(); if (sceneChanged) renderPublic(root); };
+      m.querySelectorAll('[data-g] .btn').forEach(b => b.onclick = () => { const g = b.parentElement.dataset.g; if (g === 'sz') setTextSize(+b.dataset.v); else if (g === 'th') setTheme(b.dataset.v); else { setSceneMode(b.dataset.v); sceneChanged = true; }
+        b.parentElement.querySelectorAll('.btn').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); });
+    });
+  };
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };
   const entryRow = e => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.payer))}</span>

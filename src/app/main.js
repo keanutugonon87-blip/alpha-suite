@@ -1,4 +1,6 @@
 import './styles.css';
+import { applyDisplay } from './display.js';
+applyDisplay();
 import { sb, esc } from './core.js';
 import { renderPublic } from './views/public.js';
 import { renderReceipt } from './views/receipt.js';
@@ -38,5 +40,4 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   });
   addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
 }
-// Text size chosen by the reader (small / larger / largest), remembered on this phone
-try { const z = localStorage.getItem('alpha-text'); if (z) document.documentElement.style.fontSize = z + '%'; } catch { /* ignore */ }
+
