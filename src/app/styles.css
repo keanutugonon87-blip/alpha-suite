@@ -287,5 +287,10 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 }
 
 .updbar{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:60;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--navy);color:#fff;border-radius:14px;padding:10px 14px;box-shadow:0 8px 24px #0004;max-width:520px;margin:0 auto}
+[hidden]{display:none!important}
+.todo{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}.todo .btn{border-color:var(--warn);color:var(--warn);background:var(--warn-bg)}
+.segpay{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:4px 0 8px}.segpay label{margin:0}.segpay input{position:absolute;opacity:0;pointer-events:none}
+.segpay span{display:grid;place-items:center;min-height:48px;border:2px solid var(--line);border-radius:12px;font-weight:700;cursor:pointer;background:#fff;color:var(--navy)}
+.segpay input:checked+span{border-color:var(--sea);background:var(--sky)}.segpay input:focus-visible+span{outline:3px solid var(--gold)}
 .alertbar.bad{border-color:var(--bad);border-style:solid;background:#fff4f2}
 .prog.mini{height:6px;margin:6px 0 2px;max-width:220px}

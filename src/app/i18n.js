@@ -25,7 +25,7 @@ const D = {
   remOff: ['Remind me on this phone when I still owe a payment', 'Pahinumdoman ko sa phone kung naa pa koy utang'], remOn: ['Payment reminders are on for this phone', 'Naka-on ang pahinumdom sa bayronon sa kini nga phone'],
   stmt: ['My statement', 'Akong statement'], stmtTitle: ['Statement of account', 'Statement sa akong account'], stmtPaid: ['Payments made', 'Mga bayad na'], stmtOwe: ['Still owed', 'Utang pa'], stmtNone: ['No payments yet', 'Wala pay bayad'], stmtPrint: ['Print / save as PDF', 'I-print / i-save isip PDF'], stmtClose: ['Close', 'Sirhi'],
   offlineAsOf: ['Offline. Showing what was saved on', 'Offline. Gipakita ang na-save kaniadto'], howPay: ['How to pay', 'Unsaon pagbayad'],
-  excused: ['excused', 'gipasaylo'], excusedNote: ['Excused by the officers', 'Gipasaylo sa mga opisyal'], myPays: ['My payments', 'Akong mga bayad'], pendingTag: ['waiting for approval', 'naghulat og aprobar'],
+  excused: ['excused', 'gipasaylo'], copy: ['Copy', 'Kopyaha'], copied: ['Copied', 'Nakopya na'], excusedNote: ['Excused by the officers', 'Gipasaylo sa mga opisyal'], myPays: ['My payments', 'Akong mga bayad'], pendingTag: ['waiting for approval', 'naghulat og aprobar'],
   alertDenied: ['Alerts are blocked in your browser settings.', 'Gi-block ang alerto sa browser settings.'],
 };
 export const t = k => (D[k] || [k, k])[getLang() === 'ceb' ? 1 : 0];

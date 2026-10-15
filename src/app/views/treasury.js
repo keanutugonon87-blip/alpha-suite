@@ -8,7 +8,7 @@ const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'S
 
 export async function mountTreasury(el, ctx) {
   const canWrite = ctx.can('mayor', 'treasurer'), isMayor = ctx.can('mayor');
-  let curPeriod = null, view = 'current', filter = 'all', openPast = null, members = [], charges = [], allEntries = [], limit = 500;
+  let curPeriod = null, qtext = '', view = 'current', filter = 'all', openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
   async function draw() {
@@ -45,10 +45,13 @@ export async function mountTreasury(el, ctx) {
     let body;
     if (view === 'current') {
       const shown = curE.filter(e => filter === 'all' || (filter === 'pending' ? e.status === 'pending' : e.kind === filter));
-      body = `<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
+      const soon = charges.filter(c => !c.closed && c.due_on && (new Date(c.due_on) - Date.now()) / 864e5 <= 7).length;
+      const pm = ymManila(new Date(Date.now() - 31 * 864e5)), prevOpen = entries.some(e => e.status === 'approved' && ymManila(e.occurred_at) === pm) && !lockedMonths.has(pm);
+      const todo = [pendingN ? ['pending', `${pendingN} waiting for approval`] : null, soon ? ['due', `${soon} charge${soon > 1 ? 's' : ''} due within a week or late`] : null, prevOpen ? ['month', 'Last month is not closed yet'] : null].filter(Boolean);
+      body = `${todo.length ? `<div class="todo" role="list" aria-label="To do">${todo.map(([k, t]) => `<button class="btn ghost sm" role="listitem" data-todo="${k}">${esc(t)}</button>`).join('')}</div>` : ''}<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
         <div class="stat"><small>Collected</small><b>${peso(coll)}</b></div><div class="stat"><small>Spent</small><b>${peso(exp)}</b></div></div>
         <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
-          <select id="flt" style="width:auto;margin-left:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
+          <input id="q" type="search" placeholder="Search name, receipt, purpose" aria-label="Search entries" value="${esc(qtext)}" style="flex:1 1 150px;min-width:0"><select id="flt" style="width:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${rows(shown, true)}</div>
         <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button><button class="btn ghost" id="mrep">Monthly report</button><button class="btn ghost" id="mclose">Month close${lockedMonths.size ? ` (${lockedMonths.size} 🔒)` : ''}</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
     } else {
@@ -62,6 +65,12 @@ export async function mountTreasury(el, ctx) {
       ${canWrite && view === 'current' ? '<button class="btn gold fab" id="fab">+ Collection</button>' : ''}`;
 
     const $ = s => el.querySelector(s);
+    const applyQ = () => { const q = qtext.trim().toLowerCase(), card = $('.card'); if (!card) return;
+      let head = null, shownInDay = 0; const rowsEl = [...card.querySelectorAll('.dayhead, .row')];
+      const flush = () => { if (head) head.hidden = !!q && !shownInDay; };
+      rowsEl.forEach(n => { if (n.classList.contains('dayhead')) { flush(); head = n; shownInDay = 0; } else { const hit = !q || n.textContent.toLowerCase().includes(q); n.hidden = !hit; if (hit) shownInDay++; } }); flush(); };
+    $('#q')?.addEventListener('input', e => { qtext = e.target.value; applyQ(); }); if (qtext) applyQ();
+    el.querySelectorAll('[data-todo]').forEach(b => b.onclick = () => { const k = b.dataset.todo; if (k === 'pending') { filter = 'pending'; draw(); } else if (k === 'due') location.hash = '#/staff/balances'; else monthClose(entries, periods, closes); });
     const flt = $('#flt'); if (flt) { flt.value = filter; flt.onchange = () => { filter = flt.value; draw(); }; }
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { view = b.dataset.v; draw(); });
     el.querySelectorAll('[data-past]').forEach(b => b.onclick = () => { openPast = openPast === b.dataset.past ? null : b.dataset.past; draw(); });
@@ -184,11 +193,11 @@ export async function mountTreasury(el, ctx) {
       <label>Category</label><select name="cat">${cats.map(c => `<option>${c}</option>`).join('')}</select>
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
       <label>Purpose / note</label><input name="purpose">
-      ${kind === 'collection' ? `<label>Payment method</label><select name="method"><option value="cash">Cash</option><option value="gcash">GCash</option></select><div id="gc" style="display:none"><label>GCash reference no.</label><input name="gref"></div>` : ''}
+      ${kind === 'collection' ? `<label>Payment method</label><div class="segpay" role="radiogroup"><label><input type="radio" name="method" value="cash" checked><span>💵 Cash</span></label><label><input type="radio" name="method" value="gcash"><span>📱 GCash</span></label></div><div id="gc" style="display:none"><label>GCash reference no.</label><input name="gref"></div>` : ''}
       <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
-      const sel = m.querySelector('[name=method]'); if (sel) sel.onchange = () => m.querySelector('#gc').style.display = sel.value === 'gcash' ? 'block' : 'none';
+      m.querySelectorAll('[name=method]').forEach(r => r.onchange = () => { m.querySelector('#gc').style.display = m.querySelector('[name=method]:checked')?.value === 'gcash' ? 'block' : 'none'; });
       const chSel = m.querySelector('[name=charge]'), amt = m.querySelector('[name=amt]');
       const fw = m.querySelector('#fw');
       const syncFund = () => { if (chSel && chSel.value) { fw.style.display = 'none'; } else fw.style.display = ''; };
