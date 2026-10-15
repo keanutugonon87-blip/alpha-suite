@@ -4,7 +4,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 // Writes one JSON file with every record to the private "v2-backups" bucket and keeps the newest 12 files.
 // Not included on purpose: login secrets, push-device keys, and inline receipt photos (photo files stay in their own bucket).
 const TABLES = ['v2_members', 'v2_periods', 'v2_charges', 'v2_entries', 'v2_violations', 'v2_standards', 'v2_officers', 'v2_officer_edits',
-  'v2_announcements', 'v2_settings', 'v2_quiz_scores', 'v2_reminders', 'v2_profiles', 'v2_audit',
+  'v2_announcements', 'v2_settings', 'v2_month_close', 'v2_waivers', 'v2_quiz_scores', 'v2_reminders', 'v2_profiles', 'v2_audit',
   'students', 'transactions', 'audit_log', 'shared_data', 'officer_roles', 'dues_config'];
 const KEEP = 12;
 
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
     const rows: Record<string, unknown>[] = [];
     for (let from = 0; ; from += 1000) {
       const { data, error } = await db.from(t).select('*').range(from, from + 999);
-      if (error) { errors[t] = error.message; break; }
+      if (error) { if (!/does not exist|schema cache/i.test(error.message)) errors[t] = error.message; break; }   // a table from a newer SQL file that is not installed yet is skipped, not an error
       rows.push(...(data ?? [])); if (!data || data.length < 1000) break;
     }
     for (const r of rows) if (typeof r.receipt_image === 'string' && r.receipt_image.startsWith('data:')) r.receipt_image = '[inline photo omitted]';
