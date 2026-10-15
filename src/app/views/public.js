@@ -104,7 +104,7 @@ function renderMe(host) {
 
 export async function renderPublic(root) {
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="scn" title="Scenery videos: Auto plays them except on mobile data, On always, Off shows stills" aria-label="Scenery videos">🎞 ${{ auto: 'Auto', on: 'On', off: 'Off' }[sceneMode()]}</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="scn" title="Scenery videos: Auto plays them except on mobile data, On always, Off shows stills" aria-label="Scenery videos">🎞 ${{ auto: 'Auto', on: 'On', off: 'Off' }[sceneMode()]}</button><button class="btn ghost sm" id="txt" aria-label="Text size" title="Text size">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
@@ -113,6 +113,7 @@ export async function renderPublic(root) {
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
   root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); renderPublic(root); };
+  root.querySelector('#txt').onclick = () => { try { const cur = +(localStorage.getItem('alpha-text') || 100), nx = cur >= 130 ? 100 : cur + 15; localStorage.setItem('alpha-text', String(nx)); document.documentElement.style.fontSize = nx + '%'; toast(nx === 100 ? 'Normal text size' : 'Text size ' + nx + '%'); } catch { /* ignore */ } };
   root.querySelector('#scn').onclick = () => { nextSceneMode(); renderPublic(root); };
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };

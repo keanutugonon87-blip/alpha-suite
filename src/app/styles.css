@@ -10,7 +10,7 @@
   --head:'Cinzel',Georgia,serif; --body:'Atkinson Hyperlegible','Segoe UI',system-ui,sans-serif;
 }
 *{box-sizing:border-box}html{-webkit-text-size-adjust:100%;color-scheme:light}
-body{margin:0;font-family:var(--body);font-size:16px;line-height:1.5;color:var(--ink);padding-bottom:env(safe-area-inset-bottom);
+body{margin:0;font-family:var(--body);font-size:1rem;line-height:1.5;color:var(--ink);padding-bottom:env(safe-area-inset-bottom);
   background-color:var(--paper);
   background-image:linear-gradient(rgba(42,127,176,.06) 1px,transparent 1px),linear-gradient(90deg,rgba(42,127,176,.06) 1px,transparent 1px);background-size:32px 32px}
 h1,h2,h3,h4{font-family:var(--head);margin:0;letter-spacing:.01em;line-height:1.2;color:var(--navy)}
@@ -286,5 +286,6 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
   .hscene .hvid{object-position:center bottom}
 }
 
+.updbar{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom));z-index:60;display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--navy);color:#fff;border-radius:14px;padding:10px 14px;box-shadow:0 8px 24px #0004;max-width:520px;margin:0 auto}
 .alertbar.bad{border-color:var(--bad);border-style:solid;background:#fff4f2}
 .prog.mini{height:6px;margin:6px 0 2px;max-width:220px}

@@ -28,4 +28,15 @@ sb.auth.onAuthStateChange(ev => {
 });
 route();
 
-if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  const hadController = !!navigator.serviceWorker.controller;   // a first visit has none, so no "update" notice then
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || document.getElementById('upd')) return;
+    const b = document.createElement('div'); b.id = 'upd'; b.className = 'updbar'; b.setAttribute('role', 'status');
+    b.innerHTML = '<span>A new version of Alpha ’28 is ready.</span><button class="btn gold sm">Refresh</button>';
+    b.querySelector('button').onclick = () => location.reload(); document.body.appendChild(b);
+  });
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+// Text size chosen by the reader (small / larger / largest), remembered on this phone
+try { const z = localStorage.getItem('alpha-text'); if (z) document.documentElement.style.fontSize = z + '%'; } catch { /* ignore */ }

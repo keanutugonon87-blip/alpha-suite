@@ -4,10 +4,23 @@ const ago = d => { const s = (Date.now() - new Date(d)) / 1000; if (s < 90) retu
 const NEED_SQL = e => /function|schema cache|does not exist/i.test(e.message);
 const JOBS = { 'alpha28-weekly-backup': 'Weekly backup (Monday 3 AM)', 'alpha28-auto-nudge': 'Due-date reminders (daily 9 AM)' };
 
+const HANDOVER = [
+  ['mo', 'Close the last month: count the money, then close it (Treasury > Month close).'],
+  ['rep', 'Print the final monthly report and post it in the class group chat.'],
+  ['bk', 'Download a fresh backup (Accounts > Backups) and save it somewhere outside Supabase.'],
+  ['acc', 'Give each new officer their own account and role (Accounts). Never share one login.'],
+  ['old', 'Remove or downgrade the accounts of officers who are leaving.'],
+  ['key', 'Change the alert key (Security, below) because outgoing officers knew it.'],
+  ['pay', 'Update the payment note with the new Treasurer\'s GCash details.'],
+  ['chg', 'Open the Balances tab and close charges that are finished.'],
+  ['own', 'Make sure two different officers can approve big expenses (a Vice Mayor or Auditor account exists).'],
+];
+
 /* System tab: is everything running, and the few settings the Mayor and Treasurer own. */
 export async function mountSystem(el, ctx) {
   const isMayor = ctx.can('mayor'), canSee = ctx.can('mayor', 'vice_mayor'), canNote = ctx.can('mayor', 'treasurer');
 
+  let ticks = {}; try { ticks = JSON.parse(localStorage.getItem('alpha-handover') || '{}'); } catch { /* ignore */ }
   async function draw() {
     let h = null, miss = false, note = '';
     if (canSee) { try { h = await db(sb.rpc('v2_health')); } catch (e) { if (NEED_SQL(e)) miss = true; else throw e; } }
@@ -38,7 +51,10 @@ export async function mountSystem(el, ctx) {
         <h3 class="sec">Security</h3><div class="card pad"><p style="margin:0 0 8px"><b>Alert key</b></p>
           <p class="muted" style="margin:0 0 8px">The database and the alert and backup functions prove who they are with a shared secret key. Change it now and then, or at once if an officer who knew it leaves. Nothing else needs updating.</p>
           <button class="btn ghost sm" id="rot">Change the key now</button>
-          <p class="muted" style="margin:12px 0 0;font-size:.85rem">The QR card key is not changed here, because that would make every printed card stop working. If it ever leaks, ask for a fresh set of cards to be issued.</p></div>` : ''}`;
+          <p class="muted" style="margin:12px 0 0;font-size:.85rem">The QR card key is not changed here, because that would make every printed card stop working. If it ever leaks, ask for a fresh set of cards to be issued.</p></div>
+        <h3 class="sec">Officer handover</h3><div class="card pad"><p class="muted" style="margin:0 0 8px">Work through this when a new set of officers takes over. Your ticks are saved on this phone only.</p>
+          ${HANDOVER.map(([k, txt]) => `<label class="row" style="border:0;cursor:pointer;align-items:flex-start;gap:10px"><input type="checkbox" data-h="${k}"${ticks[k] ? ' checked' : ''} style="width:auto;margin-top:4px"><span>${esc(txt)}</span></label>`).join('')}</div>` : ''}`;
+    el.querySelectorAll('[data-h]').forEach(c => c.onchange = () => { ticks[c.dataset.h] = c.checked; try { localStorage.setItem('alpha-handover', JSON.stringify(ticks)); } catch { /* ignore */ } });
 
     el.querySelector('#pn')?.addEventListener('submit', async e => { e.preventDefault();
       try { await db(sb.rpc('v2_set_setting', { p_key: 'pay_note', p_value: new FormData(e.target).get('v') || '' })); toast('Saved. Students will see it on My Status.'); }
