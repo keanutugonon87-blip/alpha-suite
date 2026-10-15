@@ -1,11 +1,5 @@
 import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync } from '../core.js';
-import { mountTreasury } from './treasury.js';
-import { mountBalances } from './balances.js';
-import { mountStudents } from './students.js';
-import { mountWatch } from './watch.js';
-import { mountOfficers } from './officers.js';
-import { mountAccounts } from './accounts.js';
-import { mountNotices } from './notices.js';
+/* Each screen is loaded only when it is opened, so students (who never sign in) do not download the officer screens. */
 
 const ICON = {
   treasury: '<path d="M4 7h16v11H4z"/><path d="M4 11h16"/><path d="M8 15h3"/>',
@@ -15,15 +9,17 @@ const ICON = {
   officers: '<path d="M12 3l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.3 6.8 19.1l1-5.8L3.5 9.2l5.9-.9z"/>',
   notices: '<path d="M4 10v4h3l6 4V6L7 10z"/><path d="M16 9a4 4 0 010 6"/>',
   accounts: '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-3.9 3.1-7 7-7s7 3.1 7 7"/>',
+  system: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
 };
 const TABS = [
-  { id: 'treasury', label: 'Treasury', mount: mountTreasury, roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
-  { id: 'balances', label: 'Balances', mount: mountBalances, roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
-  { id: 'watch', label: 'Watch', mount: mountWatch, roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
-  { id: 'students', label: 'Students', mount: mountStudents, roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },
-  { id: 'officers', label: 'Officers', mount: mountOfficers, roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
-  { id: 'notices', label: 'Notices', mount: mountNotices, roles: ['mayor', 'vice_mayor', 'secretary', 'pio'] },
-  { id: 'accounts', label: 'Accounts', mount: mountAccounts, roles: ['mayor', 'vice_mayor', 'auditor'] },
+  { id: 'treasury', label: 'Treasury', load: () => import('./treasury.js').then(m => m.mountTreasury), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
+  { id: 'balances', label: 'Balances', load: () => import('./balances.js').then(m => m.mountBalances), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
+  { id: 'watch', label: 'Watch', load: () => import('./watch.js').then(m => m.mountWatch), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
+  { id: 'students', label: 'Students', load: () => import('./students.js').then(m => m.mountStudents), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },
+  { id: 'officers', label: 'Officers', load: () => import('./officers.js').then(m => m.mountOfficers), roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
+  { id: 'notices', label: 'Notices', load: () => import('./notices.js').then(m => m.mountNotices), roles: ['mayor', 'vice_mayor', 'secretary', 'pio'] },
+  { id: 'accounts', label: 'Accounts', load: () => import('./accounts.js').then(m => m.mountAccounts), roles: ['mayor', 'vice_mayor', 'auditor'] },
+  { id: 'system', label: 'System', load: () => import('./system.js').then(m => m.mountSystem), roles: ['mayor', 'vice_mayor', 'treasurer'] },
 ];
 
 function authScreen(root, mode = 'in', msg = '', ok = false) {
@@ -103,8 +99,9 @@ export async function renderStaff(root, tabId) {
   root.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.t; });
   const view = root.querySelector('#view');
   let stop = null;
-  try { stop = await cur.mount(view, ctx); }
+  try { stop = await (await cur.load())(view, ctx); }
   catch (e) { console.error(e); view.innerHTML = `<div class="card"><b>Couldn't load ${cur.label}.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button></div>`; }
   flushQueue();
+  setTimeout(() => tabs.forEach(t => t.load().catch(() => {})), 2000);   // fetch the other screens in the background so they also open offline
   return () => { off(); stop && stop(); };
 }

@@ -2,7 +2,6 @@ import './styles.css';
 import { sb, esc } from './core.js';
 import { renderPublic } from './views/public.js';
 import { renderReceipt } from './views/receipt.js';
-import { renderStaff, showRecovery } from './views/staff.js';
 
 const root = document.getElementById('root');
 let stop = null;
@@ -15,7 +14,7 @@ async function route() {
   try {
     if (a === 'receipt' && b) stop = await renderReceipt(root, { code: b });
     else if (a === 'legacy' && b) stop = await renderReceipt(root, { legacy: b });
-    else if (a === 'staff') stop = await renderStaff(root, b);
+    else if (a === 'staff') stop = await (await import('./views/staff.js')).renderStaff(root, b);
     else stop = await renderPublic(root);
   } catch (e) {
     console.error(e);
@@ -24,7 +23,7 @@ async function route() {
 }
 window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange(ev => {
-  if (ev === 'PASSWORD_RECOVERY') { history.replaceState(null, '', '#/staff'); showRecovery(root); }
+  if (ev === 'PASSWORD_RECOVERY') { history.replaceState(null, '', '#/staff'); import('./views/staff.js').then(m => m.showRecovery(root)); }
   if (ev === 'SIGNED_OUT' && location.hash.startsWith('#/staff')) route();
 });
 route();

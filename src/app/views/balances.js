@@ -1,5 +1,6 @@
 import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, uuid, fundOptions, fundLabel } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
+import { percentPaid } from '../money.js';
 
 export async function mountBalances(el, ctx) {
   const canWrite = ctx.can('mayor', 'treasurer'), canRemind = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor');
@@ -20,7 +21,7 @@ export async function mountBalances(el, ctx) {
       <div class="prog"><i style="width:${totalDue ? Math.min(100, totalPaid / totalDue * 100) : 0}%"></i></div>
       <div class="bar" style="margin-top:12px"><select id="f" style="width:auto"><option value="owing">Owing</option><option value="paid">Paid</option><option value="all">Everyone</option></select>
         <button class="btn ghost" id="csv">Export (Excel)</button>${canRemind && !c.closed && owing.length ? '<button class="btn" id="rem">🔔 Remind those who owe</button>' : ''}${canWrite ? `<button class="btn ghost" id="fnd" style="margin-left:auto">Fund: ${esc(fundLabel(c.fund))}</button><button class="btn ghost" id="cls" >${c.closed ? 'Reopen charge' : 'Close charge'}</button>` : ''}</div>
-      <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>Paid ${peso(r.paid)} of ${peso(r.due)}</small></div>
+      <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>Paid ${peso(r.paid)} of ${peso(r.due)}</small>${r.paid > 0 && r.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(r.paid, r.due)}% paid"><i style="width:${percentPaid(r.paid, r.due)}%"></i></div>` : ''}</div>
         <div style="display:flex;align-items:center;gap:8px"><span class="tag ${r.owed <= 0 ? 'ok' : r.paid > 0 ? 'warn' : 'bad'}">${r.owed <= 0 ? 'paid' : r.paid > 0 ? 'owes ' + peso(r.owed) : 'unpaid'}</span>
         ${canWrite && r.owed > 0 && !c.closed ? `<button class="btn gold sm" data-c="${r.member_id}" data-a="${r.owed}">Collect</button>` : ''}</div></div>`).join('') || '<p class="empty">Nobody here.</p>'}</div>`
       : '<p class="empty">No charges yet. A charge is something every student owes, like dues or a contribution.</p>'}`;
@@ -41,17 +42,23 @@ export async function mountBalances(el, ctx) {
 
   /* Payment reminder: a phone alert with each student's own amount, only to students who linked their phone in My Status. */
   async function remind(c) {
-    let st;
+    let st, roster = [];
     try { st = await db(sb.rpc('v2_reminder_status', { p_charge: c.id })); }
     catch (e) { return toast(/function|schema cache/i.test(e.message) ? 'Reminders are not switched on in the database yet.' : e.message, true); }
-    const recent = st.last && Date.now() - new Date(st.last) < 6 * 3600e3;
+    try { roster = await db(sb.rpc('v2_reminder_roster', { p_charge: c.id })); } catch { /* older database: no roster yet */ }
+    const recent = st.last && Date.now() - new Date(st.last) < 6 * 3600e3, unreach = roster.filter(r => !r.linked), reach = roster.filter(r => r.linked);
+    const text = `Reminder from the BSMT 1-Alpha Treasurer: ${c.title} (${peso(c.amount)} each${c.due_on ? ', due ' + fmtDate(c.due_on) : ''}). Still owing:\n${unreach.map(r => `• ${r.name} — ${peso(r.owed)}`).join('\n')}\nPlease settle with the Treasurer. Salamat!`;
     modal(`<h3>Remind those who owe</h3><p class="muted" style="margin:0 0 10px">${esc(c.title)} · ${peso(c.amount)} each</p>
-      <div class="grid"><div class="stat"><small>Still owe</small><b>${st.owing}</b></div><div class="stat gold"><small>Can be reached</small><b>${st.reachable}</b></div></div>
-      <p class="muted" style="margin:10px 0 0">Each student gets a phone alert with their own amount. Only students who turned on reminders in <b>My Status</b> can be reached${st.owing - st.reachable > 0 ? `, so ${st.owing - st.reachable} will not get this one. Ask them to open My Status and turn reminders on` : ''}.</p>
+      <div class="grid"><div class="stat"><small>Still owe</small><b>${st.owing}</b></div><div class="stat gold"><small>Phone alert works</small><b>${st.reachable}</b></div></div>
+      <p class="muted" style="margin:10px 0 0">Each student gets a phone alert with their own amount. Only students who turned on reminders in <b>My Status</b> can be reached.</p>
       ${st.last ? `<p class="muted" style="margin:6px 0 0">Last reminder: ${fmtDateTime(st.last)}${recent ? ' (wait a few hours before sending another)' : ''}</p>` : ''}
+      ${roster.length ? `<details style="margin-top:10px"><summary><b>${reach.length}</b> will get the alert · <b>${unreach.length}</b> will not</summary>
+        <div class="card" style="max-height:30vh;overflow:auto;margin-top:6px">${roster.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>${peso(r.owed)}</small></div><span class="tag ${r.linked ? 'ok' : 'warn'}">${r.linked ? 'alert on' : 'no alert'}</span></div>`).join('')}</div></details>` : ''}
+      ${unreach.length ? `<p class="muted" style="margin:10px 0 4px">For those without alerts, copy this and post it in the class group chat:</p><textarea id="tx" rows="5" readonly style="width:100%">${esc(text)}</textarea><button class="btn ghost sm" id="cp" style="margin-top:6px">Copy message</button>` : ''}
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="rs" style="flex:1" ${st.reachable && !recent ? '' : 'disabled'}>Send to ${st.reachable} ${st.reachable === 1 ? 'student' : 'students'}</button><button class="btn ghost" id="rc">Cancel</button></div><div class="err" id="er"></div>`,
       (m, close) => {
         m.querySelector('#rc').onclick = close;
+        m.querySelector('#cp')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(text); toast('Message copied'); } catch { const t = m.querySelector('#tx'); t.select(); toast('Select the text and copy it'); } });
         m.querySelector('#rs').onclick = async e => { e.target.disabled = true;
           try { const r = await db(sb.rpc('v2_send_reminder', { p_charge: c.id })); toast(`Reminder sent to ${r.reached} ${r.reached === 1 ? 'student' : 'students'}`); close(); }
           catch (x) { m.querySelector('#er').textContent = x.message; e.target.disabled = false; } };

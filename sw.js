@@ -1,4 +1,4 @@
-const V='alpha-Y4G7VCMJ',SHELL=["./","index.html","assets/build/app.Y4G7VCMJ.js","assets/build/app.XYCLRNVG.css","assets/wolf-crest.png","assets/icon-192.png","manifest.webmanifest"];
+const V='alpha-RGVHNSXN',SHELL=["./","index.html","assets/build/app.RGVHNSXN.js","assets/build/chunk.RVP5BZOW.js","assets/build/chunk.IEVLYCYC.js","assets/build/chunk.TJDW353Z.js","assets/build/chunk.RUCQ2ZRG.js","assets/build/chunk.BS6GQAZG.js","assets/build/app.TIQHPSMH.css","assets/wolf-crest.png","assets/icon-192.png","manifest.webmanifest"];
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==V).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
 self.addEventListener('push',e=>{let d={};try{d=e.data.json()}catch(x){}e.waitUntil(self.registration.showNotification(d.title||'Alpha ’28',{body:d.body||'',icon:'assets/icon-192.png',badge:'assets/favicon-32.png',data:{url:d.url||'./'}}))});

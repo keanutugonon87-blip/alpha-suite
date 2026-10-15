@@ -1,9 +1,8 @@
 import { FUNDS, fundLabel, sb, db, esc, peso, fmtDate, onSync, skeleton, modal, initials, dayLabel, share, toast, printHTML, letterhead } from '../core.js';
-import { renderLearn } from './learn.js';
 import { t, getLang, setLang } from '../i18n.js';
-import { scanRaw, readQRFromFile } from '../qr.js';
 import { showOfficerProfile } from '../profile.js';
-import { heroScene, warmScenes } from '../scenes.js';
+import { heroScene, warmScenes, sceneMode, nextSceneMode } from '../scenes.js';
+import { percentPaid } from '../money.js';
 import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
@@ -61,21 +60,31 @@ async function statement(token) {
 function renderMe(host) {
   const get = () => { try { return localStorage.getItem(ME) || ''; } catch { return ''; } };
   const put = v => { try { v ? localStorage.setItem(ME, v) : localStorage.removeItem(ME); } catch { /* ignore */ } };
+  const CK = 'alpha-me-cache';
+  const cget = tk => { try { const c = JSON.parse(localStorage.getItem(CK) || 'null'); return c && c.token === tk ? c : null; } catch { return null; } };
+  const cput = (token, data, note) => { try { localStorage.setItem(CK, JSON.stringify({ token, at: Date.now(), data, note })); } catch { /* ignore */ } };
+  const netErr = e => !navigator.onLine || /failed to fetch|networkerror|load failed|network request/i.test(e?.message || '');
   async function show(token) {
     host.innerHTML = skeleton(3);
     try {
-      const { data, error } = await sb.rpc('v2_self_check', { p_token: token }); if (error) throw error;
+      let data, note = '', stale = 0;
+      try {
+        const { data: d, error } = await sb.rpc('v2_self_check', { p_token: token }); if (error) throw error; data = d;
+        note = await sb.rpc('v2_public_pay_note').then(r => r.data || '', () => '');   // empty until the v4 SQL is run
+        cput(token, data, note);
+      } catch (e) { const c = cget(token); if (c && netErr(e)) { data = c.data; note = c.note || ''; stale = c.at; } else throw e; }
       put(token);
       const owed = data.balances.reduce((a, b) => a + +b.owed, 0), open = data.violations.filter(v => v.status !== 'resolved');
-      host.innerHTML = `<div class="card pad"><small>${t('hello')}</small><h2 style="margin:2px 0 8px">${esc(data.name)}</h2>
+      host.innerHTML = `${stale ? `<div class="alertbar"><span>📴 ${t('offlineAsOf')} ${fmtDate(stale)}</span></div>` : ''}<div class="card pad"><small>${t('hello')}</small><h2 style="margin:2px 0 8px">${esc(data.name)}</h2>
         <div style="font-size:1.15rem;font-weight:700;color:var(${owed ? '--bad' : '--ok'})">${owed ? `${t('owed')} ${peso(owed)}` : '✓ ' + t('clear')}</div></div>
-        <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small></div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
+        ${owed && note ? `<div class="card pad"><b>${t('howPay')}</b><p style="margin:4px 0 0;white-space:pre-line">${esc(note)}</p></div>` : ''}
+        <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
         <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : ordn(v.offense) + ' offense: ₱25 fine'}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
         <div id="rm"></div>
-        <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st">${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
-      host.querySelector('#fg').onclick = () => { put(''); start(); };
+        <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
+      host.querySelector('#fg').onclick = () => { put(''); try { localStorage.removeItem(CK); } catch { /* ignore */ } start(); };
       host.querySelector('#st').onclick = () => statement(token);
-      remBox(host.querySelector('#rm'), token);
+      if (!stale) remBox(host.querySelector('#rm'), token);
     } catch (e) { put(''); start(e.message); }
   }
   function start(err = '') {
@@ -84,8 +93,8 @@ function renderMe(host) {
       <label class="btn ghost" style="cursor:pointer">${t('photo')}<input id="ph" type="file" accept="image/*" hidden></label>
       <button class="btn ghost" id="pa">${t('paste')}</button></div><div class="err" id="er" style="margin-top:10px">${esc(err)}</div></div>`;
     const go = async fn => { try { const tk = await fn(); if (tk) show(tk); } catch (e) { host.querySelector('#er').textContent = e.message; } };
-    host.querySelector('#sc').onclick = () => go(() => scanRaw());
-    host.querySelector('#ph').onchange = e => e.target.files[0] && go(() => readQRFromFile(e.target.files[0]));
+    host.querySelector('#sc').onclick = () => go(() => import('../qr.js').then(q => q.scanRaw()));
+    host.querySelector('#ph').onchange = e => e.target.files[0] && go(() => import('../qr.js').then(q => q.readQRFromFile(e.target.files[0])));
     host.querySelector('#pa').onclick = () => go(() => { const v = prompt('Paste the code under your QR (starts with A1.)'); return v && v.trim(); });
   }
   const saved = get(); saved ? show(saved) : start();
@@ -93,7 +102,7 @@ function renderMe(host) {
 
 export async function renderPublic(root) {
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="scn" title="Scenery videos: Auto plays them except on mobile data, On always, Off shows stills" aria-label="Scenery videos">🎞 ${{ auto: 'Auto', on: 'On', off: 'Off' }[sceneMode()]}</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
@@ -102,6 +111,7 @@ export async function renderPublic(root) {
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
   root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); renderPublic(root); };
+  root.querySelector('#scn').onclick = () => { nextSceneMode(); renderPublic(root); };
 
   const byDay = list => { const g = new Map(); list.forEach(e => { const k = dayLabel(e.at); g.set(k, [...(g.get(k) || []), e]); }); return g; };
   const entryRow = e => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.payer))}</span>
@@ -188,7 +198,7 @@ export async function renderPublic(root) {
       lastTab = tab; lastTop = hs.top;
     }
     if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
-    if (tab === 'learn') renderLearn(m.querySelector('#sec'));
+    if (tab === 'learn') import('./learn.js').then(l => { if (tab === 'learn' && m.querySelector('#sec')) l.renderLearn(m.querySelector('#sec')); });
     if (tab === 'me') renderMe(m.querySelector('#sec'));
     m.querySelector('#pon')?.addEventListener('click', async e => { e.target.disabled = true; try { await enablePush(); toast('Alerts are on'); } catch (x) { toast(x.message, true); } pstate = await pushState(); paint(); });
     m.querySelector('#poff')?.addEventListener('click', async () => { try { await disablePush(); } catch { /* ignore */ } pstate = await pushState(); paint(); });
@@ -205,7 +215,13 @@ export async function renderPublic(root) {
       const opt = p => db(p).catch(() => []);
       const [o, tr, s, vv, ann, prog] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing')), db(sb.rpc('v2_public_violations')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_progress'))]);
       const first = !data; data = { off: o, tre: tr, stand: s, viol: vv, ann, prog }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
-    } catch (e) { if (!data) m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div>`; }
+    } catch (e) {
+      if (!data) {   // no connection: still show the student's own saved status, if this phone has one
+        m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div><div id="offme"></div>`;
+        let saved = ''; try { saved = localStorage.getItem(ME) || ''; } catch { /* ignore */ }
+        if (saved) renderMe(m.querySelector('#offme'));
+      }
+    }
   }
   await load();
   const iv = setInterval(load, 60000);

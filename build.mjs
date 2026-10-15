@@ -9,13 +9,15 @@ const r = await build({
   outdir: 'assets/build', entryNames: '[name].[hash]', chunkNames: 'chunk.[hash]', splitting: true, metafile: true, loader: { '.css': 'css' }, logLevel: 'error',
 });
 const outs = Object.keys(r.metafile.outputs).map(p => p.replace(/\\/g, '/'));
-const js = Object.entries(r.metafile.outputs).find(([k, v]) => v.entryPoint)[0].replace(/\\/g, '/'), css = outs.find(p => p.endsWith('.css'));
+const js = Object.entries(r.metafile.outputs).find(([k, v]) => v.entryPoint === 'src/app/main.js')[0].replace(/\\/g, '/'), css = outs.find(p => p.endsWith('.css'));
 const html = readFileSync('src/index.template.html', 'utf8').replace('%JS%', js).replace('%CSS%', css);
 writeFileSync('index.html', html);
 console.log('built', js, css);
 
 // Service worker: app shell works offline; data calls always go to the network.
-const shell = ['./', 'index.html', js.replace(/^.*assets\//, 'assets/'), css.replace(/^.*assets\//, 'assets/'), 'assets/wolf-crest.png', 'assets/icon-192.png', 'manifest.webmanifest'];
+// Everything the landing page needs at start-up (the entry file plus the chunks it imports directly); officer screens load on demand and are cached when first used.
+const closure = new Set(); const walk = f => { if (closure.has(f)) return; closure.add(f); for (const i of r.metafile.outputs[f]?.imports || []) if (i.kind === 'import-statement') walk(i.path); }; walk(js);
+const shell = ['./', 'index.html', ...[...closure].map(f => f.replace(/^.*assets\//, 'assets/')), css.replace(/^.*assets\//, 'assets/'), 'assets/wolf-crest.png', 'assets/icon-192.png', 'manifest.webmanifest'];
 const ver = js.match(/app\.([A-Z0-9]+)\.js/)[1];
 writeFileSync('sw.js', `const V='alpha-${ver}',SHELL=${JSON.stringify(shell)};
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});

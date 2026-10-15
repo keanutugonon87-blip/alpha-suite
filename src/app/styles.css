@@ -285,3 +285,6 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
   .hscene{height:clamp(190px,64vw,300px)}
   .hscene .hvid{object-position:center bottom}
 }
+
+.alertbar.bad{border-color:var(--bad);border-style:solid;background:#fff4f2}
+.prog.mini{height:6px;margin:6px 0 2px;max-width:220px}

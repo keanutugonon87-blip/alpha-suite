@@ -1,4 +1,5 @@
-import { fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, initials, dayLabel } from '../core.js';
+import { fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, confirmDialog, initials, dayLabel } from '../core.js';
+import { ymManila, net as netOf, balanceAt, needsSecond, findDuplicate } from '../money.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
 
@@ -7,28 +8,33 @@ const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'S
 
 export async function mountTreasury(el, ctx) {
   const canWrite = ctx.can('mayor', 'treasurer'), isMayor = ctx.can('mayor');
-  let curPeriod = null, view = 'current', filter = 'all', openPast = null, members = [], charges = [];
+  let curPeriod = null, view = 'current', filter = 'all', openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
   async function draw() {
-    const [mem, chg, periods, raw, flags] = await Promise.all([
+    const [mem, chg, periods, raw, flags, closes, lim] = await Promise.all([
       db(sb.from('v2_members').select('id,full_name').order('full_name')),
       db(sb.from('v2_charges').select('*').order('created_at')),
       db(sb.from('v2_periods').select('*').order('opened_at', { ascending: false })),
-      db(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,fund,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false })),
+      db(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,fund,recorded_by,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false })),
       db(sb.from('v2_entries').select('id').not('receipt_image', 'is', null)),
+      sb.from('v2_month_close').select('*').then(r => r.data || [], () => []),   // empty until the month-close SQL is run
+      sb.from('v2_settings').select('value').eq('key', 'expense_second_approval').maybeSingle().then(r => r.data?.value, () => null),
     ]);
+    limit = lim != null && lim !== '' && !isNaN(+lim) ? +lim : 500; const lockedMonths = new Set(closes.filter(c => c.status === 'closed').map(c => c.month));
     members = mem; charges = chg; const hasImg = new Set(flags.map(r => r.id));
     const nameOf = id => members.find(m => m.id === id)?.full_name;
-    const entries = raw.map(e => ({ ...e, who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '' }));
+    const entries = raw.map(e => ({ ...e, who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '', locked: lockedMonths.has(ymManila(e.occurred_at)) }));
+    allEntries = entries;
     const cur = periods.find(p => p.status === 'open'); curPeriod = cur; const past = periods.filter(p => p.status === 'closed');
     const curE = entries.filter(e => e.period_id === cur.id), ok = curE.filter(e => e.status === 'approved');
     const coll = ok.filter(e => e.kind === 'collection').reduce((s, e) => s + +e.amount, 0), exp = ok.filter(e => e.kind === 'expense').reduce((s, e) => s + +e.amount, 0);
     const bal = +cur.opening_balance + coll - exp, pendingN = curE.filter(e => e.status === 'pending').length;
 
-    const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span></b>
+    const canApprove = e => e.status === 'pending' && (needsSecond(e, limit) ? ctx.can('mayor', 'vice_mayor', 'auditor', 'treasurer') && e.recorded_by !== ctx.profile.user_id : isMayor);
+    const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span>${e.locked ? ' <span class="tag" title="This month is closed">🔒</span>' : ''}${e.status === 'pending' && needsSecond(e, limit) ? ' <span class="tag warn" title="Big expense: another officer must approve it">needs a 2nd officer</span>' : ''}</b>
       <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
-      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && isMayor && e.status === 'pending' ? `<button class="btn gold sm" data-ok="${e.id}">Approve</button>` : ''}${actions && canWrite && e.status !== 'voided' ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
+      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? `<button class="btn gold sm" data-ok="${e.id}">Approve</button>` : ''}${actions && canWrite && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
       <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
     const rows = (arr, actions) => {
       if (!arr.length) return '<div class="empty"><b>Nothing here yet</b>Entries you record will show up in this list.</div>';
@@ -44,7 +50,7 @@ export async function mountTreasury(el, ctx) {
         <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
           <select id="flt" style="width:auto;margin-left:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${rows(shown, true)}</div>
-        <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button><button class="btn ghost" id="mrep">Monthly report</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
+        <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button><button class="btn ghost" id="mrep">Monthly report</button><button class="btn ghost" id="mclose">Month close${lockedMonths.size ? ` (${lockedMonths.size} 🔒)` : ''}</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
     } else {
       body = past.length ? past.map(p => { const pe = entries.filter(e => e.period_id === p.id && e.status === 'approved');
         return `<div class="card"><div class="row" style="border:0;cursor:pointer" data-past="${p.id}"><div class="m"><b>${esc(p.name)}</b><small>Closed ${fmtDate(p.closed_at)} by ${esc(p.closed_by_name || '—')}</small></div>
@@ -77,10 +83,11 @@ export async function mountTreasury(el, ctx) {
       catch (e) { toast(e.message, true); } });
     $('#rep')?.addEventListener('click', () => report(cur, curE.filter(e => e.status === 'approved'), bal));
     $('#mrep')?.addEventListener('click', () => monthly(entries, periods));
+    $('#mclose')?.addEventListener('click', () => monthClose(entries, periods, closes));
     el.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { const p = periods.find(x => x.id === b.dataset.rep); report(p, entries.filter(e => e.period_id === p.id && e.status === 'approved'), p.closing_balance); });
     el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc).catch(e => toast(e.message, true)));
     el.querySelectorAll('[data-img]').forEach(b => b.onclick = () => showPhoto(b.dataset.img));
-    el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.from('v2_entries').update({ status: 'approved', approved_by_name: ctx.profile.full_name }).eq('id', b.dataset.ok)); toast('Approved'); } catch (e) { toast(e.message, true); } });
+    el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_approve_entry', { p_id: b.dataset.ok })); toast('Approved'); draw().catch(() => {}); } catch (e) { toast(/function|schema cache/i.test(e.message) ? 'Approval is not switched on in the database yet. Run the v4 SQL.' : e.message, true); } });
     el.querySelectorAll('[data-void]').forEach(b => b.onclick = async () => { const r = await askText('Void this entry', 'Reason', { ok: 'Void entry' }); if (!r) return;
       db(sb.from('v2_entries').update({ status: 'voided', void_reason: r }).eq('id', b.dataset.void)).then(() => toast('Voided')).catch(e => toast(e.message, true)); });
   }
@@ -89,10 +96,10 @@ export async function mountTreasury(el, ctx) {
   /* Monthly report: every approved collection and expense in a calendar month, across periods, with fund totals. */
   function monthly(entries, periods) {
     const ok = entries.filter(e => e.status === 'approved');
-    const ym = d => new Date(d).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' }).slice(0, 7);
+    const ym = ymManila;
     const label = k => new Date(k + '-15T12:00:00+08:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
     const months = [...new Set(ok.map(e => ym(e.occurred_at)))].sort().reverse(); const now = ym(new Date()); if (!months.includes(now)) months.unshift(now);
-    const net = a => a.reduce((s, e) => s + (e.kind === 'collection' ? +e.amount : -e.amount), 0);
+    const net = netOf;
     modal(`<h3>Monthly report</h3><p class="muted">Every approved collection and expense in the month, across periods, with totals per fund.</p>
       <label>Month</label><select id="mm">${months.map(k => `<option value="${k}">${label(k)}</option>`).join('')}</select>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="mgo" style="flex:1">Open report</button><button class="btn ghost" id="mcx">Cancel</button></div>`,
@@ -100,11 +107,42 @@ export async function mountTreasury(el, ctx) {
         m.querySelector('#mcx').onclick = close;
         m.querySelector('#mgo').onclick = () => {
           const k = m.querySelector('#mm').value; close();
-          const first = periods.slice().sort((a, b) => new Date(a.opened_at) - new Date(b.opened_at))[0];
-          const opening = (+first?.opening_balance || 0) + net(ok.filter(e => ym(e.occurred_at) < k)), list = ok.filter(e => ym(e.occurred_at) === k);
+          const list = ok.filter(e => ym(e.occurred_at) === k), opening = balanceAt(entries, periods, k) - net(list);
           report({ name: 'Monthly report - ' + label(k), opening_balance: opening, liquidation_notes: {} }, list, opening + net(list));
         };
       });
+  }
+
+  /* Month close: someone counts the money, a different officer (the Mayor) closes the month, and its entries are locked. */
+  function monthClose(entries, periods, closes) {
+    const by = Object.fromEntries(closes.map(c => [c.month, c]));
+    const cur = ymManila(new Date());
+    const months = [...new Set([...entries.filter(e => e.status === 'approved').map(e => ymManila(e.occurred_at)), ...Object.keys(by), cur])].sort().reverse().slice(0, 12);
+    const label = k => new Date(k + '-15T12:00:00+08:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
+    const canCount = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor');
+    const rowFor = k => {
+      const c = by[k], st = c ? c.status : 'open', bal = balanceAt(entries, periods, k);
+      const tag = st === 'closed' ? '<span class="tag ok">closed 🔒</span>' : st === 'checked' ? '<span class="tag warn">counted</span>' : st === 'reopened' ? '<span class="tag bad">reopened</span>' : '<span class="tag">open</span>';
+      const info = c && st !== 'open' ? `<small>${st === 'closed' ? `Closed ${fmtDate(c.closed_at)} by ${esc(c.closed_by_name || '—')} · ` : ''}Counted ${peso(c.cash_counted)} by ${esc(c.checked_by_name || '—')}${+c.diff ? ` · off by ${peso(c.diff)}` : ' · matches'}${c.note ? ` · ${esc(c.note)}` : ''}${st === 'reopened' && c.reopen_reason ? ` · reopened: ${esc(c.reopen_reason)}` : ''}</small>` : '';
+      return `<div class="row stk"><div class="m"><b>${label(k)} ${tag}</b><small>Fund balance at month end: ${peso(bal)}</small>${info}</div>
+        <div class="acts">${canCount && st !== 'closed' ? `<button class="btn ghost sm" data-v="${k}">${st === 'checked' ? 'Count again' : 'Count the money'}</button>` : ''}${isMayor && st === 'checked' ? `<button class="btn gold sm" data-c="${k}">Close month</button>` : ''}${isMayor && st === 'closed' ? `<button class="btn ghost sm" data-r="${k}">Reopen</button>` : ''}</div></div>`;
+    };
+    modal(`<h3>Month close</h3><p class="muted" style="margin:0 0 8px">Count the cash and GCash on hand and compare it with the records. After a different officer closes the month, its entries are locked. Only the Mayor can reopen it.</p>
+      <div class="card" style="max-height:52vh;overflow:auto">${months.map(rowFor).join('')}</div><button class="btn ghost" id="mx" style="width:100%;margin-top:12px">Close</button><div class="err" id="er"></div>`, (m, close) => {
+      m.querySelector('#mx').onclick = close;
+      const run = async (fn, ok) => { try { await fn(); toast(ok); close(); draw().catch(() => {}); } catch (e) { m.querySelector('#er').textContent = /function|schema cache/i.test(e.message) ? 'Month close is not switched on in the database yet. Run the v4 SQL.' : e.message; } };
+      m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { const k = b.dataset.v, expect = balanceAt(entries, periods, k); close();
+        modal(`<h3>Count the money · ${label(k)}</h3><p class="muted">The records say the fund should hold <b>${peso(expect)}</b>. Count the cash and the GCash balance together and enter the total.</p>
+          <form id="vf"><label>Money counted (₱)</label><input name="c" type="number" step="0.01" min="0" required inputmode="decimal"><label>Note (needed if it does not match)</label><input name="n" maxlength="200">
+          <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save count</button><button type="button" class="btn ghost" id="vx">Cancel</button></div><div class="err" id="er2"></div></form>`, (m2, close2) => {
+          m2.querySelector('#vx').onclick = close2;
+          m2.querySelector('#vf').onsubmit = async ev => { ev.preventDefault(); const f = new FormData(ev.target);
+            try { const r = await db(sb.rpc('v2_verify_month', { p_month: k, p_cash: +f.get('c'), p_note: f.get('n') || '' })); toast(+r.diff ? `Saved. Off by ${peso(r.diff)}` : 'Saved. It matches the records.'); close2(); draw().catch(() => {}); }
+            catch (e) { m2.querySelector('#er2').textContent = /function|schema cache/i.test(e.message) ? 'Month close is not switched on in the database yet. Run the v4 SQL.' : e.message; } };
+        }); });
+      m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => run(() => db(sb.rpc('v2_close_month', { p_month: b.dataset.c })), 'Month closed and locked'));
+      m.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const why = await askText('Reopen this month', 'Reason', { ok: 'Reopen' }); if (!why) return; run(() => db(sb.rpc('v2_reopen_month', { p_month: b.dataset.r, p_reason: why })), 'Month reopened'); });
+    });
   }
 
   function report(p, list, endBal) {
@@ -159,6 +197,8 @@ export async function mountTreasury(el, ctx) {
       m.querySelector('#ef').onsubmit = async ev => {
         ev.preventDefault(); const f = new FormData(ev.target), btn = ev.target.querySelector('button'); btn.disabled = true; btn.textContent = 'Saving…';
         try {
+          const dup = findDuplicate(allEntries, { kind, amount: +f.get('amt'), member_id: f.get('member') || null, payer_name: f.get('payer') || null, charge_id: f.get('charge') || null });
+          if (dup && !(await confirmDialog(`The same amount (${peso(dup.amount)}) for ${dup.who} was already recorded a few minutes ago${dup.receipt_no ? ` (${dup.receipt_no})` : ''}. Save it again?`, { ok: 'Save anyway', title: 'Possible duplicate' }))) { btn.disabled = false; btn.textContent = 'Save'; return; }
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
           const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,

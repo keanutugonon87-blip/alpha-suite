@@ -32,10 +32,11 @@ Deno.serve(async (req) => {
   const name = `alpha28-backup-${stamp}.json`;
   const body = JSON.stringify({ app: 'Alpha ’28', created_at: now.toISOString(), counts: Object.fromEntries(Object.entries(out).map(([k, v]) => [k, v.length])), errors, tables: out });
   const up = await db.storage.from('v2-backups').upload(name, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json' });
-  if (up.error) return new Response(JSON.stringify({ ok: false, error: up.error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } });
+  if (up.error) { await db.from('v2_backup_log').insert({ ok: false, name, errors: { upload: up.error.message }, note: 'upload failed' }); return new Response(JSON.stringify({ ok: false, error: up.error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } }); }
 
   const { data: files } = await db.storage.from('v2-backups').list('', { limit: 200, sortBy: { column: 'name', order: 'desc' } });
   const old = (files ?? []).filter((f) => f.name.startsWith('alpha28-backup-')).slice(KEEP).map((f) => f.name);
   if (old.length) await db.storage.from('v2-backups').remove(old);
+  await db.from('v2_backup_log').insert({ ok: Object.keys(errors).length === 0, name, bytes: body.length, errors: Object.keys(errors).length ? errors : null, note: old.length ? `removed ${old.length} old` : null });
   return new Response(JSON.stringify({ ok: true, name, bytes: body.length, removed: old.length, errors }), { headers: { 'Content-Type': 'application/json' } });
 });

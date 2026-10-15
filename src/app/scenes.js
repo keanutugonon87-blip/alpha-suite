@@ -73,12 +73,18 @@ const META = {
 /* A looping video per tab sits on top of the SVG scene (kept as the fallback). Static poster when motion is reduced or data saver is on. */
 const reduceMotion = () => { try { return matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
 const saveData = () => { try { return !!navigator.connection?.saveData; } catch { return false; } };
+/* Scenery videos: Auto plays them except on mobile data (where the browser tells us), On always plays, Off shows stills only. */
+const SC = 'alpha-scenes';
+export const sceneMode = () => { try { const v = localStorage.getItem(SC); return v === 'on' || v === 'off' ? v : 'auto'; } catch { return 'auto'; } };
+export const nextSceneMode = () => { const n = { auto: 'on', on: 'off', off: 'auto' }[sceneMode()]; try { localStorage.setItem(SC, n); } catch { /* ignore */ } return n; };
+const cellular = () => { try { const c = navigator.connection; return !!c && (c.type === 'cellular' || /^(slow-2g|2g|3g)$/.test(c.effectiveType || '')); } catch { return false; } };
+const stillOnly = () => sceneMode() === 'off' || (sceneMode() === 'auto' && cellular());
 const portrait = () => { try { return matchMedia('(max-width:639px)').matches; } catch { return false; } };
 const SCENE_KEYS = ['fund', 'standing', 'me', 'officers', 'learn', 'bulletin'];
 const src = (k, ext) => `assets/scenes/${k}${portrait() ? '-m' : ''}.${ext}`;
 const media = k => {
   if (saveData()) return '';
-  if (reduceMotion()) return `<img class="hvid" src="${src(k, 'jpg')}" alt="" decoding="async">`;
+  if (reduceMotion() || stillOnly()) return `<img class="hvid" src="${src(k, 'jpg')}" alt="" decoding="async">`;
   return `<video class="hvid" src="${src(k, 'mp4')}" poster="${src(k, 'jpg')}" autoplay muted loop playsinline preload="auto" aria-hidden="true" disablepictureinpicture></video>`;
 };
 /* Warm the browser cache with every tab's still, so switching tabs never shows an empty or older frame. */
