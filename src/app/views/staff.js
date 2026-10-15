@@ -1,4 +1,4 @@
-import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync } from '../core.js';
+import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync, modal, watch } from '../core.js';
 /* Each screen is loaded only when it is opened, so students (who never sign in) do not download the officer screens. */
 
 const ICON = {
@@ -86,22 +86,34 @@ export async function renderStaff(root, tabId) {
   const ctx = { profile: p, can: (...r) => r.includes(p.role) };
   const tabs = TABS.filter(t => t.roles.includes(p.role));
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
+  // On a phone the bar holds 4 sections and a "More" button; on a wide screen the side menu lists them all.
+  const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
+  const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out">Sign out</button></div>
     <div class="banner" id="bn" hidden></div>
-    <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[t.id]}</svg><span>${t.label}</span></button>`).join('')}</nav><main id="view"></main></div>`;
+    <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}${extra.includes(t) ? ' xtra' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}>${icon(t.id)}<span>${t.label}</span>${t.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : ''}</button>`).join('')}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? cur.label : 'More'}</span></button>` : ''}</nav><main id="view"></main></div>`;
   const off = onSync((s, d, q) => {
     const c = root.querySelector('#sync'), bn = root.querySelector('#bn'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = (q ? `${q} waiting · ` : '') + { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || '';
     bn.hidden = !q; bn.textContent = q ? `${q} entr${q > 1 ? 'ies are' : 'y is'} saved on this device and will be sent when you're back online.` : '';
   });
   root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.hash = '#/'; location.reload(); };
-  root.querySelectorAll('.tabs button').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.t; });
+  root.querySelectorAll('.tabs button[data-t]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.t; });
+  root.querySelector('#more')?.addEventListener('click', () => modal(`<h3>More</h3><div class="moregrid">${extra.map(t => `<button class="btn ghost${t.id === cur.id ? ' on' : ''}" data-go="${t.id}">${icon(t.id)}<span>${t.label}</span></button>`).join('')}</div>`,
+    (m, close) => m.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { close(); location.hash = '#/staff/' + b.dataset.go; })));
+  // A small number on Treasury shows how many entries are waiting for approval (only for officers who can approve them)
+  let stopBadge = () => {};
+  if (['mayor', 'vice_mayor', 'auditor', 'treasurer'].includes(p.role)) {
+    const bdg = root.querySelector('#bdg'), count = () => sb.from('v2_entries').select('id', { count: 'exact', head: true }).eq('status', 'pending')
+      .then(r => { const n = r.count || 0; if (bdg) { bdg.hidden = !n; bdg.textContent = n > 9 ? '9+' : n; bdg.closest('button').setAttribute('aria-label', n ? `Treasury, ${n} waiting for approval` : 'Treasury'); } }, () => {});
+    count(); try { stopBadge = watch(['v2_entries'], () => count()) || stopBadge; } catch { /* realtime unavailable: the number refreshes on the next visit */ }
+  }
   const view = root.querySelector('#view');
   let stop = null;
   try { stop = await (await cur.load())(view, ctx); }
   catch (e) { console.error(e); view.innerHTML = `<div class="card"><b>Couldn't load ${cur.label}.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button></div>`; }
   flushQueue();
   setTimeout(() => tabs.forEach(t => t.load().catch(() => {})), 2000);   // fetch the other screens in the background so they also open offline
-  return () => { off(); stop && stop(); };
+  return () => { off(); stop && stop(); typeof stopBadge === 'function' && stopBadge(); };
 }
