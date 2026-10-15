@@ -91,15 +91,54 @@ function renderMe(host) {
       if (!stale) remBox(host.querySelector('#rm'), token);
     } catch (e) { put(''); start(e.message); }
   }
+  /* Sign in: Student ID + PIN, or the QR card. First time, the QR card proves who you are while you choose a PIN. */
+  const SID = 'alpha-sid', lastId = () => { try { return localStorage.getItem(SID) || ''; } catch { return ''; } };
+  const rememberId = v => { try { localStorage.setItem(SID, v); } catch { /* ignore */ } };
+  const missing = e => /function|schema cache|does not exist/i.test(e?.message || '');
+  const pinErr = d => d.error === 'locked' ? t('pinLocked').replace('{n}', d.wait_minutes) : d.error === 'revoked' ? t('pinRevoked') : d.error === 'mismatch' ? t('pinMismatchId') : d.error === 'weak' ? t('pinWeak') : d.error === 'format' ? t('pinFormat') : t('pinBad');
+  const grab = (box, fn, done) => async () => { try { const tk = await fn(); if (tk) done(tk); } catch (e) { box.textContent = e.message; } };
+  const qrButtons = () => `<button type="button" class="btn ghost" id="sc">${t('scan')}</button><label class="btn ghost" style="cursor:pointer">${t('photo')}<input id="ph" type="file" accept="image/*" hidden></label><button type="button" class="btn ghost" id="pa">${t('paste')}</button>`;
+  function qrWire(box, done) {
+    host.querySelector('#sc').onclick = grab(box, () => import('../qr.js').then(q => q.scanRaw()), done);
+    host.querySelector('#ph').onchange = e => e.target.files[0] && grab(box, () => import('../qr.js').then(q => q.readQRFromFile(e.target.files[0])), done)();
+    host.querySelector('#pa').onclick = grab(box, () => { const v = prompt(t('pasteAsk')); return v && v.trim(); }, done);
+  }
   function start(err = '') {
     host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${t('mytitle')}</h3><p class="muted">${t('mydesc')}</p>
-      <div style="display:grid;gap:8px;max-width:320px;margin:14px auto 0"><button class="btn gold" id="sc">${t('scan')}</button>
-      <label class="btn ghost" style="cursor:pointer">${t('photo')}<input id="ph" type="file" accept="image/*" hidden></label>
-      <button class="btn ghost" id="pa">${t('paste')}</button></div><div class="err" id="er" style="margin-top:10px">${esc(err)}</div></div>`;
-    const go = async fn => { try { const tk = await fn(); if (tk) show(tk); } catch (e) { host.querySelector('#er').textContent = e.message; } };
-    host.querySelector('#sc').onclick = () => go(() => import('../qr.js').then(q => q.scanRaw()));
-    host.querySelector('#ph').onchange = e => e.target.files[0] && go(() => import('../qr.js').then(q => q.readQRFromFile(e.target.files[0])));
-    host.querySelector('#pa').onclick = () => go(() => { const v = prompt('Paste the code under your QR (starts with A1.)'); return v && v.trim(); });
+      <form id="pf" style="display:grid;gap:6px;max-width:320px;margin:14px auto 0;text-align:left">
+        <label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(lastId())}">
+        <label for="spin">${t('pin')}</label><input id="spin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="current-password" placeholder="••••••" required>
+        <button class="btn gold" style="margin-top:6px">${t('signin2')}</button></form>
+      <p style="margin:12px 0 0"><a href="#" id="np">${t('firstTime')}</a></p>
+      <details style="max-width:320px;margin:14px auto 0;text-align:left"><summary>${t('useQr')}</summary><div style="display:grid;gap:8px;margin-top:8px">${qrButtons()}</div></details>
+      <div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
+    const er = host.querySelector('#er');
+    qrWire(er, tk => show(tk));
+    host.querySelector('#np').onclick = e => { e.preventDefault(); setup(); };
+    host.querySelector('#pf').onsubmit = async e => { e.preventDefault(); const btn = e.target.querySelector('button'), id = host.querySelector('#sid').value.trim(); btn.disabled = true; er.textContent = '';
+      try { const { data, error } = await sb.rpc('v2_pin_login', { p_student_no: id, p_pin: host.querySelector('#spin').value }); if (error) throw error;
+        if (data.ok) { rememberId(id); return show(data.token); } er.textContent = pinErr(data); host.querySelector('#spin').value = ''; }
+      catch (x) { er.textContent = missing(x) ? t('pinNotReady') : netErr(x) ? t('noNet') : x.message; } btn.disabled = false; };
+  }
+  function setup(err = '', token = '', id = lastId()) {
+    host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${t('setupTitle')}</h3><p class="muted">${t('setupDesc')}</p>
+      <div style="display:grid;gap:8px;max-width:320px;margin:12px auto 0;text-align:left">
+        <div style="display:grid;gap:8px" id="qrs">${token ? `<div class="tag ok" style="justify-self:start">✓ ${t('qrRead')}</div>` : qrButtons()}</div>
+        <form id="sf" style="display:grid;gap:6px"><label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(id)}">
+          <label for="n1">${t('pinNew')}</label><input id="n1" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="••••••" required>
+          <label for="n2">${t('pinConfirm')}</label><input id="n2" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="••••••" required>
+          <button class="btn gold" style="margin-top:6px">${t('pinSave')}</button></form></div>
+      <p style="margin:12px 0 0"><a href="#" id="bk">${t('back')}</a></p><div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
+    const er = host.querySelector('#er'), keep = () => host.querySelector('#sid').value;
+    if (!token) qrWire(er, tk => setup('', tk, keep()));
+    host.querySelector('#bk').onclick = e => { e.preventDefault(); start(); };
+    host.querySelector('#sf').onsubmit = async e => { e.preventDefault(); const btn = e.target.querySelector('button'), n1 = host.querySelector('#n1').value; er.textContent = '';
+      if (!token) return void (er.textContent = t('qrNeeded'));
+      if (n1 !== host.querySelector('#n2').value) return void (er.textContent = t('pinNoMatch'));
+      btn.disabled = true;
+      try { const { data, error } = await sb.rpc('v2_pin_setup', { p_student_no: keep().trim(), p_token: token, p_pin: n1 }); if (error) throw error;
+        if (data.ok) { rememberId(keep().trim()); toast(t('pinSaved')); return show(data.token); } er.textContent = pinErr(data); }
+      catch (x) { er.textContent = missing(x) ? t('pinNotReady') : netErr(x) ? t('noNet') : x.message; } btn.disabled = false; };
   }
   const saved = get(); saved ? show(saved) : start();
 }
