@@ -71,6 +71,7 @@ function renderMe(host) {
       try {
         const { data: d, error } = await sb.rpc('v2_self_check', { p_token: token }); if (error) throw error; data = d;
         note = await sb.rpc('v2_public_pay_note').then(r => r.data || '', () => '');   // empty until the v4 SQL is run
+        data.pay = await sb.rpc('v2_self_statement', { p_token: token }).then(r => (r.data?.payments || []).slice(0, 6), () => []);
         cput(token, data, note);
       } catch (e) { const c = cget(token); if (c && netErr(e)) { data = c.data; note = c.note || ''; stale = c.at; } else throw e; }
       put(token);
@@ -78,7 +79,8 @@ function renderMe(host) {
       host.innerHTML = `${stale ? `<div class="alertbar"><span>📴 ${t('offlineAsOf')} ${fmtDate(stale)}</span></div>` : ''}<div class="card pad"><small>${t('hello')}</small><h2 style="margin:2px 0 8px">${esc(data.name)}</h2>
         <div style="font-size:1.15rem;font-weight:700;color:var(${owed ? '--bad' : '--ok'})">${owed ? `${t('owed')} ${peso(owed)}` : '✓ ' + t('clear')}</div></div>
         ${owed && note ? `<div class="card pad"><b>${t('howPay')}</b><p style="margin:4px 0 0;white-space:pre-line">${esc(note)}</p></div>` : ''}
-        <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
+        <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${b.waived ? t('excusedNote') : `${peso(b.paid)} / ${peso(b.due)}`}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : b.waived ? t('excused') : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
+        ${(data.pay || []).length ? `<h3 class="sec">${t('myPays')}</h3><div class="card">${data.pay.map(p => `<div class="row"><div class="m"><b>${esc(p.for || '—')}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : ''}${p.status === 'pending' ? ' · ' + t('pendingTag') : ''}</small></div><span class="tag ok">${peso(p.amount)}</span></div>`).join('')}</div>` : ''}
         <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : ordn(v.offense) + ' offense: ₱25 fine'}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
         <div id="rm"></div>
         <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;

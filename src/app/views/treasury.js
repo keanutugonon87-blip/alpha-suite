@@ -34,7 +34,7 @@ export async function mountTreasury(el, ctx) {
     const canApprove = e => e.status === 'pending' && (needsSecond(e, limit) ? ctx.can('mayor', 'vice_mayor', 'auditor', 'treasurer') && e.recorded_by !== ctx.profile.user_id : isMayor);
     const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span>${e.locked ? ' <span class="tag" title="This month is closed">🔒</span>' : ''}${e.status === 'pending' && needsSecond(e, limit) ? ' <span class="tag warn" title="Big expense: another officer must approve it">needs a 2nd officer</span>' : ''}</b>
       <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
-      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? `<button class="btn gold sm" data-ok="${e.id}">Approve</button>` : ''}${actions && canWrite && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
+      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? (needsSecond(e, limit) && !e.hasImg ? '<span class="tag bad" title="Add a receipt photo first">no receipt photo</span>' : `<button class="btn gold sm" data-ok="${e.id}">Approve</button>`) : ''}${actions && canWrite && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
       <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
     const rows = (arr, actions) => {
       if (!arr.length) return '<div class="empty"><b>Nothing here yet</b>Entries you record will show up in this list.</div>';
@@ -82,7 +82,7 @@ export async function mountTreasury(el, ctx) {
           { label: 'Spent', get: p => p.status === 'closed' ? p.expenses_total : entries.filter(e => e.period_id === p.id && e.kind === 'expense' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true }, { label: 'Closing balance', get: p => p.status === 'closed' ? p.closing_balance : bal, type: 'money' }], rows: periods }] }); toast('Excel ready'); }
       catch (e) { toast(e.message, true); } });
     $('#rep')?.addEventListener('click', () => report(cur, curE.filter(e => e.status === 'approved'), bal));
-    $('#mrep')?.addEventListener('click', () => monthly(entries, periods));
+    $('#mrep')?.addEventListener('click', () => monthly(entries, periods, closes));
     $('#mclose')?.addEventListener('click', () => monthClose(entries, periods, closes));
     el.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { const p = periods.find(x => x.id === b.dataset.rep); report(p, entries.filter(e => e.period_id === p.id && e.status === 'approved'), p.closing_balance); });
     el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc).catch(e => toast(e.message, true)));
@@ -94,7 +94,7 @@ export async function mountTreasury(el, ctx) {
 
 
   /* Monthly report: every approved collection and expense in a calendar month, across periods, with fund totals. */
-  function monthly(entries, periods) {
+  function monthly(entries, periods, closes = []) {
     const ok = entries.filter(e => e.status === 'approved');
     const ym = ymManila;
     const label = k => new Date(k + '-15T12:00:00+08:00').toLocaleDateString('en-PH', { month: 'long', year: 'numeric', timeZone: 'Asia/Manila' });
@@ -108,7 +108,7 @@ export async function mountTreasury(el, ctx) {
         m.querySelector('#mgo').onclick = () => {
           const k = m.querySelector('#mm').value; close();
           const list = ok.filter(e => ym(e.occurred_at) === k), opening = balanceAt(entries, periods, k) - net(list);
-          report({ name: 'Monthly report - ' + label(k), opening_balance: opening, liquidation_notes: {} }, list, opening + net(list));
+          report({ name: 'Monthly report - ' + label(k), opening_balance: opening, liquidation_notes: {}, check: closes.find(c => c.month === k) }, list, opening + net(list));
         };
       });
   }
@@ -153,7 +153,7 @@ export async function mountTreasury(el, ctx) {
     const fundTbl = `<h2>By fund</h2><table><thead><tr><th>Fund</th><th class="r">Collected</th><th class="r">Spent</th><th class="r">Net</th></tr></thead><tbody>${byFund.map(r => `<tr><td>${esc(r.name)}</td><td class="r">${peso(r.collected)}</td><td class="r">${peso(r.spent)}</td><td class="r">${peso(r.net)}</td></tr>`).join('')}</tbody></table>`;
     const doPrint = () => printHTML(p.name, `${letterhead(p.name, 'Class Fund report · BSMT 1-Alpha')}<div class="sum"><div>Opening<b>${peso(p.opening_balance)}</b></div><div>Collected<b>${peso(sum(inn))}</b></div><div>Spent<b>${peso(sum(out))}</b></div><div>Balance<b>${peso(endBal)}</b></div></div>
       ${fundTbl}<h2>Collections (${inn.length})</h2>${tbl(inn)}<h2>Expenses (${out.length})</h2>${tbl(out)}
-      ${Object.keys(p.liquidation_notes || {}).length ? `<h2>Liquidation notes</h2>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}<p style="margin-top:34px">Prepared by: <b>${esc(ctx.profile.full_name)}</b></p>`);
+      ${Object.keys(p.liquidation_notes || {}).length ? `<h2>Liquidation notes</h2>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}${p.check && p.check.status !== 'open' ? `<h2>Month check</h2><p>${p.check.status === 'closed' ? `Month closed on <b>${fmtDate(p.check.closed_at)}</b> by <b>${esc(p.check.closed_by_name || '—')}</b>. ` : 'Money counted, month not yet closed. '}Counted <b>${peso(p.check.cash_counted)}</b> by <b>${esc(p.check.checked_by_name || '—')}</b>${+p.check.diff ? `, <b>${peso(Math.abs(p.check.diff))}</b> ${p.check.diff < 0 ? 'short' : 'over'} the records` : ', matching the records'}.${p.check.note ? ' Note: ' + esc(p.check.note) : ''}</p>` : ''}<p style="margin-top:34px">Prepared by: <b>${esc(ctx.profile.full_name)}</b></p>`);
     const doXlsx = async () => {
       const cols = [{ label: 'Date', get: e => e.occurred_at, type: 'datetime' }, { label: 'Name / payee', key: 'who', width: 28 }, { label: 'For', get: e => e.charge || e.purpose || e.category, width: 30 }, { label: 'Fund', get: e => fundLabel(e.fundK), width: 24 }, { label: 'Receipt no.', key: 'receipt_no' }, { label: 'Amount', key: 'amount', type: 'money', total: true }];
       const summary = [['Opening', +p.opening_balance || 0, 'money'], ['Collected', sum(inn), 'money'], ['Spent', sum(out), 'money'], ['Balance', +endBal || 0, 'money']];
@@ -185,7 +185,7 @@ export async function mountTreasury(el, ctx) {
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
       <label>Purpose / note</label><input name="purpose">
       ${kind === 'collection' ? `<label>Payment method</label><select name="method"><option value="cash">Cash</option><option value="gcash">GCash</option></select><div id="gc" style="display:none"><label>GCash reference no.</label><input name="gref"></div>` : ''}
-      <label>Receipt photo (optional)</label><input name="img" type="file" accept="image/*">
+      <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const sel = m.querySelector('[name=method]'); if (sel) sel.onchange = () => m.querySelector('#gc').style.display = sel.value === 'gcash' ? 'block' : 'none';
@@ -199,6 +199,8 @@ export async function mountTreasury(el, ctx) {
         try {
           const dup = findDuplicate(allEntries, { kind, amount: +f.get('amt'), member_id: f.get('member') || null, payer_name: f.get('payer') || null, charge_id: f.get('charge') || null });
           if (dup && !(await confirmDialog(`The same amount (${peso(dup.amount)}) for ${dup.who} was already recorded a few minutes ago${dup.receipt_no ? ` (${dup.receipt_no})` : ''}. Save it again?`, { ok: 'Save anyway', title: 'Possible duplicate' }))) { btn.disabled = false; btn.textContent = 'Save'; return; }
+          const file0 = f.get('img');
+          if (kind === 'expense' && limit > 0 && +f.get('amt') >= limit && !(file0 && file0.size)) throw new Error(`Add a receipt photo. Expenses of ${peso(limit)} or more need one.`);
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
           const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,

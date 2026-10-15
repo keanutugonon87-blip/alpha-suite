@@ -1,9 +1,9 @@
-import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, uuid, fundOptions, fundLabel } from '../core.js';
+import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, uuid, fundOptions, fundLabel, askText, confirmDialog } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 import { percentPaid } from '../money.js';
 
 export async function mountBalances(el, ctx) {
-  const canWrite = ctx.can('mayor', 'treasurer'), canRemind = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor');
+  const canWrite = ctx.can('mayor', 'treasurer'), canRemind = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor'), canWaive = ctx.can('mayor', 'vice_mayor'), isMayor = ctx.can('mayor');
   let sel = null, only = 'owing';
   el.innerHTML = skeleton(5);
 
@@ -13,7 +13,7 @@ export async function mountBalances(el, ctx) {
     if (!sel || !charges.find(c => c.id === sel)) sel = (open[0] || charges[0])?.id;
     const c = charges.find(x => x.id === sel), rows = bal.filter(b => b.charge_id === sel);
     const paid = rows.filter(r => r.owed <= 0), owing = rows.filter(r => r.owed > 0);
-    const totalDue = rows.length * (c?.amount || 0), totalPaid = rows.reduce((s, r) => s + Math.min(r.paid, r.due), 0);
+    const totalDue = rows.reduce((s, r) => s + +r.due, 0), totalPaid = rows.reduce((s, r) => s + Math.min(r.paid, r.due), 0);
     const shown = only === 'owing' ? owing : only === 'paid' ? paid : rows;
     el.innerHTML = `<div class="bar"><select id="ch" class="grow">${charges.map(x => `<option value="${x.id}"${x.id === sel ? ' selected' : ''}>${esc(x.title)} — ${peso(x.amount)}${x.closed ? ' (closed)' : ''}</option>`).join('') || '<option>No charges yet</option>'}</select>
       ${canWrite ? '<button class="btn gold" id="new">+ New charge</button>' : ''}</div>
@@ -21,9 +21,9 @@ export async function mountBalances(el, ctx) {
       <div class="prog"><i style="width:${totalDue ? Math.min(100, totalPaid / totalDue * 100) : 0}%"></i></div>
       <div class="bar" style="margin-top:12px"><select id="f" style="width:auto"><option value="owing">Owing</option><option value="paid">Paid</option><option value="all">Everyone</option></select>
         <button class="btn ghost" id="csv">Export (Excel)</button>${canRemind && !c.closed && owing.length ? '<button class="btn" id="rem">🔔 Remind those who owe</button>' : ''}${canWrite ? `<button class="btn ghost" id="fnd" style="margin-left:auto">Fund: ${esc(fundLabel(c.fund))}</button><button class="btn ghost" id="cls" >${c.closed ? 'Reopen charge' : 'Close charge'}</button>` : ''}</div>
-      <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>Paid ${peso(r.paid)} of ${peso(r.due)}</small>${r.paid > 0 && r.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(r.paid, r.due)}% paid"><i style="width:${percentPaid(r.paid, r.due)}%"></i></div>` : ''}</div>
-        <div style="display:flex;align-items:center;gap:8px"><span class="tag ${r.owed <= 0 ? 'ok' : r.paid > 0 ? 'warn' : 'bad'}">${r.owed <= 0 ? 'paid' : r.paid > 0 ? 'owes ' + peso(r.owed) : 'unpaid'}</span>
-        ${canWrite && r.owed > 0 && !c.closed ? `<button class="btn gold sm" data-c="${r.member_id}" data-a="${r.owed}">Collect</button>` : ''}</div></div>`).join('') || '<p class="empty">Nobody here.</p>'}</div>`
+      <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.name)}</b><small>${r.waived ? `Excused: ${esc(r.waive_reason || '')}` : `Paid ${peso(r.paid)} of ${peso(r.due)}`}</small>${r.paid > 0 && !r.waived && r.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(r.paid, r.due)}% paid"><i style="width:${percentPaid(r.paid, r.due)}%"></i></div>` : ''}</div>
+        <div style="display:flex;align-items:center;gap:8px"><span class="tag ${r.owed <= 0 ? 'ok' : r.paid > 0 ? 'warn' : 'bad'}">${r.waived ? 'excused' : r.owed <= 0 ? 'paid' : r.paid > 0 ? 'owes ' + peso(r.owed) : 'unpaid'}</span>
+        ${canWrite && r.owed > 0 && !c.closed ? `<button class="btn gold sm" data-c="${r.member_id}" data-a="${r.owed}">Collect</button>` : ''}${canWaive && r.owed > 0 && !r.waived ? `<button class="btn ghost sm" data-w="${r.member_id}" title="Excuse this student from the charge">Excuse</button>` : ''}${isMayor && r.waived ? `<button class="btn ghost sm" data-uw="${r.member_id}">Undo</button>` : ''}</div></div>`).join('') || '<p class="empty">Nobody here.</p>'}</div>`
       : '<p class="empty">No charges yet. A charge is something every student owes, like dues or a contribution.</p>'}`;
     el.querySelector('#ch').onchange = e => { sel = e.target.value; draw(); };
     const f = el.querySelector('#f'); if (f) { f.value = only; f.onchange = () => { only = f.value; draw(); }; }
@@ -36,6 +36,14 @@ export async function mountBalances(el, ctx) {
           rows: rows.slice().sort((a, b) => (b.owed > 0) - (a.owed > 0) || a.name.localeCompare(b.name)) }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); } });
     el.querySelector('#fnd')?.addEventListener('click', () => modal(`<h3>Fund for ${esc(c.title)}</h3><p class="muted">Every collection under this charge follows it.</p><form id="ff"><select name="fu">${fundOptions(c.fund)}</select><div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => { m.querySelector('#cx').onclick = close; m.querySelector('#ff').onsubmit = async e => { e.preventDefault(); try { await db(sb.from('v2_charges').update({ fund: new FormData(e.target).get('fu') || null }).eq('id', c.id)); toast('Fund updated'); close(); } catch (x) { m.querySelector('#er').textContent = x.message; } }; }));
     el.querySelector('#cls')?.addEventListener('click', async () => { try { await db(sb.from('v2_charges').update({ closed: !c.closed }).eq('id', c.id)); toast(c.closed ? 'Reopened' : 'Closed'); } catch (e) { toast(e.message, true); } });
+    const NEED = e => /function|schema cache|does not exist/i.test(e.message) ? 'Excusing students is not switched on in the database yet. Run the v5 SQL.' : e.message;
+    el.querySelectorAll('[data-w]').forEach(b => b.onclick = async () => {
+      const who = rows.find(r => r.member_id === b.dataset.w)?.name || 'this student';
+      const why = await askText(`Excuse ${who}`, `Reason (they will owe nothing for "${c.title}")`, { ok: 'Excuse' }); if (!why) return;
+      try { await db(sb.rpc('v2_waive_charge', { p_charge: sel, p_member: b.dataset.w, p_reason: why })); toast('Excused'); draw(); } catch (e) { toast(NEED(e), true); } });
+    el.querySelectorAll('[data-uw]').forEach(b => b.onclick = async () => {
+      if (!await confirmDialog('The student will owe this charge again.', { ok: 'Undo excuse', title: 'Undo the excuse?' })) return;
+      try { await db(sb.rpc('v2_unwaive_charge', { p_charge: sel, p_member: b.dataset.uw })); toast('Excuse removed'); draw(); } catch (e) { toast(NEED(e), true); } });
     el.querySelectorAll('[data-c]').forEach(b => b.onclick = () => { sessionStorage.setItem('alpha-prefill', JSON.stringify({ member: b.dataset.c, charge: sel, amount: b.dataset.a })); location.hash = '#/staff/treasury'; });
   }
 
@@ -76,5 +84,5 @@ export async function mountBalances(el, ctx) {
     });
   }
   await draw();
-  return watch(['v2_charges', 'v2_entries', 'v2_members'], () => draw().catch(() => {}));
+  return watch(['v2_charges', 'v2_entries', 'v2_members', 'v2_waivers'], () => draw().catch(() => {}));
 }
