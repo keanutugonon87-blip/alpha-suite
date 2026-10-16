@@ -2,7 +2,8 @@
    offline write queue, and exports. Everything else imports from here. */
 import { createClient } from '@supabase/supabase-js';
 
-export const sb = createClient('https://gxwgkbplscsduscoeoph.supabase.co', 'sb_publishable_m3l1Dxhwj6bIse-3UwBB4w_fqZXLuD0', {
+export const SB_URL = 'https://gxwgkbplscsduscoeoph.supabase.co', SB_KEY = 'sb_publishable_m3l1Dxhwj6bIse-3UwBB4w_fqZXLuD0';
+export const sb = createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'alpha-auth' },
 });
 
@@ -197,7 +198,7 @@ export function printHTML(title, body, { plain = false } = {}) {
 /* ---- auth ---- */
 export async function getProfile() {
   const { data: { session } } = await sb.auth.getSession();
-  if (!session) return null;
+  if (!session || session.user.user_metadata?.alpha_kind) return null;   // student and guest sessions are not officers
   const { data, error } = await sb.from('v2_profiles').select('*').eq('user_id', session.user.id).maybeSingle();
   if (error) throw error;
   return { ...(data || { user_id: session.user.id, email: session.user.email, full_name: session.user.email, role: 'pending' }) };

@@ -26,7 +26,7 @@ async function route() {
 window.addEventListener('hashchange', route);
 sb.auth.onAuthStateChange(ev => {
   if (ev === 'PASSWORD_RECOVERY') { history.replaceState(null, '', '#/staff'); import('./views/staff.js').then(m => m.showRecovery(root)); }
-  if (ev === 'SIGNED_OUT' && location.hash.startsWith('#/staff')) route();
+  if (ev === 'SIGNED_OUT') route();
 });
 route();
 

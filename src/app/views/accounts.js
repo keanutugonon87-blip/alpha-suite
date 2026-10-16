@@ -59,8 +59,21 @@ export async function mountAccounts(el, ctx) {
       });
   }
 
+  async function linkModal(p, cur) {
+    const ms = await sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active').order('full_name').then(r => r.data || [], () => []);
+    modal(`<h3>Link ${esc(p.full_name)} to a student</h3><p class="muted" style="margin:4px 0 10px">Officers are students first. Once linked, this officer signs in with their Student ID and PIN like everyone else. Their current email sign-in keeps working for 30 days while they set up their PIN.</p>
+      <label for="lm">Student record</label><select id="lm">${ms.map(m => `<option value="${m.id}"${cur && cur.member_id === m.id ? ' selected' : ''}>${esc(m.full_name)}${m.student_no && !/^PENDING/i.test(m.student_no) ? ' · ' + esc(m.student_no) : ''}</option>`).join('')}</select>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="lg" style="flex:1">Link</button>${cur ? '<button class="btn danger" id="lu">Unlink</button>' : ''}<button class="btn ghost" id="lx">Cancel</button></div><div class="err" id="er"></div>`,
+      (m, close) => {
+        m.querySelector('#lx').onclick = close;
+        m.querySelector('#lg').onclick = async () => { try { await db(sb.rpc('v2_link_officer', { p_user: p.user_id, p_member: m.querySelector('#lm').value })); toast('Linked'); close(); draw(); } catch (e) { m.querySelector('#er').textContent = /function|schema cache/i.test(e.message) ? 'Run the v7 SQL first.' : e.message; } };
+        m.querySelector('#lu')?.addEventListener('click', async () => { try { await db(sb.rpc('v2_unlink_officer', { p_user: p.user_id })); toast('Unlinked'); close(); draw(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
+      });
+  }
+
   async function draw() {
     const people = await db(sb.from('v2_profiles').select('*').order('created_at'));
+    const links = new Map(); if (tab === 'people' && canAlert) (await sb.rpc('v2_officer_links').then(r => r.data || [], () => [])).forEach(l => links.set(l.user_id, l));
     const canAudit = ctx.can('mayor', 'auditor', 'vice_mayor');
     let audit = [], hasNext = false;
     if (tab === 'audit' && canAudit) {
@@ -94,7 +107,8 @@ export async function mountAccounts(el, ctx) {
           ${isMayor ? `<div class="acts"><button class="btn gold sm" data-rv="${p.user_id}">Review</button><button class="btn ghost sm" data-rj="${p.user_id}">Reject</button></div>` : '<span class="tag warn">Pending</span>'}</div>`).join('') || '<p class="empty">No one is waiting. New sign-ups appear here.</p>'}</div>
       <h3 class="sec">Officers (${active.length})</h3>
       <div class="card">${active.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small>
-          <small>Joined ${fmtDate(p.created_at)}${changed(p) ? ` · role changed ${fmtDate(p.updated_at)}` : ''}</small></div></div>
+          <small>Joined ${fmtDate(p.created_at)}${changed(p) ? ` · role changed ${fmtDate(p.updated_at)}` : ''}</small>
+          ${canAlert ? `<small>${links.get(p.user_id) ? `Student: ${esc(links.get(p.user_id).member_name)} · ${links.get(p.user_id).has_pin ? 'PIN set' : 'no PIN yet'}` : 'Not linked to a student record'}${isMayor ? ` · <a href="#" data-ln="${p.user_id}">${links.get(p.user_id) ? 'change' : 'link'}</a>` : ''}</small>` : ''}</div></div>
         <div class="acts">${isMayor && p.user_id !== ctx.profile.user_id
           ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ROLES.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select><button class="btn danger sm" data-del="${p.user_id}">Remove</button>`
           : `<span class="tag ok">${ROLE_LABEL[p.role]}${p.user_id === ctx.profile.user_id ? ' (you)' : ''}</span>`}</div></div>`).join('')}</div>`
@@ -118,6 +132,7 @@ export async function mountAccounts(el, ctx) {
         <div class="bar"><button class="btn ghost sm" id="apv" ${af.page ? '' : 'disabled'}>← Newer</button><span class="muted" style="align-self:center">Page ${af.page + 1}</span><button class="btn ghost sm" id="anx" ${hasNext ? '' : 'disabled'}>Older →</button></div>`}`;
     const by = id => people.find(p => p.user_id === id);
     el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { tab = b.dataset.k; draw(); });
+    el.querySelectorAll('[data-ln]').forEach(a => a.onclick = e => { e.preventDefault(); linkModal(by(a.dataset.ln), links.get(a.dataset.ln)); });
     el.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => review(by(b.dataset.rv)));
     el.querySelectorAll('[data-rj]').forEach(b => b.onclick = () => remove(by(b.dataset.rj), true));
     el.querySelectorAll('[data-del]').forEach(b => b.onclick = () => remove(by(b.dataset.del), false));

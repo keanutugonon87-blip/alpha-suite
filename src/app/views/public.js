@@ -4,12 +4,14 @@ import { getTheme, setTheme, getTextSize, setTextSize } from '../display.js';
 import { showOfficerProfile } from '../profile.js';
 import { heroScene, warmScenes, sceneMode, setSceneMode } from '../scenes.js';
 import { percentPaid } from '../money.js';
+import { auth, loadAuth, callAuth, enter, signOutViewer } from '../auth.js';
 import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
 const TABS = ['fund', 'standing', 'me', 'officers', 'learn', 'bulletin'];
+const GUEST_HIDE = ['standing', 'me'];
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function countUp(el, to) {
   if (reduceMotion()) { el.textContent = peso(to); return; }
@@ -58,7 +60,7 @@ async function statement(token) {
     });
 }
 
-function renderMe(host) {
+function renderMe(host, opts = {}) {
   const get = () => { try { return localStorage.getItem(ME) || ''; } catch { return ''; } };
   const put = v => { try { v ? localStorage.setItem(ME, v) : localStorage.removeItem(ME); } catch { /* ignore */ } };
   const CK = 'alpha-me-cache';
@@ -86,7 +88,7 @@ function renderMe(host) {
         <div id="rm"></div>
         <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
       host.querySelector('#cpn')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(note); toast(t('copied')); } catch { toast(note); } });
-      host.querySelector('#fg').onclick = () => { put(''); try { localStorage.removeItem(CK); } catch { /* ignore */ } start(); };
+      host.querySelector('#fg').onclick = async () => { put(''); try { localStorage.removeItem(CK); } catch { /* ignore */ } await signOutViewer().catch(() => {}); await loadAuth().catch(() => {}); if (auth.require) location.reload(); else start(); };
       host.querySelector('#st').onclick = () => statement(token);
       if (!stale) remBox(host.querySelector('#rm'), token);
     } catch (e) { put(''); start(e.message); }
@@ -96,6 +98,7 @@ function renderMe(host) {
   const rememberId = v => { try { localStorage.setItem(SID, v); } catch { /* ignore */ } };
   const missing = e => /function|schema cache|does not exist/i.test(e?.message || '');
   const pinErr = d => d.error === 'locked' ? t('pinLocked').replace('{n}', d.wait_minutes) : d.error === 'revoked' ? t('pinRevoked') : d.error === 'mismatch' ? t('pinMismatchId') : d.error === 'weak' ? t('pinWeak') : d.error === 'format' ? t('pinFormat') : t('pinBad');
+  const done = async tk => { await loadAuth().catch(() => {}); return opts.lock ? opts.onSignedIn() : show(tk); };
   const grab = (box, fn, done) => async () => { try { const tk = await fn(); if (tk) done(tk); } catch (e) { box.textContent = e.message; } };
   const qrButtons = () => `<button type="button" class="btn ghost" id="sc">${t('scan')}</button><label class="btn ghost" style="cursor:pointer">${t('photo')}<input id="ph" type="file" accept="image/*" hidden></label><button type="button" class="btn ghost" id="pa">${t('paste')}</button>`;
   function qrWire(box, done) {
@@ -104,20 +107,26 @@ function renderMe(host) {
     host.querySelector('#pa').onclick = grab(box, () => { const v = prompt(t('pasteAsk')); return v && v.trim(); }, done);
   }
   function start(err = '') {
-    host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${t('mytitle')}</h3><p class="muted">${t('mydesc')}</p>
+    host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${opts.lock ? t('lockTitle') : t('mytitle')}</h3><p class="muted">${opts.lock ? t('lockDesc') : t('mydesc')}</p>
       <form id="pf" style="display:grid;gap:6px;max-width:320px;margin:14px auto 0;text-align:left">
         <label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(lastId())}">
         <label for="spin">${t('pin')}</label><input id="spin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="current-password" placeholder="••••••" required>
         <button class="btn gold" style="margin-top:6px">${t('signin2')}</button></form>
       <p style="margin:12px 0 0"><a href="#" id="np">${t('firstTime')}</a></p>
-      <details style="max-width:320px;margin:14px auto 0;text-align:left"><summary>${t('useQr')}</summary><div style="display:grid;gap:8px;margin-top:8px">${qrButtons()}</div></details>
+      ${opts.lock ? `<form id="gf" style="display:grid;gap:6px;max-width:320px;margin:14px auto 0;text-align:left"><label for="gc">${t('guestCode')}</label><div style="display:flex;gap:8px"><input id="gc" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX" style="flex:1"><button class="btn ghost">${t('guestGo')}</button></div><small class="muted">${t('guestHint')}</small></form>
+        <p style="margin:14px 0 0;font-size:.9rem"><a href="#/staff">${t('officerEmail')}</a></p>` : ''}
+      ${opts.lock ? '' : `<details style="max-width:320px;margin:14px auto 0;text-align:left"><summary>${t('useQr')}</summary><div style="display:grid;gap:8px;margin-top:8px">${qrButtons()}</div></details>`}
       <div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
     const er = host.querySelector('#er');
-    qrWire(er, tk => show(tk));
+    if (!opts.lock) qrWire(er, tk => done(tk));
     host.querySelector('#np').onclick = e => { e.preventDefault(); setup(); };
+    const gf = host.querySelector('#gf');
+    if (gf) gf.onsubmit = async e => { e.preventDefault(); const b = gf.querySelector('button'); b.disabled = true; er.textContent = '';
+      try { const d = await callAuth({ action: 'guest', code: host.querySelector('#gc').value }); if (!d.ok) er.textContent = d.error === 'server' ? t('noNet') : t('guestBad'); else { await enter(d); return done(''); } }
+      catch (x) { er.textContent = netErr(x) ? t('noNet') : x.message; } b.disabled = false; };
     host.querySelector('#pf').onsubmit = async e => { e.preventDefault(); const btn = e.target.querySelector('button'), id = host.querySelector('#sid').value.trim(); btn.disabled = true; er.textContent = '';
-      try { const { data, error } = await sb.rpc('v2_pin_login', { p_student_no: id, p_pin: host.querySelector('#spin').value }); if (error) throw error;
-        if (data.ok) { rememberId(id); return show(data.token); } er.textContent = pinErr(data); host.querySelector('#spin').value = ''; }
+      try { const data = await callAuth({ action: 'login', student_no: id, pin: host.querySelector('#spin').value });
+        if (data.ok) { await enter(data); rememberId(id); return done(data.token); } er.textContent = pinErr(data); host.querySelector('#spin').value = ''; }
       catch (x) { er.textContent = missing(x) ? t('pinNotReady') : netErr(x) ? t('noNet') : x.message; } btn.disabled = false; };
   }
   function setup(err = '', token = '', id = lastId()) {
@@ -136,16 +145,22 @@ function renderMe(host) {
       if (!token) return void (er.textContent = t('qrNeeded'));
       if (n1 !== host.querySelector('#n2').value) return void (er.textContent = t('pinNoMatch'));
       btn.disabled = true;
-      try { const { data, error } = await sb.rpc('v2_pin_setup', { p_student_no: keep().trim(), p_token: token, p_pin: n1 }); if (error) throw error;
-        if (data.ok) { rememberId(keep().trim()); toast(t('pinSaved')); return show(data.token); } er.textContent = pinErr(data); }
+      try { const data = await callAuth({ action: 'setup', student_no: keep().trim(), token, pin: n1 });
+        if (data.ok) { await enter(data); rememberId(keep().trim()); toast(t('pinSaved')); return done(data.token); } er.textContent = pinErr(data); }
       catch (x) { er.textContent = missing(x) ? t('pinNotReady') : netErr(x) ? t('noNet') : x.message; } btn.disabled = false; };
   }
-  const saved = get(); saved ? show(saved) : start();
+  const saved = get();
+  if (opts.lock) start();
+  else if (saved) show(saved);
+  else if (auth.member_id) sb.rpc('v2_my_token').then(r => r.data ? show(r.data) : start(), () => start());   // signed in already: no scanning needed
+  else start();
 }
 
 export async function renderPublic(root) {
+  await loadAuth();
+  if (auth.require && !auth.viewer) return lockScreen(root);
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="txt" aria-label="Display: text size and dark mode" title="Text size, dark mode, scenery">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="txt" aria-label="Display: text size and dark mode" title="Text size, dark mode, scenery">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button>${auth.kind === 'guest' ? `<button class="btn ghost sm" id="so">${t('signOut')}</button>` : ''}<a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
@@ -154,6 +169,7 @@ export async function renderPublic(root) {
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
   root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); renderPublic(root); };
+  root.querySelector('#so')?.addEventListener('click', async () => { await signOutViewer().catch(() => {}); location.reload(); });
   root.querySelector('#txt').onclick = () => {
     let sceneChanged = false; const th = getTheme(), sz = getTextSize(), on = (c, v) => c === v ? ' on' : '';
     modal(`<h3>${t('display')}</h3><label>${t('textSize')}</label><div class="dispgrid" data-g="sz">${[[100, 'Aa'], [115, 'Aa+'], [130, 'Aa++']].map(([v, l]) => `<button class="btn ghost${on(sz, v)}" data-v="${v}" aria-pressed="${sz === v}">${l}</button>`).join('')}</div>
@@ -237,7 +253,7 @@ export async function renderPublic(root) {
         <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
           <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p>${fundChips()}</div>
         ${hs.html}</div>
-      <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
     {
       /* the compass answers the tap: swing to this tab's bearing, fade the scenery, ease the sky colour */
@@ -280,4 +296,15 @@ export async function renderPublic(root) {
   await load();
   const iv = setInterval(load, 60000);
   return () => { off(); clearInterval(iv); };
+}
+
+/* The lock: shown instead of the class page when "Require sign-in" is on and the visitor is not signed in. */
+function lockScreen(root) {
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${t('lockSub')}</small></div>
+    <button class="btn ghost sm" id="txt" aria-label="Display" title="Display">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button></div>
+    <main id="m" style="padding-bottom:40px;max-width:480px;margin:0 auto"></main>`;
+  root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); lockScreen(root); };
+  root.querySelector('#txt').onclick = () => { const n = getTheme() === 'dark' ? 'light' : 'dark'; setTheme(n); };
+  renderMe(root.querySelector('#m'), { lock: true, onSignedIn: () => renderPublic(root) });
+  return () => {};
 }
