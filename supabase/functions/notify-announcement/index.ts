@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   const get = (k: string) => dec(sec.find((r) => r.key === k)?.value ?? '');
   if (req.method !== 'POST' || req.headers.get('x-hook-secret') !== get('push_hook')) return new Response('forbidden', { status: 403 });
 
-  let note: { kind?: string; title?: string; body?: string; items?: { member_id: string; title?: string; body?: string }[] };
+  let note: { kind?: string; title?: string; body?: string; url?: string; items?: { member_id: string; title?: string; body?: string }[] };
   try { note = await req.json(); } catch { return new Response('bad request', { status: 400 }); }
   webpush.setVapidDetails('https://keanutugonon87-blip.github.io/alpha-suite/', get('vapid_public'), get('vapid_private'));
 
@@ -45,7 +45,7 @@ Deno.serve(async (req) => {
   } else {
     const { data } = await db.from('v2_push_subs').select('endpoint,p256dh,auth'); subs = data ?? [];
   }
-  const payload = JSON.stringify({ title: String(note.title ?? 'New notice').slice(0, 120), body: String(note.body ?? '').slice(0, 160), url: signup ? './#/staff/accounts' : './' });
+  const payload = JSON.stringify({ title: String(note.title ?? 'New notice').slice(0, 120), body: String(note.body ?? '').slice(0, 160), url: signup ? (typeof note.url === 'string' && /^\.\/#\/staff\/[a-z]+$/.test(note.url) ? note.url : './#/staff/accounts') : './' });
   await Promise.all(subs.map((s) => push(s, payload)));
   return new Response(JSON.stringify({ sent, gone, failed }), { headers: { 'Content-Type': 'application/json' } });
 });
