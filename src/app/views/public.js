@@ -21,6 +21,18 @@ function countUp(el, to) {
 }
 
 const ME = 'alpha-me';
+/* "Add to home screen" nudge, shown once after sign-in on a phone that has not installed the app */
+let deferredInstall = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });
+function installBar(box) {
+  if (!box) return;
+  try { if (localStorage.getItem('alpha-install-no') || matchMedia('(display-mode: standalone)').matches || navigator.standalone) return; } catch { return; }
+  const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) && !navigator.standalone;
+  if (!deferredInstall && !ios) return;
+  box.innerHTML = `<div class="alertbar"><span>📲 ${deferredInstall ? t('instTitle') : t('instIos')}</span><span style="display:flex;gap:6px">${deferredInstall ? `<button class="btn gold sm" id="ib">${t('instBtn')}</button>` : ''}<button class="btn ghost sm" id="in">${t('instNo')}</button></span></div>`;
+  box.querySelector('#ib')?.addEventListener('click', async () => { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch { /* ignore */ } deferredInstall = null; box.innerHTML = ''; });
+  box.querySelector('#in').onclick = () => { try { localStorage.setItem('alpha-install-no', '1'); } catch { /* ignore */ } box.innerHTML = ''; };
+}
 const ordn = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
 
 /* Balance reminders: a student links their own phone to their QR card, so the Treasurer can remind only those who still owe. */
@@ -79,7 +91,7 @@ function renderMe(host, opts = {}) {
       } catch (e) { const c = cget(token); if (c && netErr(e)) { data = c.data; note = c.note || ''; stale = c.at; } else throw e; }
       put(token);
       const owed = data.balances.reduce((a, b) => a + +b.owed, 0), open = data.violations.filter(v => v.status !== 'resolved');
-      host.innerHTML = `${stale ? `<div class="alertbar"><span>📴 ${t('offlineAsOf')} ${fmtDate(stale)}</span></div>` : ''}<div class="card pad"><small>${t('hello')}</small><h2 style="margin:2px 0 8px">${esc(data.name)}</h2>
+      host.innerHTML = `<div id="inst"></div>${stale ? `<div class="alertbar"><span>📴 ${t('offlineAsOf')} ${fmtDate(stale)}</span></div>` : ''}<div class="card pad"><small>${t('hello')}</small><h2 style="margin:2px 0 8px">${esc(data.name)}</h2>
         <div style="font-size:1.15rem;font-weight:700;color:var(${owed ? '--bad' : '--ok'})">${owed ? `${t('owed')} ${peso(owed)}` : '✓ ' + t('clear')}</div></div>
         ${owed && note ? `<div class="card pad"><b>${t('howPay')}</b><p style="margin:4px 0 8px;white-space:pre-line">${esc(note)}</p><button class="btn ghost sm" id="cpn">${t('copy')}</button></div>` : ''}
         <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${b.waived ? t('excusedNote') : `${peso(b.paid)} / ${peso(b.due)}`}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : b.waived ? t('excused') : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
@@ -87,6 +99,7 @@ function renderMe(host, opts = {}) {
         <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : ordn(v.offense) + ' offense: ₱25 fine'}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
         <div id="rm"></div>
         <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
+      installBar(host.querySelector('#inst'));
       host.querySelector('#cpn')?.addEventListener('click', async () => { try { await navigator.clipboard.writeText(note); toast(t('copied')); } catch { toast(note); } });
       host.querySelector('#fg').onclick = async () => { put(''); try { localStorage.removeItem(CK); } catch { /* ignore */ } await signOutViewer().catch(() => {}); await loadAuth().catch(() => {}); if (auth.require) location.reload(); else start(); };
       host.querySelector('#st').onclick = () => statement(token);
@@ -97,8 +110,10 @@ function renderMe(host, opts = {}) {
   const SID = 'alpha-sid', lastId = () => { try { return localStorage.getItem(SID) || ''; } catch { return ''; } };
   const rememberId = v => { try { localStorage.setItem(SID, v); } catch { /* ignore */ } };
   const missing = e => /function|schema cache|does not exist/i.test(e?.message || '');
-  const pinErr = d => d.error === 'locked' ? t('pinLocked').replace('{n}', d.wait_minutes) : d.error === 'revoked' ? t('pinRevoked') : d.error === 'mismatch' ? t('pinMismatchId') : d.error === 'weak' ? t('pinWeak') : d.error === 'format' ? t('pinFormat') : t('pinBad');
+  const pinErr = d => d.error === 'locked' ? t('pinLocked').replace('{n}', d.wait_minutes).replace('{t}', new Date(Date.now() + d.wait_minutes * 60000).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })) : d.error === 'revoked' ? t('pinRevoked') : d.error === 'mismatch' ? t('pinMismatchId') : d.error === 'weak' ? t('pinWeak') : d.error === 'format' ? t('pinFormat') : t('pinBad');
   const done = async tk => { await loadAuth().catch(() => {}); return opts.lock ? opts.onSignedIn() : show(tk); };
+  const pin = (id, ac, ph = '••••••') => `<div class="pw"><input id="${id}" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="${ac}" placeholder="${ph}" required><button type="button" class="eye" data-eye="${id}" aria-label="${t('showPin')}" aria-pressed="false">👁</button></div>`;
+  const eyes = () => host.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const i = host.querySelector('#' + b.dataset.eye), show = i.type === 'password'; i.type = show ? 'text' : 'password'; b.setAttribute('aria-pressed', show); b.setAttribute('aria-label', t(show ? 'hidePin' : 'showPin')); b.textContent = show ? '🙈' : '👁'; });
   const grab = (box, fn, done) => async () => { try { const tk = await fn(); if (tk) done(tk); } catch (e) { box.textContent = e.message; } };
   const qrButtons = () => `<button type="button" class="btn ghost" id="sc">${t('scan')}</button><label class="btn ghost" style="cursor:pointer">${t('photo')}<input id="ph" type="file" accept="image/*" hidden></label><button type="button" class="btn ghost" id="pa">${t('paste')}</button>`;
   function qrWire(box, done) {
@@ -110,14 +125,14 @@ function renderMe(host, opts = {}) {
     host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${opts.lock ? t('lockTitle') : t('mytitle')}</h3><p class="muted">${opts.lock ? t('lockDesc') : t('mydesc')}</p>
       <form id="pf" style="display:grid;gap:6px;max-width:320px;margin:14px auto 0;text-align:left">
         <label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(lastId())}">
-        <label for="spin">${t('pin')}</label><input id="spin" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="current-password" placeholder="••••••" required>
+        <label for="spin">${t('pin')}</label>${pin('spin', 'current-password')}
         <button class="btn gold" style="margin-top:6px">${t('signin2')}</button></form>
       <p style="margin:12px 0 0"><a href="#" id="np">${t('firstTime')}</a></p>
       ${opts.lock ? `<form id="gf" style="display:grid;gap:6px;max-width:320px;margin:14px auto 0;text-align:left"><label for="gc">${t('guestCode')}</label><div style="display:flex;gap:8px"><input id="gc" autocapitalize="characters" spellcheck="false" placeholder="XXXXX-XXXXX" style="flex:1"><button class="btn ghost">${t('guestGo')}</button></div><small class="muted">${t('guestHint')}</small></form>
         <p style="margin:14px 0 0;font-size:.9rem"><a href="#/staff">${t('officerEmail')}</a></p>` : ''}
       ${opts.lock ? '' : `<details style="max-width:320px;margin:14px auto 0;text-align:left"><summary>${t('useQr')}</summary><div style="display:grid;gap:8px;margin-top:8px">${qrButtons()}</div></details>`}
       <div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
-    const er = host.querySelector('#er');
+    const er = host.querySelector('#er'); eyes();
     if (!opts.lock) qrWire(er, tk => done(tk));
     host.querySelector('#np').onclick = e => { e.preventDefault(); setup(); };
     const gf = host.querySelector('#gf');
@@ -134,11 +149,11 @@ function renderMe(host, opts = {}) {
       <div style="display:grid;gap:8px;max-width:320px;margin:12px auto 0;text-align:left">
         <div style="display:grid;gap:8px" id="qrs">${token ? `<div class="tag ok" style="justify-self:start">✓ ${t('qrRead')}</div>` : qrButtons()}</div>
         <form id="sf" style="display:grid;gap:6px"><label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(id)}">
-          <label for="n1">${t('pinNew')}</label><input id="n1" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="••••••" required>
-          <label for="n2">${t('pinConfirm')}</label><input id="n2" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="new-password" placeholder="••••••" required>
+          <label for="n1">${t('pinNew')}</label>${pin('n1', 'new-password')}
+          <label for="n2">${t('pinConfirm')}</label>${pin('n2', 'new-password')}
           <button class="btn gold" style="margin-top:6px">${t('pinSave')}</button></form></div>
       <p style="margin:12px 0 0"><a href="#" id="bk">${t('back')}</a></p><div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
-    const er = host.querySelector('#er'), keep = () => host.querySelector('#sid').value;
+    const er = host.querySelector('#er'), keep = () => host.querySelector('#sid').value; eyes();
     if (!token) qrWire(er, tk => setup('', tk, keep()));
     host.querySelector('#bk').onclick = e => { e.preventDefault(); start(); };
     host.querySelector('#sf').onsubmit = async e => { e.preventDefault(); const btn = e.target.querySelector('button'), n1 = host.querySelector('#n1').value; er.textContent = '';
