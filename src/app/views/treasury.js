@@ -133,7 +133,19 @@ export async function mountTreasury(el, ctx) {
       const c = by[k], st = c ? c.status : 'open', bal = balanceAt(entries, periods, k);
       const tag = st === 'closed' ? '<span class="tag ok">closed 🔒</span>' : st === 'checked' ? '<span class="tag warn">counted</span>' : st === 'reopened' ? '<span class="tag bad">reopened</span>' : '<span class="tag">open</span>';
       const info = c && st !== 'open' ? `<small>${st === 'closed' ? `Closed ${fmtDate(c.closed_at)} by ${esc(c.closed_by_name || '—')} · ` : ''}Counted ${peso(c.cash_counted)} by ${esc(c.checked_by_name || '—')}${+c.diff ? ` · off by ${peso(c.diff)}` : ' · matches'}${c.note ? ` · ${esc(c.note)}` : ''}${st === 'reopened' && c.reopen_reason ? ` · reopened: ${esc(c.reopen_reason)}` : ''}</small>` : '';
-      return `<div class="row stk"><div class="m"><b>${label(k)} ${tag}</b><small>Fund balance at month end: ${peso(bal)}</small>${info}</div>
+      const inMonth = entries.filter(e => ymManila(e.occurred_at) === k && e.status !== 'voided');
+      const nPend = inMonth.filter(e => e.status === 'pending').length, noRcpt = inMonth.filter(e => e.status === 'approved' && e.kind === 'expense' && !e.hasImg).length;
+      const ticked = (() => { try { return localStorage.getItem('alpha-mc-' + k) === '1'; } catch { return false; } })();
+      const steps = st === 'closed' ? [] : [
+        [!nPend, nPend ? `${nPend} entr${nPend === 1 ? 'y is' : 'ies are'} still waiting for approval` : 'Every entry this month is decided', nPend ? 'bad' : 'ok'],
+        [!noRcpt, noRcpt ? `${noRcpt} expense${noRcpt === 1 ? ' has' : 's have'} no receipt photo (add one if you have it)` : 'Every expense has a receipt photo', noRcpt ? 'warn' : 'ok'],
+        [st === 'checked', st === 'checked' ? 'Money counted' : 'Count the cash and GCash', st === 'checked' ? 'ok' : 'bad'],
+        [st === 'checked' && !+(c.diff || 0), st === 'checked' ? (+(c.diff || 0) ? `The count is off by ${peso(c.diff)}. Explain it in the note` : 'The count matches the records') : 'The count should match the records', st === 'checked' ? (+(c.diff || 0) ? 'warn' : 'ok') : 'bad'],
+        [ticked, 'Monthly report reviewed (tick below)', ticked ? 'ok' : 'bad'],
+      ];
+      const chk = steps.length ? `<details class="chk" style="margin-top:6px"${steps.some(x => !x[0]) ? ' open' : ''}><summary><small>Checklist · ${steps.filter(x => x[0]).length} of ${steps.length} done</small></summary>${steps.map(x => `<div style="display:flex;gap:8px;align-items:center;margin:4px 0"><span class="tag ${x[2]}">${x[0] ? '✓' : x[2] === 'warn' ? '!' : '○'}</span><small>${esc(x[1])}</small></div>`).join('')}
+        <label style="display:flex;gap:8px;align-items:center;margin-top:6px;cursor:pointer"><input type="checkbox" data-mc="${k}" style="width:auto"${ticked ? ' checked' : ''}><small>I reviewed the monthly report for ${label(k)}</small></label></details>` : '';
+      return `<div class="row stk"><div class="m"><b>${label(k)} ${tag}</b><small>Fund balance at month end: ${peso(bal)}</small>${info}${chk}</div>
         <div class="acts">${canCount && st !== 'closed' ? `<button class="btn ghost sm" data-v="${k}">${st === 'checked' ? 'Count again' : 'Count the money'}</button>` : ''}${isMayor && st === 'checked' ? `<button class="btn gold sm" data-c="${k}">Close month</button>` : ''}${isMayor && st === 'closed' ? `<button class="btn ghost sm" data-r="${k}">Reopen</button>` : ''}</div></div>`;
     };
     modal(`<h3>Month close</h3><p class="muted" style="margin:0 0 8px">Count the cash and GCash on hand and compare it with the records. After a different officer closes the month, its entries are locked. Only the Mayor can reopen it.</p>
@@ -149,7 +161,10 @@ export async function mountTreasury(el, ctx) {
             try { const r = await db(sb.rpc('v2_verify_month', { p_month: k, p_cash: +f.get('c'), p_note: f.get('n') || '' })); toast(+r.diff ? `Saved. Off by ${peso(r.diff)}` : 'Saved. It matches the records.'); close2(); draw().catch(() => {}); }
             catch (e) { m2.querySelector('#er2').textContent = /function|schema cache/i.test(e.message) ? 'Month close is not switched on in the database yet. Run the v4 SQL.' : e.message; } };
         }); });
-      m.querySelectorAll('[data-c]').forEach(b => b.onclick = () => run(() => db(sb.rpc('v2_close_month', { p_month: b.dataset.c })), 'Month closed and locked'));
+      m.querySelectorAll('[data-mc]').forEach(c => c.onchange = () => { try { c.checked ? localStorage.setItem('alpha-mc-' + c.dataset.mc, '1') : localStorage.removeItem('alpha-mc-' + c.dataset.mc); } catch { /* ignore */ } });
+      m.querySelectorAll('[data-c]').forEach(b => b.onclick = async () => { const k = b.dataset.c, np = entries.filter(e => ymManila(e.occurred_at) === k && e.status === 'pending').length;
+        if (np && !await confirmDialog(`${np} entr${np === 1 ? 'y is' : 'ies are'} still waiting for approval in this month. Closing locks the month, so decide them first or they cannot be approved later.`, { ok: 'Close anyway', danger: true, title: 'Close with entries waiting?' })) return;
+        run(() => db(sb.rpc('v2_close_month', { p_month: k })), 'Month closed and locked'); });
       m.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const why = await askText('Reopen this month', 'Reason', { ok: 'Reopen' }); if (!why) return; run(() => db(sb.rpc('v2_reopen_month', { p_month: b.dataset.r, p_reason: why })), 'Month reopened'); });
     });
   }
