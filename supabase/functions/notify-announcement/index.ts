@@ -4,6 +4,7 @@ import webpush from 'npm:web-push@3.6.7';
 // Called only by database functions/triggers (shared secret in the x-hook-secret header).
 //   kind 'signup'   -> Mayor / Vice Mayor devices only.
 //   kind 'reminder' -> one personal message per student: items = [{ member_id, title, body }], sent only to that student's linked devices.
+//   kind 'duty'     -> officer duty reminders: items = [{ user_id, title, body }], sent only to that officer's own devices.
 //   anything else   -> a new public notice, sent to every subscribed device.
 Deno.serve(async (req) => {
   const db = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
@@ -13,7 +14,7 @@ Deno.serve(async (req) => {
   const get = (k: string) => dec(sec.find((r) => r.key === k)?.value ?? '');
   if (req.method !== 'POST' || req.headers.get('x-hook-secret') !== get('push_hook')) return new Response('forbidden', { status: 403 });
 
-  let note: { kind?: string; title?: string; body?: string; url?: string; items?: { member_id: string; title?: string; body?: string }[] };
+  let note: { kind?: string; title?: string; body?: string; url?: string; items?: { member_id?: string; user_id?: string; title?: string; body?: string }[] };
   try { note = await req.json(); } catch { return new Response('bad request', { status: 400 }); }
   webpush.setVapidDetails('https://keanutugonon87-blip.github.io/alpha-suite/', get('vapid_public'), get('vapid_private'));
 
@@ -26,13 +27,23 @@ Deno.serve(async (req) => {
 
   if (note.kind === 'reminder') {
     const items = (note.items ?? []).filter((i) => i && i.member_id);
-    const ids = items.map((i) => i.member_id);
+    const ids = items.map((i) => i.member_id as string);
     const { data } = ids.length ? await db.from('v2_push_subs').select('endpoint,p256dh,auth,member_id').in('member_id', ids) : { data: [] };
     const subs = (data ?? []) as (Sub & { member_id: string })[];
     await Promise.all(subs.map((s) => {
       const it = items.find((i) => i.member_id === s.member_id)!;
       return push(s, JSON.stringify({ title: String(it.title ?? 'Payment reminder').slice(0, 120), body: String(it.body ?? '').slice(0, 200), url: './' }));
     }));
+    return new Response(JSON.stringify({ sent, gone, failed }), { headers: { 'Content-Type': 'application/json' } });
+  }
+
+  if (note.kind === 'duty') {
+    const items = (note.items ?? []).filter((i) => i && i.user_id);
+    const ids = items.map((i) => i.user_id as string);
+    const { data } = ids.length ? await db.from('v2_push_subs').select('endpoint,p256dh,auth,user_id').in('user_id', ids) : { data: [] };
+    const subs = (data ?? []) as (Sub & { user_id: string })[];
+    await Promise.all(subs.flatMap((s) => items.filter((i) => i.user_id === s.user_id).map((it) =>
+      push(s, JSON.stringify({ title: String(it.title ?? 'Your duties').slice(0, 120), body: String(it.body ?? '').slice(0, 200), url: './#/staff/home' })))));
     return new Response(JSON.stringify({ sent, gone, failed }), { headers: { 'Content-Type': 'application/json' } });
   }
 

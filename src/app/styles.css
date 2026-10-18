@@ -329,3 +329,13 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .dispgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:6px 0 14px}.dispgrid .btn{min-height:46px}.dispgrid .btn.ghost.on,html[data-theme=dark] .dispgrid .btn.ghost.on{background:var(--dk);color:#fff;border-color:var(--dk)}
 
 .pw{position:relative;display:flex}.pw input{flex:1;padding-right:46px}.pw .eye{position:absolute;right:2px;top:50%;transform:translateY(-50%);background:none;border:0;font-size:1.1rem;min-width:44px;min-height:40px;cursor:pointer;color:var(--navy)}
+
+/* Officer duties */
+.duty .dbox{flex:none;width:30px;height:30px;min-width:30px;border-radius:9px;border:2px solid var(--line);background:var(--card);color:#fff;font-weight:800;cursor:pointer;margin-right:10px;display:grid;place-items:center;padding:0}
+.duty .dbox[aria-checked=true]{background:var(--ok);border-color:var(--ok)}
+.duty.done .m b{text-decoration:line-through;opacity:.65}
+.ddots{display:flex;gap:4px;justify-content:flex-end;margin-bottom:3px}
+.ddot{width:12px;height:12px;border-radius:50%;background:var(--line)}
+.ddot.ok{background:var(--ok)}.ddot.part{background:var(--brass)}.ddot.miss{background:var(--bad)}.ddot.none{background:transparent;border:1.5px solid var(--line)}
+.duty-off>summary::-webkit-details-marker{display:none}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border:1px solid var(--line);border-radius:99px;font-size:.9rem;cursor:pointer}.chip input{width:auto;margin:0}
