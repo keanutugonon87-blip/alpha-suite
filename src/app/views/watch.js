@@ -44,7 +44,7 @@ export async function mountWatch(el, ctx) {
     let body;
     if (tab === 'ledger') {
       const shown = viol.filter(v => !q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())).slice().reverse();
-      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? '<button class="btn gold" id="add">+ Report</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
+      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? '<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">Inspect</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
@@ -60,6 +60,7 @@ export async function mountWatch(el, ctx) {
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
+    el.querySelector('#insp')?.addEventListener('click', () => inspect(members, standards));
     el.querySelector('#csv')?.addEventListener('click', async () => {
       const counted2 = viol.filter(v => !['awaiting_approval', 'rejected'].includes(v.status));
       const byM = {}; counted2.forEach(v => { const o = byM[v.member_id] ||= { total: 0, open: 0 }; o.total++; if (v.status !== 'resolved') o.open++; });
@@ -106,6 +107,24 @@ export async function mountWatch(el, ctx) {
         m.querySelector('#rf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
           try { remember(f.get('m'), f.get('s'), members, standards); const res = await safeWrite('v2_violations', { id: uuid(), member_id: f.get('m'), standard_id: f.get('s'), occurred_on: f.get('d'), reported_by: `${r} ${name}`, status: canApprove ? 'pending' : 'awaiting_approval' });
             toast(res.queued ? 'No signal — saved on this device, will send automatically' : canApprove ? 'Recorded' : 'Submitted for approval'); close(); draw().catch(() => {}); } catch (x) { m.querySelector('#er').textContent = x.message; } }; });
+  }
+  // Inspection: pick one standard, tap the students who failed it, record them all at once.
+  function inspect(members, standards) {
+    const act = members.filter(m => m.status === 'active');
+    modal(`<h3>Inspection</h3><p class="muted" style="margin:0 0 8px">Choose what you checked, then tap only the students who failed it.</p><form id="if">
+      <label>Standard</label><select name="s" required><option value="">Select…</option>${standards.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select>
+      <label>Date</label><input name="d" type="date" required value="${todayISO()}">
+      <div class="chips" id="il" style="max-height:42vh;overflow:auto;margin-top:10px">${act.map(m => `<button type="button" role="checkbox" aria-checked="false" data-m="${m.id}">${esc(m.full_name)}</button>`).join('')}</div>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1" id="go">Record 0</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
+      (m, close) => { m.querySelector('#cx').onclick = close;
+        const picked = new Set(), go = m.querySelector('#go'), upd = () => { go.textContent = `Record ${picked.size}`; };
+        m.querySelectorAll('#il [data-m]').forEach(b => b.onclick = () => { const id = b.dataset.m, on = !picked.has(id); on ? picked.add(id) : picked.delete(id); b.setAttribute('aria-checked', on); b.classList.toggle('on', on); upd(); });
+        m.querySelector('#if').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
+          if (!picked.size) return void (m.querySelector('#er').textContent = 'Tap at least one student, or close if everyone passed.');
+          go.disabled = true; let queued = false, done = 0;
+          try { for (const id of picked) { const res = await safeWrite('v2_violations', { id: uuid(), member_id: id, standard_id: f.get('s'), occurred_on: f.get('d'), reported_by: `${r} ${name}`, status: canApprove ? 'pending' : 'awaiting_approval' }); queued = queued || res.queued; done++; picked.delete(id); }
+            toast(queued ? 'No signal. Saved on this device, will send automatically' : `${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
+          catch (x) { go.disabled = false; upd(); m.querySelectorAll('#il [data-m]').forEach(b => { if (!picked.has(b.dataset.m)) { b.setAttribute('aria-checked', 'false'); b.classList.remove('on'); } }); m.querySelector('#er').textContent = `${done} saved before the error: ${x.message}. Only the rest are still selected.`; } }; });
   }
   function newStandard() {
     modal(`<h3>New standard</h3><form id="sf"><label>Title</label><input name="t" required><label>Rule</label><textarea name="r" rows="3"></textarea>

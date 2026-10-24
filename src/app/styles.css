@@ -344,3 +344,4 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .rolegrid .tag{padding:1px 5px;font-size:.78rem}.rolegrid th,.rolegrid td{padding:6px 2px;font-size:.78rem}.rolegrid tbody th{min-width:0;width:34%;font-size:.84rem}
 .duty .dbox{position:relative}.duty .dbox::after{content:"";position:absolute;inset:-9px}
 :focus-visible{outline:3px solid var(--gold,#e8b923);outline-offset:2px}
+.chips button.on{background:var(--flag,#c0392b);border-color:var(--flag,#c0392b);color:#fff;font-weight:700}
