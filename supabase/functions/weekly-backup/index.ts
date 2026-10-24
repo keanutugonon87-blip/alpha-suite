@@ -5,7 +5,8 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 // Not included on purpose: login secrets, push-device keys, and inline receipt photos (photo files stay in their own bucket).
 const TABLES = ['v2_members', 'v2_periods', 'v2_charges', 'v2_entries', 'v2_violations', 'v2_standards', 'v2_officers', 'v2_officer_edits',
   'v2_announcements', 'v2_settings', 'v2_month_close', 'v2_waivers', 'v2_quiz_scores', 'v2_reminders', 'v2_profiles', 'v2_audit',
-  'students', 'transactions', 'audit_log', 'shared_data', 'officer_roles', 'dues_config'];
+  'students', 'transactions', 'audit_log', 'shared_data', 'officer_roles', 'dues_config',
+  'v2_duty_templates', 'v2_duty_log', 'v2_documents', 'v2_doc_folders', 'v2_doc_files'];
 const KEEP = 12;
 
 Deno.serve(async (req) => {

@@ -25,8 +25,9 @@ const ACTIONS = [
   ['Add, edit or delete duties', ['mayor']],
   ['See who finished their duties', ['mayor', 'vice_mayor']],
   ['Back up now, see system health', ['mayor', 'vice_mayor']],
-  ['Add or edit documents', ['mayor', 'vice_mayor', 'secretary']],
-  ['Delete a document', ['mayor', 'secretary']],
+  ['Add or edit documents, attach files', ['mayor', 'vice_mayor', 'secretary']],
+  ['Make, rename or delete folders', ['mayor', 'secretary']],
+  ['Delete a document or remove a file', ['mayor', 'secretary']],
   ['Change settings', ['mayor']],
 ];
 const grid = (title, rows) => `<div class="card pad" style="margin-bottom:12px;overflow-x:auto"><b>${title}</b>

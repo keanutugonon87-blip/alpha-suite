@@ -345,3 +345,4 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .duty .dbox{position:relative}.duty .dbox::after{content:"";position:absolute;inset:-9px}
 :focus-visible{outline:3px solid var(--gold,#e8b923);outline-offset:2px}
 .chips button.on{background:var(--flag,#c0392b);border-color:var(--flag,#c0392b);color:#fff;font-weight:700}
+.chips.pick button.on{background:var(--navy,#0c1f5c);border-color:var(--navy,#0c1f5c);color:#fff}
