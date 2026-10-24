@@ -1,4 +1,4 @@
-import { fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, confirmDialog, initials, dayLabel } from '../core.js';
+import { fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, toastUndo, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, confirmDialog, initials, dayLabel } from '../core.js';
 import { ymManila, net as netOf, balanceAt, needsSecond, findDuplicate } from '../money.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
@@ -98,7 +98,9 @@ export async function mountTreasury(el, ctx) {
     el.querySelectorAll('[data-img]').forEach(b => b.onclick = () => showPhoto(b.dataset.img));
     el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_approve_entry', { p_id: b.dataset.ok })); toast('Approved'); draw().catch(() => {}); } catch (e) { toast(/function|schema cache/i.test(e.message) ? 'Approval is not switched on in the database yet. Run the v4 SQL.' : e.message, true); } });
     el.querySelectorAll('[data-void]').forEach(b => b.onclick = async () => { const r = await askText('Void this entry', 'Reason', { ok: 'Void entry' }); if (!r) return;
-      db(sb.from('v2_entries').update({ status: 'voided', void_reason: r }).eq('id', b.dataset.void)).then(() => toast('Voided')).catch(e => toast(e.message, true)); });
+      b.disabled = true;   // a void cannot be reversed once saved, so it waits a few seconds and can be cancelled
+      toastUndo('Entry will be voided.', () => { b.disabled = false; toast('Cancelled. Nothing was voided.'); }, { ms: 6000,
+        onExpire: () => db(sb.from('v2_entries').update({ status: 'voided', void_reason: r }).eq('id', b.dataset.void)).then(() => toast('Voided')).catch(e => { b.disabled = false; toast(e.message, true); }) }); });
   }
 
 

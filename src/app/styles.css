@@ -101,6 +101,7 @@ label{display:block;font-size:.85rem;color:var(--soft);margin:12px 0 4px}
 .err{color:var(--bad);font-size:.9rem;margin-top:8px}
 #toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom));transform:translate(-50%,30px);background:var(--dk);color:#fff;padding:11px 18px;border-radius:12px;opacity:0;pointer-events:none;transition:.25s;z-index:99;max-width:90vw}
 #toast.show{opacity:1;transform:translate(-50%,0)}#toast.bad{background:var(--flag)}
+#toast .undo{margin-left:10px;background:none;border:0;border-bottom:2px solid var(--gold,#e8b923);color:#fff;font:inherit;font-weight:700;cursor:pointer;padding:2px 4px}
 @media(min-width:900px){#toast{bottom:24px}}
 
 /* ---- auth ---- */

@@ -1,4 +1,4 @@
-import { sb, db, esc, peso, ROLE_LABEL, skeleton, watch, todayISO, toast, modal } from '../core.js';
+import { sb, db, esc, peso, ROLE_LABEL, skeleton, watch, todayISO, toast, toastUndo, modal } from '../core.js';
 import { ymManila } from '../money.js';
 
 /* Today: the first screen after sign-in. It shows what needs this officer, by role, and a quick view of the class. */
@@ -21,7 +21,9 @@ function wireDuties(el, list, redraw) {
   const find = id => (list || []).find(d => d.id === id);
   el.querySelectorAll('[data-duty]').forEach(b => b.onclick = async () => {
     const d = find(b.dataset.duty); if (!d) return; b.disabled = true;
-    try { await db(sb.rpc('v2_duty_tick_off', { p_duty: d.id, p_done: !d.done, p_note: d.done ? null : d.note || null })); await redraw(); }
+    try { await db(sb.rpc('v2_duty_tick_off', { p_duty: d.id, p_done: !d.done, p_note: d.done ? null : d.note || null })); await redraw();
+      const undo = () => db(sb.rpc('v2_duty_tick_off', { p_duty: d.id, p_done: d.done, p_note: d.note || null })).then(redraw).catch(x => toast(x.message, true));
+      toastUndo(d.done ? 'Marked not done.' : 'Marked done.', undo); }
     catch (x) { toast(x.message, true); b.disabled = false; }
   });
   el.querySelectorAll('[data-dnote]').forEach(b => b.onclick = () => {

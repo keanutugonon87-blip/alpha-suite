@@ -27,6 +27,20 @@ export function toast(msg, bad = false) {
   t.setAttribute('role', 'status'); t.textContent = msg; t.className = 'show' + (bad ? ' bad' : '');
   clearTimeout(toast._t); toast._t = setTimeout(() => t.className = '', 3400);
 }
+// Shows a message with an Undo button. onUndo runs if tapped within `ms`; onExpire runs when the time is up without Undo.
+export function toastUndo(msg, onUndo, { ms = 6000, onExpire } = {}) {
+  let t = document.getElementById('toast');
+  if (!t) { t = document.createElement('div'); t.id = 'toast'; document.body.appendChild(t); }
+  clearTimeout(toast._t);
+  t.setAttribute('role', 'status'); t.className = 'show'; t.textContent = '';
+  const span = document.createElement('span'); span.textContent = msg + ' ';
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'undo'; b.textContent = 'Undo';
+  t.append(span, b); t.style.pointerEvents = 'auto';
+  let done = false;
+  const end = () => { t.className = ''; t.style.pointerEvents = ''; };
+  const timer = setTimeout(() => { if (done) return; done = true; end(); onExpire && onExpire(); }, ms);
+  b.onclick = () => { if (done) return; done = true; clearTimeout(timer); end(); onUndo && onUndo(); };
+}
 export function modal(html, onMount) {
   const m = document.createElement('div'); m.className = 'modal';
   m.innerHTML = `<div class="sheet" role="dialog" aria-modal="true">${html}</div>`;
