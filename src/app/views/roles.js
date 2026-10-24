@@ -8,6 +8,7 @@ const SCREENS = [
   ['Students', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor']],
   ['Officers', ALL],
   ['Notices', ['mayor', 'vice_mayor', 'secretary', 'pio']],
+  ['Documents', ['mayor', 'vice_mayor', 'secretary']],
   ['Accounts', ['mayor', 'vice_mayor', 'auditor']],
   ['Duties, Roles', ['mayor', 'vice_mayor']],
   ['System', ['mayor', 'vice_mayor', 'treasurer']],
@@ -24,6 +25,8 @@ const ACTIONS = [
   ['Add, edit or delete duties', ['mayor']],
   ['See who finished their duties', ['mayor', 'vice_mayor']],
   ['Back up now, see system health', ['mayor', 'vice_mayor']],
+  ['Add or edit documents', ['mayor', 'vice_mayor', 'secretary']],
+  ['Delete a document', ['mayor', 'secretary']],
   ['Change settings', ['mayor']],
 ];
 const grid = (title, rows) => `<div class="card pad" style="margin-bottom:12px;overflow-x:auto"><b>${title}</b>
