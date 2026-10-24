@@ -43,9 +43,9 @@ export async function mountDuties(el, ctx) {
         ${isMayor ? '<div class="pad"><button class="btn gold" id="add" style="width:100%">Add a duty</button></div>' : ''}</div>
       <h3 class="sec">Phone alerts</h3>
       <form class="card pad" id="al"><p class="muted" style="margin:0 0 8px">Each officer gets a morning reminder with today's duties. The follow-up goes only to officers who still have something undone, and you get a short summary of who.</p>
-        <label>Alerts</label><select name="alerts" ${isMayor ? '' : 'disabled'}><option value="on"${st.alerts === 'on' ? ' selected' : ''}>On</option><option value="off"${st.alerts === 'off' ? ' selected' : ''}>Off</option></select>
-        <label>Morning reminder</label><input type="time" name="morning" value="${esc(st.morning)}" ${isMayor ? '' : 'disabled'}>
-        <label>Follow-up for undone duties</label><input type="time" name="followup" value="${esc(st.followup)}" ${isMayor ? '' : 'disabled'}>
+        <label>Alerts</label><select name="alerts" aria-label="Alerts" ${isMayor ? '' : 'disabled'}><option value="on"${st.alerts === 'on' ? ' selected' : ''}>On</option><option value="off"${st.alerts === 'off' ? ' selected' : ''}>Off</option></select>
+        <label>Morning reminder</label><input type="time" name="morning" aria-label="Morning reminder time" value="${esc(st.morning)}" ${isMayor ? '' : 'disabled'}>
+        <label>Follow-up for undone duties</label><input type="time" name="followup" aria-label="Follow-up reminder time" value="${esc(st.followup)}" ${isMayor ? '' : 'disabled'}>
         ${isMayor ? `<button class="btn gold" style="width:100%;margin-top:12px">Save alert settings</button>
         <div style="display:flex;gap:8px;margin-top:8px"><button type="button" class="btn ghost" id="t1" style="flex:1">Send morning reminder now</button><button type="button" class="btn ghost" id="t2" style="flex:1">Send follow-up now</button></div>` : ''}
         <small class="muted" style="display:block;margin-top:8px">Officers must turn on notifications on their own phone to receive these. Times are Philippine time.</small></form>`;
