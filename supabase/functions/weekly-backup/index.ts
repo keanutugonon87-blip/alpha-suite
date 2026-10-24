@@ -34,9 +34,32 @@ Deno.serve(async (req) => {
   const up = await db.storage.from('v2-backups').upload(name, new Blob([body], { type: 'application/json' }), { upsert: true, contentType: 'application/json' });
   if (up.error) { await db.from('v2_backup_log').insert({ ok: false, name, errors: { upload: up.error.message }, note: 'upload failed' }); return new Response(JSON.stringify({ ok: false, error: up.error.message }), { status: 500, headers: { 'Content-Type': 'application/json' } }); }
 
+  // Check the file we just wrote: download it, read it back, and compare it with the database (row counts and the total of every entry).
+  let verified = false, vnote = '';
+  try {
+    const dl = await db.storage.from('v2-backups').download(name);
+    if (dl.error) throw new Error('could not read the file back: ' + dl.error.message);
+    const parsed = JSON.parse(await dl.data.text());
+    const short = Object.entries(out).filter(([t, rows]) => (parsed.tables?.[t]?.length ?? -1) !== rows.length).map(([t]) => t);
+    if (short.length) throw new Error('the file is missing rows in: ' + short.join(', '));
+    const sumOf = (rows: Record<string, unknown>[]) => Math.round(rows.reduce((a, r) => a + Number(r.amount ?? 0), 0) * 100) / 100;
+    const fileRows = (parsed.tables?.v2_entries ?? []) as Record<string, unknown>[];
+    for (let attempt = 0; attempt < 2 && !verified; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, 2500));   // an entry saved during the check: look again once
+      const live: Record<string, unknown>[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data, error } = await db.from('v2_entries').select('amount').range(from, from + 999);
+        if (error) throw new Error('could not read the database: ' + error.message);
+        live.push(...(data ?? [])); if (!data || data.length < 1000) break;
+      }
+      if (live.length === fileRows.length && sumOf(live) === sumOf(fileRows)) { verified = true; vnote = `File reads back correctly. ${fileRows.length} entries, total ${sumOf(fileRows).toFixed(2)}, match the database.`; }
+      else vnote = `Entries differ: file has ${fileRows.length} (total ${sumOf(fileRows).toFixed(2)}), database has ${live.length} (total ${sumOf(live).toFixed(2)}).`;
+    }
+  } catch (e) { vnote = (e as Error).message; }
+
   const { data: files } = await db.storage.from('v2-backups').list('', { limit: 200, sortBy: { column: 'name', order: 'desc' } });
   const old = (files ?? []).filter((f) => f.name.startsWith('alpha28-backup-')).slice(KEEP).map((f) => f.name);
   if (old.length) await db.storage.from('v2-backups').remove(old);
-  await db.from('v2_backup_log').insert({ ok: Object.keys(errors).length === 0, name, bytes: body.length, errors: Object.keys(errors).length ? errors : null, note: old.length ? `removed ${old.length} old` : null });
-  return new Response(JSON.stringify({ ok: true, name, bytes: body.length, removed: old.length, errors }), { headers: { 'Content-Type': 'application/json' } });
+  await db.from('v2_backup_log').insert({ ok: Object.keys(errors).length === 0, name, bytes: body.length, errors: Object.keys(errors).length ? errors : null, note: old.length ? `removed ${old.length} old` : null, verified, verify_note: vnote });
+  return new Response(JSON.stringify({ ok: true, name, bytes: body.length, removed: old.length, errors, verified, vnote }), { headers: { 'Content-Type': 'application/json' } });
 });

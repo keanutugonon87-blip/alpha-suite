@@ -14,7 +14,7 @@ async function signupSheet() {
     <p style="font-size:13px;color:#58708a">Wala pay QR card o nalimtan ang PIN? Pangayo sa Treasurer o Mayor.</p>`, { plain: true });
 }
 const NEED_SQL = e => /function|schema cache|does not exist/i.test(e.message);
-const JOBS = { 'alpha28-weekly-backup': 'Weekly backup (Monday 3 AM)', 'alpha28-auto-nudge': 'Due-date reminders (daily 9 AM)' };
+const JOBS = { 'alpha28-weekly-backup': 'Weekly backup (Monday 3 AM)', 'alpha28-auto-nudge': 'Due-date reminders (daily 9 AM)', 'alpha28-duty-alerts': 'Officer duty alerts (every 15 minutes)', 'alpha28-watchdog': 'Daily system check (7 AM)' };
 
 const HANDOVER = [
   ['mo', 'Close the last month: count the money, then close it (Treasury > Month close).'],
@@ -28,6 +28,7 @@ const HANDOVER = [
   ['own', 'Make sure two different officers can approve big expenses (a Vice Mayor or Auditor account exists).'],
 ];
 
+const SQL_FILES = ['v3', 'v4', 'v5', 'v6', 'v7', 'v8', 'v9', 'v10', 'v11', 'v12', 'v14'];   // v13 is optional, so it is never reported as missing
 /* System tab: is everything running, and the few settings the Mayor and Treasurer own. */
 export async function mountSystem(el, ctx) {
   const isMayor = ctx.can('mayor'), canSee = ctx.can('mayor', 'vice_mayor'), canNote = ctx.can('mayor', 'treasurer');
@@ -51,6 +52,9 @@ export async function mountSystem(el, ctx) {
     const lines = h ? [
       ['Database', 'Reachable', true],
       ['Backups', h.last_ok_backup ? `Last good backup ${ago(h.last_ok_backup)}` : 'No backup recorded yet', okDays <= 8],
+      ...(h.last_backup ? [['Backup check', h.last_backup.verified === true ? (h.last_backup.verify_note || 'The backup file matches the database.') : h.last_backup.verified === false ? `Does not match: ${h.last_backup.verify_note || 'unknown reason'}` : 'Not checked yet. The weekly-backup function needs the update to check itself.', h.last_backup.verified !== false]] : []),
+      ...(h.problems ? [['Problems found', h.problems.length ? h.problems.join('. ') : 'No problems found. Runs every morning at 7:00 and alerts you if one appears.', !h.problems.length]] : []),
+      ...(h.applied ? [['SQL files run', (() => { const miss = SQL_FILES.filter(f => !h.applied.includes(f)); return miss.length ? `Missing: ${miss.join(', ')}. Run those files in the Supabase SQL Editor.` : `All up to date (${h.applied.slice().sort((a, b) => parseInt(a.slice(1)) - parseInt(b.slice(1))).join(', ')})`; })(), SQL_FILES.every(f => h.applied.includes(f))]] : []),
       ['Reminders', `${h.linked} of ${h.members} students have reminders on${h.last_reminder ? ` · last sent ${ago(h.last_reminder)}` : ''}`, h.linked > 0],
       ['Officer alerts', `${h.staff_devices} device${h.staff_devices === 1 ? '' : 's'} get sign-up alerts`, true],
       ['Open work', `${h.open_charges} open charge${h.open_charges === 1 ? '' : 's'} · ${h.pending_entries} entr${h.pending_entries === 1 ? 'y' : 'ies'} waiting for approval`, true],
@@ -58,6 +62,7 @@ export async function mountSystem(el, ctx) {
     ] : [];
 
     el.innerHTML = `${miss ? '<div class="alertbar bad"><span>⚠️ The system page is not switched on in the database yet. Run the v4 SQL in Supabase.</span></div>' : ''}
+      ${h && h.problems && h.problems.length ? `<div class="alertbar bad"><span>⚠️ ${h.problems.map(esc).join('. ')}.</span></div>` : ''}
       ${h ? `<h3 class="sec">Health</h3><div class="card">${lines.map(([k, v, ok]) => `<div class="row"><div class="m"><b>${esc(k)}</b><small>${esc(v)}</small></div><span class="tag ${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'Check'}</span></div>`).join('')}</div>
         <p class="muted" style="font-size:.85rem">Checked ${fmtDateTime(h.now)}. The list refreshes when you open this tab.</p>` : ''}
       ${canNote ? `<h3 class="sec">Payment note for students</h3><form class="card pad" id="pn"><p class="muted" style="margin:0 0 8px">Shown on every student's My Status page while they still owe something. For example your GCash number and who to pay.</p>
