@@ -27,6 +27,8 @@ const ACTIONS = [
   ['Back up now, see system health', ['mayor', 'vice_mayor']],
   ['Add or edit documents, attach files', ['mayor', 'vice_mayor', 'secretary']],
   ['Make, rename or delete folders', ['mayor', 'secretary']],
+  ['Link or unlink Google Drive', ['mayor']],
+  ['Copy to Google Drive (Sync now)', ['mayor', 'vice_mayor', 'secretary']],
   ['Delete a document or remove a file', ['mayor', 'secretary']],
   ['Change settings', ['mayor']],
 ];
