@@ -2,7 +2,6 @@ import { t, getLang } from '../i18n.js';
 import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanLoop } from '../qr.js';
-import { mountEvents } from './events.js';
 
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
@@ -19,7 +18,7 @@ export async function mountWatch(el, ctx) {
   const canApprove = ctx.can('mayor','vice_mayor');
   const TK = 'alpha-f-watch-tab';
   let kind = (() => { try { const k = localStorage.getItem('alpha-f-watch-kind'); return ['viol', 'att'].includes(k) ? k : 'all'; } catch { return 'all'; } })();
-  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'events', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
+  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
   el.innerHTML = skeleton(5);
 
   async function draw() {
@@ -68,8 +67,6 @@ export async function mountWatch(el, ctx) {
       body = `<div class="seg" id="kf" style="margin-bottom:8px">${[['all', 'All'], ['viol', 'Violations'], ['att', 'Attendance and events']].map(([k, l]) => `<button data-k="${k}" class="${kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
-    } else if (tab === 'events') {
-      body = '<div id="evh">' + skeleton(2) + '</div>';
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
       // Attendance (PIT Handbook): every 3 tardies count as 1 absence.
@@ -83,9 +80,8 @@ export async function mountWatch(el, ctx) {
         ${ctx.can('mayor','vice_mayor') ? `<div style="display:flex;gap:4px"><button class="btn ghost sm" data-es="${s.id}">Edit</button><button class="btn ghost sm" data-rs="${s.id}">Remove</button></div>` : ''}</div>`).join('')}</div>`;
     }
     el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
-      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='events'?'':'ghost'}" data-t="events">Events</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
+      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
 
-    if (tab === 'events') mountEvents(el.querySelector('#evh'), ctx, members, standards, () => draw().catch(() => {}));
     el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { kind = b.dataset.k; try { localStorage.setItem('alpha-f-watch-kind', kind); } catch { /* ignore */ } draw(); });
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; try { localStorage.setItem(TK, tab); } catch { /* ignore */ } draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
@@ -167,7 +163,7 @@ export async function mountWatch(el, ctx) {
        1 Scan     - aim at the QR card; every scan is confirmed by a banner, a flash, a beep and a vibration
        2 Category - tap what the student failed
        3 Finalize - check the report, then submit
-     Attendance (flag ceremony, inspection roll, event log in/out) is run from the Events tab. */
+     Attendance (flag ceremony, inspection, event log in/out) is on the Attendance tab. */
   function scanInspect(members, standards) {
     const act = members.filter(x => x.status === 'active'), byId = Object.fromEntries(act.map(x => [x.id, x]));
     const checkable = standards.filter(x => !x.kind && !ATT.test(x.title));       // grooming and uniform standards only

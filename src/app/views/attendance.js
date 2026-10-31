@@ -1,43 +1,78 @@
-import { sb, db, esc, fmtDate, toast, modal, uuid, todayISO, safeWrite, confirmDialog } from '../core.js';
+import { sb, db, watch, esc, fmtDate, toast, modal, uuid, todayISO, confirmDialog, skeleton } from '../core.js';
 import { scanLoop } from '../qr.js';
 
-/* Events and attendance.
-   The Mayor or Vice Mayor (the President) sets an event: flag ceremony, inspection, or any event with log in and log out.
-   The Marshals, Secretary and SAILS officers scan the students' QR cards; every scan is confirmed before it counts.
-   When the event is over, the President reviews who never scanned and records them as absences (excused ones are unticked). */
+/* Attendance: log in and log out by QR card.
+   The Mayor (the President) is the only one who sets an event and its category.
+   The Marshals scan the students' cards and confirm each scan.
+   The Secretary compiles who was missed (excused students unticked), then sends the fines report to the Mayor, Vice Mayor, Marshals and Treasurer.
+   The PIO sends the report to the students through the app. */
 const KINDS = { flag: 'Flag ceremony', inspection: 'Inspection', event: 'Event (log in / log out)' };
-const needV21 = e => /relation|schema cache|does not exist/i.test(e.message || '') ? 'Run the v21 SQL in Supabase first (supabase/v21_events_attendance.sql).' : e.message;
+const needV2 = e => /relation|schema cache|does not exist|function .* not|could not find/i.test(e.message || '') ? 'Run the v21 and v22 SQL in Supabase first (supabase/v21_events_attendance.sql, then v22_attendance_report.sql).' : e.message;
 const defStd = (k, stds) => (stds.find(s => (k === 'flag' ? /flag/i : k === 'inspection' ? /inspection/i : /log\s*in|event log/i).test(s.title)) || stds.find(s => !s.kind) || {}).id || '';
+const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH');
 
-export async function mountEvents(host, ctx, members, standards, redraw) {
-  const manage = ctx.can('mayor', 'vice_mayor'), canScan = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails');
-  const act = members.filter(x => x.status === 'active');
-  let events, scans;
+export async function mountAttendance(el, ctx) {
+  el.innerHTML = skeleton(3);
+  const unwatch = watch(['v2_events', 'v2_event_scans', 'v2_violations'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
+  await load();
+  return unwatch;
+  async function load() {
+    const [members, standards] = await Promise.all([
+      db(sb.from('v2_members').select('id,full_name,section,status').order('full_name')),
+      db(sb.from('v2_standards').select('*').eq('active', true).order('sort_order')),
+    ]);
+    return draw(el, ctx, members, standards, () => load().catch(() => {}));
+  }
+}
+
+async function draw(host, ctx, members, standards, redraw) {
+  const manage = ctx.can('mayor'), canScan = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails'), canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
+  const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor'), collects = ctx.can('mayor', 'treasurer');
+  const act = members.filter(x => x.status === 'active'), mname = id => members.find(m => m.id === id)?.full_name || '?';
+  let events, scans, viol = [], paid = new Set();
   try {
     [events, scans] = await Promise.all([
       db(sb.from('v2_events').select('*').order('event_date', { ascending: false }).order('created_at', { ascending: false })),
       db(sb.from('v2_event_scans').select('event_id,member_id,kind')),
     ]);
-  } catch (e) { host.innerHTML = `<div class="card pad"><p class="empty">${esc(needV21(e))}</p></div>`; return; }
+  } catch (e) { host.innerHTML = `<div class="card pad"><p class="empty">${esc(needV2(e))}</p></div>`; return; }
+  if (sees) {
+    viol = await db(sb.from('v2_violations').select('id,member_id,standard_id,event_id,status,excuse_status').not('event_id', 'is', null)).catch(() => []);
+    paid = new Set(await db(sb.from('v2_entries').select('violation_id').not('violation_id', 'is', null).neq('status', 'voided')).then(r => r.map(x => x.violation_id)).catch(() => []));
+  }
+  const std = id => standards.find(s => s.id === id);
   const cnt = id => { const o = { in: new Set(), out: new Set() }; scans.filter(s => s.event_id === id).forEach(s => o[s.kind].add(s.member_id)); return o; };
-  const stdTitle = id => standards.find(s => s.id === id)?.title || '';
-  const card = ev => { const c = cnt(ev.id), open = ev.status === 'open';
-    return `<div class="row stk vw"><div class="m"><b>${esc(ev.title)} <span class="tag ${open ? 'ok' : ''}">${open ? 'Open' : ev.finalized_at ? 'Absences recorded' : 'Closed'}</span></b>
-      <small>${KINDS[ev.kind] || ev.kind} · ${fmtDate(ev.event_date)}${ev.created_by_name ? ` · set by ${esc(ev.created_by_name)}` : ''}<br>In ${c.in.size} of ${act.length}${ev.needs_out ? ` · Out ${c.out.size} of ${act.length}` : ''}</small></div>
-      <div class="acts">${open && canScan ? `<button class="btn gold sm" data-sc="${ev.id}">📷 Scan attendance</button>` : ''}
-      ${manage && !ev.finalized_at ? `<button class="btn ghost sm" data-rv="${ev.id}">Review absences</button>` : ''}
-      ${manage ? `<button class="btn ghost sm" data-cl="${ev.id}">${open ? 'Close' : 'Reopen'}</button><button class="btn ghost sm" data-dl="${ev.id}">Delete</button>` : ''}</div></div>`; };
-  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The Mayor or Vice Mayor sets the event. Open one below to scan attendance.</p>'}
+  const finesOf = id => viol.filter(v => v.event_id === id && !['rejected', 'awaiting_approval'].includes(v.status) && v.excuse_status !== 'accepted');
+  const stage = e => e.notified_at ? ['Students notified', 'ok'] : e.report_sent_at ? ['Report sent', 'warn'] : e.finalized_at ? ['Compiled', 'warn'] : e.status === 'open' ? ['Open', 'ok'] : ['Closed', ''];
+  const card = e => { const c = cnt(e.id), open = e.status === 'open', [lbl, cls] = stage(e), fl = finesOf(e.id), tot = fl.reduce((t, v) => t + (+std(v.standard_id)?.fine || 0), 0);
+    const report = sees && e.report_sent_at ? `<div class="card pad" style="margin:8px 0 0"><b>Fines report from ${esc(e.report_by_name || 'the Secretary')}</b>
+        <p class="muted" style="margin:4px 0">${fl.length} student${fl.length === 1 ? '' : 's'}, ${peso(tot)} in fines. ${collects ? 'Please collect them.' : 'Treasurer and Mayor collect.'}${e.report_note ? `<br>“${esc(e.report_note)}”` : ''}</p>
+        <details${collects ? ' open' : ''}><summary>Show the list</summary>${fl.map(v => { const f = +std(v.standard_id)?.fine || 0; return `<div class="fr"><span>${esc(mname(v.member_id))}</span><b>${paid.has(v.id) ? 'paid' : peso(f)}</b>${collects && f && !paid.has(v.id) ? `<button class="btn gold sm" data-co="${v.id}">Collect</button>` : ''}</div>`; }).join('')}</details></div>` : '';
+    return `<div class="row stk vw"><div class="m"><b>${esc(e.title)} <span class="tag ${cls}">${lbl}</span></b>
+      <small>${KINDS[e.kind] || e.kind} · ${fmtDate(e.event_date)}${e.created_by_name ? ` · set by ${esc(e.created_by_name)}` : ''}<br>In ${c.in.size} of ${act.length}${e.needs_out ? ` · Out ${c.out.size} of ${act.length}` : ''}</small>${report}</div>
+      <div class="acts">${open && canScan ? `<button class="btn gold sm" data-sc="${e.id}">📷 Scan attendance</button>` : ''}
+      ${canCompile && !e.finalized_at ? `<button class="btn ${open ? 'ghost' : 'gold'} sm" data-rv="${e.id}">Compile attendance</button>` : ''}
+      ${canCompile && e.finalized_at && !e.report_sent_at ? `<button class="btn gold sm" data-sr="${e.id}">Send fines report</button>` : ''}
+      ${canNotify && e.report_sent_at && !e.notified_at ? `<button class="btn gold sm" data-nt="${e.id}">Send to students</button>` : ''}
+      ${manage ? `<button class="btn ghost sm" data-cl="${e.id}">${open ? 'Close' : 'Reopen'}</button><button class="btn ghost sm" data-dl="${e.id}">Delete</button>` : ''}</div></div>`; };
+  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President sets the event. Marshals scan, the Secretary compiles, the PIO tells the students.</p>'}
     <div class="card">${events.map(card).join('') || '<p class="empty">No events yet.</p>'}</div>`;
   const ev = id => events.find(e => e.id === id);
   host.querySelector('#ne')?.addEventListener('click', () => newEvent());
   host.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => scanEvent(ev(b.dataset.sc)));
-  host.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => review(ev(b.dataset.rv)));
+  host.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => compile(ev(b.dataset.rv)));
+  host.querySelectorAll('[data-sr]').forEach(b => b.onclick = () => sendReport(ev(b.dataset.sr)));
+  host.querySelectorAll('[data-nt]').forEach(b => b.onclick = async () => { const e = ev(b.dataset.nt);
+    if (!(await confirmDialog(`This posts a notice about “${e.title}” and sends a phone alert to students who turned alerts on. Each student sees their own fine on their card.`, { ok: 'Send to students', title: 'Send the report to students?' }))) return;
+    try { await db(sb.rpc('v2_event_notify', { p_event: e.id })); toast('Students notified'); redraw(); } catch (x) { toast(needV2(x), true); } });
+  host.querySelectorAll('[data-co]').forEach(b => b.onclick = () => { const v = viol.find(x => x.id === b.dataset.co), s = std(v.standard_id), e = ev(v.event_id);
+    try { sessionStorage.setItem('alpha-prefill', JSON.stringify({ member: v.member_id, amount: s.fine, purpose: `Fine: ${s.title}${e ? ' · ' + e.title : ''}`, cat: 'Fines', fund: 'sails', violation: v.id })); } catch { /* ignore */ }
+    location.hash = '#/staff/treasury'; });
   host.querySelectorAll('[data-cl]').forEach(b => b.onclick = async () => { const e = ev(b.dataset.cl);
-    try { await db(sb.from('v2_events').update(e.status === 'open' ? { status: 'closed' } : { status: 'open', closed_at: null, finalized_at: null }).eq('id', e.id)); redraw(); } catch (x) { toast(needV21(x), true); } });
+    try { await db(sb.from('v2_events').update(e.status === 'open' ? { status: 'closed' } : { status: 'open', closed_at: null }).eq('id', e.id)); redraw(); } catch (x) { toast(needV2(x), true); } });
   host.querySelectorAll('[data-dl]').forEach(b => b.onclick = async () => { const e = ev(b.dataset.dl);
-    if (!(await confirmDialog(`Delete “${e.title}” and its scans? Absences already recorded stay in the ledger.`))) return;
-    try { await db(sb.from('v2_events').delete().eq('id', e.id)); toast('Deleted'); redraw(); } catch (x) { toast(needV21(x), true); } });
+    if (!(await confirmDialog(`Delete “${e.title}” and its scans? Absences already recorded stay in the Watch ledger.`, { ok: 'Delete', danger: true }))) return;
+    try { await db(sb.from('v2_events').delete().eq('id', e.id)); toast('Deleted'); redraw(); } catch (x) { toast(needV2(x), true); } });
 
   function newEvent() {
     modal(`<h3>New event</h3><form id="nf">
@@ -52,28 +87,37 @@ export async function mountEvents(host, ctx, members, standards, redraw) {
       k.onchange = sync; sync(); m.querySelector('#cx').onclick = close;
       f.onsubmit = async e => { e.preventDefault(); const x = f.elements;
         try { await db(sb.from('v2_events').insert({ id: uuid(), title: x.t.value.trim(), kind: x.k.value, event_date: x.d.value, needs_out: x.k.value === 'event' && x.o.checked, standard_id: defStd(x.k.value, standards) || null }));
-          toast('Event is open. Officers can scan now.'); close(); redraw(); } catch (er) { m.querySelector('#er').textContent = needV21(er); } };
+          toast('Event is open. Officers can scan now.'); close(); redraw(); } catch (er) { m.querySelector('#er').textContent = needV2(er); } };
     });
   }
 
-  /* President: who never scanned? Record them as absences. */
-  function review(e) {
+  /* Secretary: who never scanned? Untick the excused, then record the rest as absences. */
+  function compile(e) {
     const c = cnt(e.id), need = x => !c.in.has(x.id) || (e.needs_out && !c.out.has(x.id));
     const why = x => !c.in.has(x.id) && e.needs_out && !c.out.has(x.id) ? 'No log in, no log out' : !c.in.has(x.id) ? (e.needs_out ? 'No log in' : 'Not scanned') : 'No log out';
-    const pool = act.filter(need), cur = e.standard_id || defStd(e.kind, standards);
-    const opts = standards;
-    modal(`<h3>Review absences</h3><p class="muted" style="margin:0 0 8px">${esc(e.title)} · ${fmtDate(e.event_date)}${e.status === 'open' ? '<br><b>Still open.</b> Submitting closes the event.' : ''}</p>
-      <label>Record absences under</label><select id="as">${opts.map(s => `<option value="${s.id}"${s.id === cur ? ' selected' : ''}>${esc(s.title)}${s.fine ? ` (₱${s.fine} fine)` : ''}</option>`).join('')}</select>
-      <p class="muted" style="margin:8px 0">${pool.length} to record. Untick anyone who was excused.</p>
+    const pool = act.filter(need), s = std(e.standard_id);
+    modal(`<h3>Compile attendance</h3><p class="muted" style="margin:0 0 8px">${esc(e.title)} · ${fmtDate(e.event_date)}${e.status === 'open' ? '<br><b>Still open.</b> Compiling closes the event, so scanning stops.' : ''}</p>
+      <p class="muted" style="margin:0 0 8px">Recorded as <b>${esc(s?.title || 'no standard set')}</b>${s?.fine ? `, fine ${peso(s.fine)} each` : ''}. ${pool.length} to record. Untick anyone who was excused.</p>
       <div class="rvl">${pool.map(x => `<label class="ck"><input type="checkbox" data-a="${x.id}" checked><span>${esc(x.full_name)}<small>${why(x)}</small></span></label>`).join('') || '<p class="muted">Everyone is accounted for.</p>'}</div>
-      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:2">${pool.length ? 'Record absences and close' : 'Close event'}</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:2">${pool.length ? 'Record absences' : 'Close event'}</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
-      m.querySelector('#go').onclick = async () => { const sid = m.querySelector('#as').value, ids = [...m.querySelectorAll('[data-a]:checked')].map(x => x.dataset.a); let done = 0; m.querySelector('#go').disabled = true;
-        if (ids.length && !sid) { m.querySelector('#er').textContent = 'Choose what to record these under.'; m.querySelector('#go').disabled = false; return; }
-        try { for (const id of ids) { await safeWrite('v2_violations', { id: uuid(), member_id: id, standard_id: sid, occurred_on: e.event_date, reported_by: `${ctx.profile.role} ${ctx.profile.full_name} · ${e.title}`, status: 'pending' }); done++; }
-          await db(sb.from('v2_events').update({ status: 'closed', finalized_at: new Date().toISOString() }).eq('id', e.id));
-          toast(`${done} absence${done === 1 ? '' : 's'} recorded`); close(); redraw(); }
-        catch (x) { m.querySelector('#er').textContent = `${done} saved before the error: ${x.message}`; m.querySelector('#go').disabled = false; } };
+      m.querySelector('#go').onclick = async () => { const ids = [...m.querySelectorAll('[data-a]:checked')].map(x => x.dataset.a); m.querySelector('#go').disabled = true;
+        try { const n = await db(sb.rpc('v2_event_compile', { p_event: e.id, p_members: ids })); toast(`${n} absence${n === 1 ? '' : 's'} recorded. Now send the fines report.`); close(); redraw(); }
+        catch (x) { m.querySelector('#er').textContent = needV2(x); m.querySelector('#go').disabled = false; } };
+    });
+  }
+
+  /* Secretary: send the fines report to the officers who collect. */
+  function sendReport(e) {
+    const fl = finesOf(e.id), tot = fl.reduce((t, v) => t + (+std(v.standard_id)?.fine || 0), 0);
+    modal(`<h3>Send fines report</h3><p class="muted" style="margin:0 0 8px">${esc(e.title)} · goes to the President, Vice Mayor, Marshals and Treasurer.</p>
+      <div class="card pad"><b>${fl.length} student${fl.length === 1 ? '' : 's'} · ${peso(tot)} in fines</b>${fl.map(v => `<div class="fr"><span>${esc(mname(v.member_id))}</span><b>${peso(std(v.standard_id)?.fine)}</b></div>`).join('')}</div>
+      <label>Note (optional)</label><textarea id="nt" rows="2" maxlength="500" placeholder="Please collect these fines this week."></textarea>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:2">Send report</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#go').onclick = async () => { m.querySelector('#go').disabled = true;
+        try { await db(sb.rpc('v2_event_send_report', { p_event: e.id, p_note: m.querySelector('#nt').value })); toast('Report sent to the officers'); close(); redraw(); }
+        catch (x) { m.querySelector('#er').textContent = needV2(x); m.querySelector('#go').disabled = false; } };
     });
   }
 
@@ -106,7 +150,7 @@ export async function mountEvents(host, ctx, members, standards, redraw) {
       async function record(mem, d) {
         const id = uuid();
         try { await db(sb.from('v2_event_scans').insert({ id, event_id: e.id, member_id: mem.id, kind: d })); }
-        catch (x) { if (/duplicate|unique/i.test(x.message)) { mine[d].add(mem.id); say(`${mem.name} already ${d === 'in' ? 'logged in' : 'logged out'}.`, 'warn'); } else say(/closed/i.test(x.message) ? 'This event was closed by the President.' : needV21(x), 'bad'); return false; }
+        catch (x) { if (/duplicate|unique/i.test(x.message)) { mine[d].add(mem.id); say(`${mem.name} already ${d === 'in' ? 'logged in' : 'logged out'}.`, 'warn'); } else say(/closed/i.test(x.message) ? 'This event was closed by the President.' : needV2(x), 'bad'); return false; }
         mine[d].add(mem.id); hist.unshift({ label: `${d} ${mem.name}`, undo: async () => { await db(sb.from('v2_event_scans').delete().eq('id', id)); mine[d].delete(mem.id); } });
         say(`✓ ${d === 'in' ? 'Logged in' : 'Logged out'}: ${mem.name} · ${tm()}`, 'ok'); return true;
       }

@@ -380,3 +380,4 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .scn .rvl{display:flex;flex-direction:column;margin-top:10px}.scn .rvl .ck{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line);margin:0}.scn .rvl .ck input{width:24px;height:24px;flex:none}.scn .rvl small{display:block;color:var(--muted)}
 #pkw{margin-top:10px}
 .scn [hidden],.scnm [hidden]{display:none!important}
+.ck span small,.rvl .ck small{display:block}
