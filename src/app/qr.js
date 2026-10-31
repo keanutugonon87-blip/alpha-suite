@@ -38,10 +38,10 @@ export async function readQRFromFile(file) {
 }
 
 /* Keeps the camera open and calls onRaw(code) for every Alpha QR it sees, until the host element leaves the page. Throws when there is no camera. */
-export async function scanLoop(host, video, onRaw) {
+export async function scanLoop(host, video, onRaw, onStream) {
   const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
   try {
-    video.srcObject = stream; await video.play();
+    video.srcObject = stream; await video.play(); onStream && onStream(stream);
     const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
     const bd = 'BarcodeDetector' in window ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
     while (host.isConnected) {

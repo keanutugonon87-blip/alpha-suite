@@ -6,6 +6,7 @@ import { scanLoop } from '../qr.js';
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
 const peso0 = n => '₱' + Number(n).toLocaleString('en-PH');
+const ATT = /flag|inspection|log\s*in|log\s*out|event log/i;   // attendance and event standards, kept apart from grooming and uniform violations
 const VCOLS = 'id,member_id,standard_id,occurred_on,source,status,reported_by,resolve_requested_by,forwarded_by,resolved_by,created_at,updated_at,excuse_note,excuse_status,excuse_by,excuse_decided_by';
 const needV19 = e => /column|schema cache|does not exist/i.test(e.message || '') ? 'Run the v19 SQL in Supabase first (supabase/v19_constitution_fines.sql).' : e.message;
 const sanction = n => n === 1 ? '1st Offense: Verbal Warning' : `${ordinal(n)} Offense: Fine (₱${FINE})`;
@@ -16,6 +17,7 @@ export async function mountWatch(el, ctx) {
   const canReport = ctx.can('mayor','vice_mayor','secretary','marshall','sails');
   const canApprove = ctx.can('mayor','vice_mayor');
   const TK = 'alpha-f-watch-tab';
+  let kind = (() => { try { const k = localStorage.getItem('alpha-f-watch-kind'); return ['viol', 'att'].includes(k) ? k : 'all'; } catch { return 'all'; } })();
   let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
   el.innerHTML = skeleton(5);
 
@@ -41,9 +43,9 @@ export async function mountWatch(el, ctx) {
     const open = viol.filter(v => ['pending','resolve_requested','resolve_forwarded'].includes(v.status));
     const awaiting = viol.filter(v => v.status === 'awaiting_approval');
 
-    const vrow = v => { const [lbl0, cls] = STATUS[v.status] || [v.status, '']; const lbl = getLang() === 'ceb' ? t({ pending: 'sPending', awaiting_approval: 'sAwaiting', resolve_requested: 'sResReq', resolve_forwarded: 'sFwd', resolved: 'sResolved', rejected: 'sRejected' }[v.status] || 'x') : lbl0; return `<div class="row"><div class="m"><b>${esc(mname(v.member_id))} <span class="tag ${cls}">${lbl}</span></b>
+    const vrow = v => { const [lbl0, cls] = STATUS[v.status] || [v.status, '']; const lbl = getLang() === 'ceb' ? t({ pending: 'sPending', awaiting_approval: 'sAwaiting', resolve_requested: 'sResReq', resolve_forwarded: 'sFwd', resolved: 'sResolved', rejected: 'sRejected' }[v.status] || 'x') : lbl0; return `<div class="row stk vw"><div class="m"><b>${esc(mname(v.member_id))} <span class="tag ${cls}">${lbl}</span></b>
       <small>${esc(std(v.standard_id)?.title || 'Violation')} · ${fmtDate(v.occurred_on)} · ${sanctionOf(v)}${paid.has(v.id) ? ' · fine paid' : ''}${v.excuse_status === 'pending' ? ' · excuse letter waiting' : v.excuse_status === 'rejected' ? ' · excuse rejected' : ''}${v.reported_by ? ` · by ${esc(v.reported_by)}` : ''}</small></div>
-      <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${actions(v)}</div></div>`; };
+      <div class="acts">${actions(v)}</div></div>`; };
     function actions(v) {
       const a = [];
       if (v.status === 'awaiting_approval' && canApprove) a.push(`<button class="btn gold sm" data-act="approve" data-id="${v.id}">Approve</button><button class="btn ghost sm" data-act="reject" data-id="${v.id}">Reject</button>`);
@@ -60,8 +62,10 @@ export async function mountWatch(el, ctx) {
 
     let body;
     if (tab === 'ledger') {
-      const shown = viol.filter(v => !q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())).slice().reverse();
-      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
+      const isAtt = v => { const s0 = std(v.standard_id); return !!s0 && (!!s0.kind || ATT.test(s0.title)); };
+      const shown = viol.filter(v => (!q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())) && (kind === 'all' || (kind === 'att' ? isAtt(v) : !isAtt(v)))).slice().reverse();
+      body = `<div class="seg" id="kf" style="margin-bottom:8px">${[['all', 'All'], ['viol', 'Violations'], ['att', 'Attendance and events']].map(([k, l]) => `<button data-k="${k}" class="${kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
+        <div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
@@ -78,6 +82,7 @@ export async function mountWatch(el, ctx) {
     el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
       <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
 
+    el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { kind = b.dataset.k; try { localStorage.setItem('alpha-f-watch-kind', kind); } catch { /* ignore */ } draw(); });
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; try { localStorage.setItem(TK, tab); } catch { /* ignore */ } draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
@@ -154,84 +159,115 @@ export async function mountWatch(el, ctx) {
             toast(queued ? 'No signal. Saved on this device, will send automatically' : `${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
           catch (x) { go.disabled = false; upd(); m.querySelectorAll('#il [data-m]').forEach(b => { if (!picked.has(b.dataset.m)) { b.setAttribute('aria-checked', 'false'); b.classList.remove('on'); } }); m.querySelector('#er').textContent = `${done} saved before the error: ${x.message}. Only the rest are still selected.`; } }; });
   }
-  /* Scan inspection: the camera stays open. "Find violations": scan a card, tap only what failed. "Roll call": scan everyone present, the rest are recorded absent. */
+  /* Scan inspection: the camera stays open and every scan is confirmed on screen, by sound and by vibration.
+     Violations: pick what you are checking, scan a card, tap only what failed.  Roll call: scan everyone present (flag ceremony, inspection), the rest are recorded absent.
+     Event log in / out: scan on arrival and again on leaving, anyone who missed either is reviewed and fined. */
   function scanInspect(members, standards) {
     const act = members.filter(x => x.status === 'active'), byId = Object.fromEntries(act.map(x => [x.id, x]));
-    const checkable = standards.filter(x => !x.kind);
-    const absStd = standards.find(x => /flag/i.test(x.title)) || standards.find(x => /inspection/i.test(x.title)) || checkable[0];
-    let absId = absStd?.id, mode = 'find', pending = null, busy = false, last = '', lastAt = 0, lastOk = false, review = false;
-    const checked = new Set(), want = new Set(), present = new Set(), recent = []; let nFail = 0;
+    const checkable = standards.filter(x => !x.kind && !ATT.test(x.title));       // grooming and uniform standards only
+    const rollStds = standards.filter(x => /flag|inspection/i.test(x.title));
+    const logStd = standards.find(x => /log\s*in|log\s*out|event log/i.test(x.title));
+    let absId = (rollStds[0] || standards.find(x => !x.kind))?.id, logId = logStd?.id || '', mode = 'find', phase = 'in', pending = null, busy = false, last = '', lastAt = 0, lastOk = false, review = false;
+    const want = new Set(), checked = new Set(), present = new Set(), inAt = new Map(), outAt = new Map(), hist = []; let nFail = 0;
     const status = canApprove ? 'pending' : 'awaiting_approval';
-    const write = (mid, sid, d) => safeWrite('v2_violations', { id: uuid(), member_id: mid, standard_id: sid, occurred_on: d, reported_by: `${r} ${name}`, status });
-    const m = modal(`<h3>Scan inspection</h3>
-      <div class="seg" id="sm"><button data-md="find" class="on">Find violations</button><button data-md="roll">Roll call</button></div>
+    const write = async (mid, sid, d) => { const id = uuid(); await safeWrite('v2_violations', { id, member_id: mid, standard_id: sid, occurred_on: d, reported_by: `${r} ${name}`, status }); return id; };
+    const tm = d0 => d0.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
+    const m = modal(`<div class="scn"><h3>Scan inspection</h3>
+      <div class="seg" id="sm"><button data-md="find" class="on">Violations</button><button data-md="roll">Roll call</button><button data-md="log">Event log in/out</button></div>
       <label>Date</label><input id="sd" type="date" value="${todayISO()}">
-      <video id="sv" playsinline muted style="width:100%;border-radius:12px;background:#000;aspect-ratio:4/3;max-height:30vh;margin-top:8px"></video>
-      <p class="muted" id="ss" style="margin:6px 0">Starting camera…</p><div id="sp"></div>
-      <button type="button" class="btn ghost" id="sx" style="width:100%;margin-top:10px">Close</button>`, (el, close) => {
-      const $ = q => el.querySelector(q), ss = t0 => { $('#ss').textContent = t0; };
-      const hit = () => { try { navigator.vibrate && navigator.vibrate(60); } catch { /* ignore */ } };
-      const left = () => act.filter(x => !checked.has(x.id) && !present.has(x.id));
-      const pickBox = () => `<label style="margin-top:10px">Camera not reading? Pick the student</label><select id="pk"><option value="">Select…</option>${left().map(x => `<option value="${x.id}">${esc(x.full_name)}</option>`).join('')}</select>`;
+      <div class="vid" id="vd"><video id="sv" playsinline muted></video><button type="button" class="torch" id="tc" hidden aria-label="Flashlight">🔦</button></div>
+      <div class="sb idle" id="sb" role="status" aria-live="polite">Starting camera…</div><div id="sp"></div>
+      <div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn ghost" id="un" hidden>↩ Undo last</button><button type="button" class="btn ghost" id="sx" style="flex:1">Close</button></div></div>`, (el, close) => {
+      const $ = q => el.querySelector(q);
+      let ac = null;
+      const beep = ok => { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = ok ? 880 : 300; g.gain.value = 0.15; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + (ok ? 0.12 : 0.28)); } catch { /* no sound */ } };
+      const say = (txt, kind = 'idle') => { const b = $('#sb'); b.className = 'sb ' + kind; b.textContent = txt;
+        if (kind !== 'idle') { const v = $('#vd'); v.classList.remove('flash', 'ok', 'warn', 'bad'); void v.offsetWidth; v.classList.add('flash', kind); beep(kind === 'ok'); try { navigator.vibrate && navigator.vibrate(kind === 'ok' ? 60 : [80, 60, 80]); } catch { /* ignore */ } } };
+      const left = () => act.filter(x => !checked.has(x.id) && !present.has(x.id) && !inAt.has(x.id) && !outAt.has(x.id));
+      const pickBox = () => `<label style="margin-top:14px">Camera not reading? Pick the student</label><select id="pk"><option value="">Select…</option>${act.filter(x => !checked.has(x.id)).map(x => `<option value="${x.id}">${esc(x.full_name)}</option>`).join('')}</select>`;
+      const stdSel = (id, list) => `<select id="as">${list.map(x => `<option value="${x.id}"${x.id === id ? ' selected' : ''}>${esc(x.title)}${x.fine ? ` (₱${x.fine} fine)` : ''}</option>`).join('')}</select>`;
+      const recentList = () => hist.slice(0, 3).map(h => `<small class="muted" style="display:block;padding:2px 0">${esc(h.label)}</small>`).join('');
+      const refreshUndo = () => { $('#un').hidden = !hist.length; };
+      function review_(rows, stdId, title, hint) {
+        const pp = $('#sp'), sd = standards.find(x => x.id === stdId);
+        pp.innerHTML = `<div class="card pad"><b>${rows.length} ${title}</b><p class="muted" style="margin:4px 0 10px">${hint} Untick anyone who was excused. The rest are recorded for ${esc(sd?.title || 'this standard')}${sd?.fine ? ` (fine ₱${sd.fine})` : ''}.</p>
+          <div class="rvl">${rows.map(([x, why]) => `<label class="ck"><input type="checkbox" data-a="${x.id}" checked><span>${esc(x.full_name)}${why ? `<small>${esc(why)}</small>` : ''}</span></label>`).join('') || '<p class="muted">Everyone is accounted for.</p>'}</div>
+          <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="rc" style="flex:1"${rows.length ? '' : ' disabled'}>Record ${rows.length}</button><button class="btn ghost" id="bk">Back</button></div></div>`;
+        $('#bk').onclick = () => { review = false; pane(); };
+        $('#rc').onclick = async () => { const ids = [...pp.querySelectorAll('[data-a]:checked')].map(c => c.dataset.a); $('#rc').disabled = true; let done = 0;
+          try { for (const id of ids) { await write(id, stdId, $('#sd').value); done++; } toast(`${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
+          catch (x) { toast(`${done} saved before the error: ${x.message}`, true); $('#rc').disabled = false; } };
+      }
       function pane() {
-        const pp = $('#sp');
+        const pp = $('#sp'); refreshUndo();
         if (mode === 'find') {
           if (pending) {
             const bad = pending.bad;
-            pp.innerHTML = `<div class="card pad"><b style="font-size:1.1rem">${esc(pending.name)}</b><p class="muted" style="margin:2px 0 8px">Tap only what this student failed.</p>
+            pp.innerHTML = `<div class="card pad"><b class="who">${esc(pending.name)}</b><p class="muted" style="margin:2px 0 10px">Tap only what this student failed.</p>
               <div class="chips">${[...want].map(id => { const x = standards.find(y => y.id === id); return `<button type="button" data-f="${id}" class="${bad.has(id) ? 'on' : ''}">${esc(x.title)}</button>`; }).join('')}</div>
-              <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="ok" style="flex:1">${bad.size ? `Record ${bad.size} violation${bad.size === 1 ? '' : 's'}` : '✓ Passed'}</button><button class="btn ghost" id="sk">Skip</button></div></div>`;
+              <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold big" id="ok" style="flex:1">${bad.size ? `Record ${bad.size} violation${bad.size === 1 ? '' : 's'}` : '✓ Passed'}</button><button class="btn ghost big" id="sk">Skip</button></div></div>`;
             pp.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bad.has(b.dataset.f) ? bad.delete(b.dataset.f) : bad.add(b.dataset.f); pane(); });
-            $('#sk').onclick = () => { pending = null; pane(); };
-            $('#ok').onclick = async () => { $('#ok').disabled = true;
-              try { for (const id of bad) await write(pending.id, id, $('#sd').value); checked.add(pending.id); if (bad.size) nFail++; hit(); recent.unshift(`${pending.name}${bad.size ? ` · ${bad.size} failed` : ' · passed'}`); pending = null; pane(); }
+            $('#sk').onclick = () => { pending = null; say('Skipped. Scan the next card.'); pane(); };
+            $('#ok').onclick = async () => { $('#ok').disabled = true; const nm = pending.name, mid = pending.id, ids = [];
+              try { for (const sid of bad) ids.push(await write(mid, sid, $('#sd').value)); checked.add(mid); if (bad.size) nFail++;
+                hist.unshift({ label: `${nm} · ${bad.size ? bad.size + ' failed' : 'passed'}`, undo: async () => { for (const id of ids) await db(sb.from('v2_violations').delete().eq('id', id)); checked.delete(mid); if (ids.length) nFail--; } });
+                pending = null; say(bad.size ? `Recorded for ${nm}. Scan the next card.` : `${nm} passed. Scan the next card.`, 'ok'); pane(); }
               catch (x) { toast(x.message, true); $('#ok').disabled = false; } };
           } else {
-            pp.innerHTML = `<label>What are you checking? (tap all that apply)</label><div class="chips pick" id="ws">${checkable.map(x => `<button type="button" data-w="${x.id}" class="${want.has(x.id) ? 'on' : ''}">${esc(x.title)}</button>`).join('')}</div>
-              <p class="muted" style="margin:10px 0 0"><b>${checked.size}</b> of ${act.length} checked · <b>${nFail}</b> with violations</p>${recent.slice(0, 3).map(t0 => `<small class="muted" style="display:block">${esc(t0)}</small>`).join('')}${pickBox()}`;
-            pp.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { want.has(b.dataset.w) ? want.delete(b.dataset.w) : want.add(b.dataset.w); pane(); });
+            pp.innerHTML = `${want.size ? '' : '<div class="need" id="nd"><b>① Choose what you are checking</b><span>Tap one or more below, then scan the cards.</span></div>'}
+              <label style="margin-top:0">What are you checking?</label><div class="chips pick" id="ws">${checkable.map(x => `<button type="button" data-w="${x.id}" class="${want.has(x.id) ? 'on' : ''}">${esc(x.title)}</button>`).join('')}</div>
+              <p class="count"><b>${checked.size}</b> of ${act.length} checked · <b>${nFail}</b> with violations</p>${recentList()}${pickBox()}`;
+            pp.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { want.has(b.dataset.w) ? want.delete(b.dataset.w) : want.add(b.dataset.w); if (want.size) say('Ready. Scan a student’s card.'); pane(); });
           }
-        } else if (review) {
-          const rest = left(), as0 = standards.find(x => x.id === absId);
-          pp.innerHTML = `<div class="card pad"><b>${rest.length} not scanned</b><p class="muted" style="margin:2px 0 8px">Untick anyone who was excused. The rest are recorded absent for ${esc(as0?.title || 'this standard')}${as0?.fine ? ` (fine ₱${as0.fine})` : ''}.</p>
-            <div style="max-height:30vh;overflow:auto">${rest.map(x => `<label class="ck" style="display:flex;gap:8px;align-items:center;padding:4px 0"><input type="checkbox" data-a="${x.id}" checked> ${esc(x.full_name)}</label>`).join('')}</div>
-            <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="rc" style="flex:1">Record absences</button><button class="btn ghost" id="bk">Back</button></div></div>`;
-          $('#bk').onclick = () => { review = false; pane(); };
-          $('#rc').onclick = async () => { const ids = [...pp.querySelectorAll('[data-a]:checked')].map(c => c.dataset.a); $('#rc').disabled = true; let done = 0;
-            try { for (const id of ids) { await write(id, absId, $('#sd').value); done++; } toast(`${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
-            catch (x) { toast(`${done} saved before the error: ${x.message}`, true); $('#rc').disabled = false; } };
-        } else {
-          pp.innerHTML = `<label>Record the unscanned as absent for</label><select id="as">${standards.map(x => `<option value="${x.id}"${x.id === absId ? ' selected' : ''}>${esc(x.title)}${x.fine ? ` (₱${x.fine} fine)` : ''}</option>`).join('')}</select>
-            <p style="margin:10px 0 0;font-size:1.3rem"><b>${present.size}</b> of ${act.length} present</p>${recent.slice(0, 3).map(t0 => `<small class="muted" style="display:block">✓ ${esc(t0)}</small>`).join('')}
-            <button class="btn gold" id="fin" style="width:100%;margin-top:10px">Finish and review the unscanned</button>${pickBox()}`;
+        } else if (mode === 'roll') {
+          if (review) return review_(left().map(x => [x, '']), absId, 'not scanned', 'These students were not scanned.');
+          pp.innerHTML = `<label style="margin-top:0">Record the unscanned as absent for</label>${stdSel(absId, rollStds.length ? rollStds : standards.filter(x => !x.kind))}
+            <p class="count"><b>${present.size}</b> of ${act.length} present</p>${recentList()}
+            <button class="btn gold big" id="fin" style="width:100%;margin-top:10px">Finish and review the unscanned</button>${pickBox()}`;
           $('#as').onchange = e => { absId = e.target.value; };
           $('#fin').onclick = () => { review = true; pane(); };
+        } else {
+          if (review) { const rows = act.filter(x => !inAt.has(x.id) || !outAt.has(x.id)).map(x => [x, !inAt.has(x.id) && !outAt.has(x.id) ? 'No log in, no log out' : !inAt.has(x.id) ? 'No log in' : 'No log out']); return review_(rows, logId, 'missed log in or log out', 'The Constitution fines a missed log in or log out.'); }
+          pp.innerHTML = `${logStd ? '' : `<label style="margin-top:0">Record misses under</label>${stdSel(logId, standards.filter(x => !x.kind))}`}
+            <div class="seg" id="ph" style="margin-top:6px"><button data-ph="in" class="${phase === 'in' ? 'on' : ''}">Log in</button><button data-ph="out" class="${phase === 'out' ? 'on' : ''}">Log out</button></div>
+            <p class="count"><b>${inAt.size}</b> logged in · <b>${outAt.size}</b> logged out · ${act.length} students</p>${recentList()}
+            <button class="btn gold big" id="fin" style="width:100%;margin-top:10px">Finish and review misses</button>${pickBox()}`;
+          pp.querySelectorAll('[data-ph]').forEach(b => b.onclick = () => { phase = b.dataset.ph; say(phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.'); pane(); });
+          $('#as')?.addEventListener('change', e => { logId = e.target.value; });
+          $('#fin').onclick = () => { if (!logId) return say('Choose where to record the misses first.', 'warn'); review = true; pane(); };
         }
         $('#pk')?.addEventListener('change', e => { const mem = byId[e.target.value]; if (mem) got({ id: mem.id, name: mem.full_name }); });
       }
       function got(s0) {
-        if (!byId[s0.id]) return !ss('That student is not on the active list.');
+        if (!byId[s0.id]) return void say('That student is not on the active list.', 'bad');
         if (mode === 'find') {
-          if (pending) return !ss(`Finish ${pending.name} first.`);
-          if (!want.size) return !ss('Tap what you are checking first.');
-          if (checked.has(s0.id)) return !ss(`${s0.name} is already checked.`);
-          pending = { id: s0.id, name: s0.name, bad: new Set() }; hit(); ss('Scanned ' + s0.name);
+          if (!want.size) { const nd = $('#nd'); if (nd) { nd.classList.remove('shake'); void nd.offsetWidth; nd.classList.add('shake'); } return void say(`Scanned ${s0.name}. First choose what you are checking, then scan again.`, 'warn'); }
+          if (pending) return void say(`Finish ${pending.name} first.`, 'warn');
+          if (checked.has(s0.id)) return void say(`${s0.name} is already checked.`, 'warn');
+          pending = { id: s0.id, name: s0.name, bad: new Set() }; say(`✓ Scanned: ${s0.name}`, 'ok');
+        } else if (mode === 'roll') {
+          if (present.has(s0.id)) return void say(`${s0.name} is already marked present.`, 'warn');
+          present.add(s0.id); hist.unshift({ label: `✓ ${s0.name}`, undo: async () => { present.delete(s0.id); } }); say(`✓ Present: ${s0.name}`, 'ok');
         } else {
-          if (present.has(s0.id)) return !ss(`${s0.name} is already marked present.`);
-          present.add(s0.id); recent.unshift(s0.name); hit(); ss('✓ ' + s0.name);
+          const set = phase === 'in' ? inAt : outAt;
+          if (set.has(s0.id)) return void say(`${s0.name} already logged ${phase === 'in' ? 'in' : 'out'} at ${tm(set.get(s0.id))}.`, 'warn');
+          set.set(s0.id, new Date()); hist.unshift({ label: `${phase === 'in' ? '→' : '←'} ${s0.name} · ${tm(set.get(s0.id))}`, undo: async () => { set.delete(s0.id); } }); say(`✓ Logged ${phase}: ${s0.name}`, 'ok');
         }
         pane(); return true;
       }
       const onRaw = async raw => {
         const now = Date.now(); if (busy || (raw === last && now - lastAt < (lastOk ? 3000 : 1200))) return; busy = true; last = raw; lastAt = now; lastOk = false;
-        try { const s0 = await db(sb.rpc('v2_resolve_token', { p_token: raw })); lastOk = !!got(s0); } catch (x) { ss(x.message); }
+        try { const s0 = await db(sb.rpc('v2_resolve_token', { p_token: raw })); lastOk = !!got(s0); } catch (x) { say(x.message, 'bad'); }
         busy = false;
       };
       el.addEventListener('scan', e => onRaw(e.detail));           // lets a test or a hardware scanner feed codes without the camera
-      el.querySelectorAll('[data-md]').forEach(b => b.onclick = () => { mode = b.dataset.md; review = false; pending = null; el.querySelectorAll('[data-md]').forEach(x => x.classList.toggle('on', x === b)); pane(); });
+      el.querySelectorAll('[data-md]').forEach(b => b.onclick = () => { mode = b.dataset.md; review = false; pending = null; el.querySelectorAll('[data-md]').forEach(x => x.classList.toggle('on', x === b));
+        say({ find: 'Violations: choose what you are checking, then scan.', roll: 'Roll call: scan everyone who is present.', log: phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.' }[mode]); pane(); });
+      $('#un').onclick = async () => { const h = hist.shift(); if (!h) return; try { await h.undo(); say('Undone: ' + h.label, 'warn'); } catch (x) { toast(x.message, true); hist.unshift(h); } pane(); };
       $('#sx').onclick = close; pane();
-      scanLoop(el, $('#sv'), onRaw).then(() => {}, e => ss('Camera unavailable (' + (e.message || e) + '). Pick the student below instead.'));
-      $('#sv').addEventListener('playing', () => ss('Point at a student’s QR card'));
+      scanLoop(el, $('#sv'), onRaw, stream => { const tr = stream.getVideoTracks()[0]; if (tr?.getCapabilities?.().torch) { const b = $('#tc'); b.hidden = false; let on = false; b.onclick = () => { on = !on; tr.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {}); b.classList.toggle('on', on); }; } })
+        .then(() => {}, e => say('Camera unavailable (' + (e.message || e) + '). Pick the student below instead.', 'bad'));
+      $('#sv').addEventListener('playing', () => say(mode === 'find' && !want.size ? 'Camera ready. Choose what you are checking first.' : 'Camera ready. Point at a student’s QR card.'));
     });
     return m;
   }
