@@ -37,6 +37,22 @@ export async function readQRFromFile(file) {
   return r.data;
 }
 
+/* Keeps the camera open and calls onRaw(code) for every Alpha QR it sees, until the host element leaves the page. Throws when there is no camera. */
+export async function scanLoop(host, video, onRaw) {
+  const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+  try {
+    video.srcObject = stream; await video.play();
+    const c = document.createElement('canvas'), x = c.getContext('2d', { willReadFrequently: true });
+    const bd = 'BarcodeDetector' in window ? new window.BarcodeDetector({ formats: ['qr_code'] }) : null;
+    while (host.isConnected) {
+      let raw = null;
+      try { if (bd) raw = (await bd.detect(video))[0]?.rawValue; else { c.width = video.videoWidth; c.height = video.videoHeight; x.drawImage(video, 0, 0); const d = x.getImageData(0, 0, c.width, c.height); raw = jsQR(d.data, d.width, d.height)?.data; } } catch { /* next frame */ }
+      if (raw && raw.startsWith('A1.')) await onRaw(raw);
+      await new Promise(r => setTimeout(r, 250));
+    }
+  } finally { stream.getTracks().forEach(t => t.stop()); }
+}
+
 export function scanMember() {
   return new Promise(resolve => {
     let stream = null, stop = false, done = false;
