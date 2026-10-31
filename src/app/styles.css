@@ -355,18 +355,28 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .crumbs{display:flex;align-items:center;gap:8px;margin:12px 0 4px}.crumbs button{background:none;border:0;color:var(--navy);font:inherit;font-weight:600;cursor:pointer;padding:6px 4px;text-decoration:underline}
 /* Watch rows on a phone: the text gets the full width, the buttons sit underneath */
 .row.stk.vw{gap:10px}.row.stk.vw .acts{margin:0;display:flex;flex-wrap:wrap;gap:8px}.row.stk.vw .acts .btn{min-height:40px}
-/* Scan inspection */
-.scn{padding:2px 2px 6px}.scn h3{margin:0 0 12px}.scn .seg button{padding:11px 6px;font-size:.88rem}.scn label{margin-top:12px}
-.scn .vid{position:relative;margin-top:12px}.scn .vid video{width:100%;display:block;border-radius:14px;background:#000;aspect-ratio:4/3;max-height:30vh;object-fit:cover}
-.scn .vid.flash:after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;font-size:4.5rem;font-weight:700;color:#fff;border-radius:14px;background:rgba(46,158,107,.6);animation:scnfl .8s forwards;pointer-events:none}
+/* Scan inspection: a full screen in stages (Scan, Category, Finalize) */
+.scnm{align-items:stretch;background:var(--card)}.scnm .sheet{max-width:none;width:100%;height:100dvh;max-height:none;border-radius:0;padding:12px 14px calc(12px + env(safe-area-inset-bottom));display:flex;flex-direction:column;overflow:auto}
+.scn.full{display:flex;flex-direction:column;flex:1;min-height:0}
+.scn-h{display:flex;align-items:center;gap:10px;margin-bottom:8px}.scn-h b{font-family:var(--head);color:var(--navy);font-size:1.05rem}.scn-h .x{margin-left:auto;width:44px;height:44px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:1.1rem;cursor:pointer;color:var(--navy)}
+.steps{display:flex;gap:6px;font-size:.72rem;color:var(--muted)}.steps span{display:flex;align-items:center;gap:4px}.steps i{font-style:normal;width:20px;height:20px;border-radius:50%;background:var(--line);display:grid;place-items:center;font-weight:700;color:var(--navy)}
+.steps .on{color:var(--navy);font-weight:700}.steps .on i{background:var(--navy);color:#fff}.steps .done i{background:#2e9e6b;color:#fff}
+#g1{display:flex;flex-direction:column;flex:1;min-height:0}#g1[hidden],#g2[hidden]{display:none}#g2{display:flex;flex-direction:column;flex:1;min-height:0}
+.scn .seg{margin-bottom:8px}.scn .seg button{padding:10px 6px;font-size:.88rem}
+.scn .vid{position:relative;flex:1;min-height:42vh;margin-top:2px}.scn .vid video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:16px;background:#000}
+.scn .pill{position:absolute;left:10px;bottom:10px;background:rgba(0,0,0,.6);color:#fff;border-radius:99px;padding:6px 12px;font-size:.85rem;font-weight:700}
+.scn .vid.flash:after{content:"✓";position:absolute;inset:0;display:grid;place-items:center;font-size:5rem;font-weight:700;color:#fff;border-radius:16px;background:rgba(46,158,107,.6);animation:scnfl .8s forwards;pointer-events:none}
 .scn .vid.flash.warn:after{content:"!";background:rgba(224,162,27,.65)}.scn .vid.flash.bad:after{content:"✕";background:rgba(214,81,63,.65)}
 @keyframes scnfl{0%{opacity:1}70%{opacity:1}100%{opacity:0}}
-.scn .torch{position:absolute;right:10px;top:10px;width:44px;height:44px;border-radius:50%;border:0;background:rgba(0,0,0,.55);font-size:1.3rem;cursor:pointer}.scn .torch.on{background:#e0a21b}
-.scn .sb{border-radius:14px;padding:14px 16px;font-weight:700;margin:12px 0;font-size:1.05rem;line-height:1.35}
+.scn .torch{position:absolute;right:10px;top:10px;width:46px;height:46px;border-radius:50%;border:0;background:rgba(0,0,0,.55);font-size:1.3rem;cursor:pointer;z-index:2}.scn .torch.on{background:#e0a21b}
+.scn .sb{border-radius:14px;padding:12px 14px;font-weight:700;margin:0 0 10px;font-size:1rem;line-height:1.3}
 .scn .sb.idle{background:var(--sky);color:var(--navy)}.scn .sb.ok{background:#d9f4e6;color:#0b6b3a}.scn .sb.warn{background:#fff1cf;color:#8a5a00}.scn .sb.bad{background:#fde2e0;color:#a32117}
-.scn .need{background:#fff1cf;border:2px solid #e0a21b;color:#6b4a00;border-radius:14px;padding:12px 14px;margin:0 0 12px;display:flex;flex-direction:column;gap:2px}.scn .need.shake{animation:scnsh .5s}
-@keyframes scnsh{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
-.scn .chips{gap:10px;margin:10px 0 4px}.scn .chips button{padding:11px 16px;font-size:1rem;min-height:46px}
-.scn .who{font-size:1.2rem;color:var(--navy)}.scn .count{margin:14px 0 6px;font-size:1.05rem}.scn .btn.big{min-height:50px;font-size:1.05rem}
-.scn .card.pad{padding:16px}.scn select,.scn input[type=date]{min-height:46px}
-.scn .rvl{max-height:34vh;overflow:auto;display:flex;flex-direction:column}.scn .rvl .ck{display:flex;gap:12px;align-items:center;padding:10px 2px;border-bottom:1px solid var(--line);margin:0}.scn .rvl .ck input{width:22px;height:22px;flex:none}.scn .rvl small{display:block;color:var(--muted)}
+.scn-b{display:flex;gap:8px;margin-top:10px}.scn-b .btn{flex:1}.scn-b.stick{margin-top:auto;padding-top:12px}.scn .btn.big{min-height:52px;font-size:1.02rem}
+.stg{flex:1;overflow:auto}.stg .who{font-size:1.5rem;font-weight:700;color:var(--navy);margin:4px 0 2px}.stg .muted{margin:0 0 12px}
+.cats{display:grid;grid-template-columns:1fr 1fr;gap:10px}.cats button{min-height:72px;border:2px solid var(--line);background:var(--sky);color:var(--navy);border-radius:16px;font:inherit;font-size:1.05rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;padding:8px}
+.cats button small{color:var(--muted)}.cats button.on{background:var(--flag,#c0392b);border-color:var(--flag,#c0392b);color:#fff}.cats button.on small{color:#ffe3e0}
+.scn .fr{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line);font-size:1.05rem}.scn .fr:last-child{border:0}.scn .fr.tot{font-weight:700}
+.scn select,.scn input[type=date]{min-height:48px;width:100%}.scn label{margin-top:12px;display:block}
+.scn .rvl{display:flex;flex-direction:column;margin-top:10px}.scn .rvl .ck{display:flex;gap:12px;align-items:center;padding:12px 2px;border-bottom:1px solid var(--line);margin:0}.scn .rvl .ck input{width:24px;height:24px;flex:none}.scn .rvl small{display:block;color:var(--muted)}
+#pkw{margin-top:10px}
+.scn [hidden],.scnm [hidden]{display:none!important}

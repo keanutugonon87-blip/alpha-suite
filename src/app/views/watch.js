@@ -159,101 +159,113 @@ export async function mountWatch(el, ctx) {
             toast(queued ? 'No signal. Saved on this device, will send automatically' : `${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
           catch (x) { go.disabled = false; upd(); m.querySelectorAll('#il [data-m]').forEach(b => { if (!picked.has(b.dataset.m)) { b.setAttribute('aria-checked', 'false'); b.classList.remove('on'); } }); m.querySelector('#er').textContent = `${done} saved before the error: ${x.message}. Only the rest are still selected.`; } }; });
   }
-  /* Scan inspection: the camera stays open and every scan is confirmed on screen, by sound and by vibration.
-     Violations: pick what you are checking, scan a card, tap only what failed.  Roll call: scan everyone present (flag ceremony, inspection), the rest are recorded absent.
-     Event log in / out: scan on arrival and again on leaving, anyone who missed either is reviewed and fined. */
+  /* Scan inspection, in stages on a full screen so the camera stays big:
+       1 Scan   - aim at the QR card; every scan is confirmed by a banner, a flash, a beep and a vibration
+       2 Category - (Violations only) tap what the student failed
+       3 Finalize - check the report, then submit
+     Violations: grooming and uniform.  Roll call: flag ceremony, inspection (the unscanned are recorded absent).  Event log in/out: arrival and leaving. */
   function scanInspect(members, standards) {
     const act = members.filter(x => x.status === 'active'), byId = Object.fromEntries(act.map(x => [x.id, x]));
     const checkable = standards.filter(x => !x.kind && !ATT.test(x.title));       // grooming and uniform standards only
     const rollStds = standards.filter(x => /flag|inspection/i.test(x.title));
     const logStd = standards.find(x => /log\s*in|log\s*out|event log/i.test(x.title));
-    let absId = (rollStds[0] || standards.find(x => !x.kind))?.id, logId = logStd?.id || '', mode = 'find', phase = 'in', pending = null, busy = false, last = '', lastAt = 0, lastOk = false, review = false;
-    const want = new Set(), checked = new Set(), present = new Set(), inAt = new Map(), outAt = new Map(), hist = []; let nFail = 0;
+    let absId = (rollStds[0] || standards.find(x => !x.kind))?.id, logId = logStd?.id || '', mode = 'find', phase = 'in', stage = 'scan', pending = null, busy = false, last = '', lastAt = 0, lastOk = false, dateV = todayISO();
+    const checked = new Set(), present = new Set(), inAt = new Map(), outAt = new Map(), hist = []; let nFail = 0;
     const status = canApprove ? 'pending' : 'awaiting_approval';
     const write = async (mid, sid, d) => { const id = uuid(); await safeWrite('v2_violations', { id, member_id: mid, standard_id: sid, occurred_on: d, reported_by: `${r} ${name}`, status }); return id; };
     const tm = d0 => d0.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
-    const m = modal(`<div class="scn"><h3>Scan inspection</h3>
-      <div class="seg" id="sm"><button data-md="find" class="on">Violations</button><button data-md="roll">Roll call</button><button data-md="log">Event log in/out</button></div>
-      <label>Date</label><input id="sd" type="date" value="${todayISO()}">
-      <div class="vid" id="vd"><video id="sv" playsinline muted></video><button type="button" class="torch" id="tc" hidden aria-label="Flashlight">🔦</button></div>
-      <div class="sb idle" id="sb" role="status" aria-live="polite">Starting camera…</div><div id="sp"></div>
-      <div style="display:flex;gap:8px;margin-top:12px"><button type="button" class="btn ghost" id="un" hidden>↩ Undo last</button><button type="button" class="btn ghost" id="sx" style="flex:1">Close</button></div></div>`, (el, close) => {
+    const peso1 = n => '₱' + Number(n).toLocaleString('en-PH');
+    const m = modal(`<div class="scn full">
+      <div class="scn-h"><b>Scan inspection</b><span class="steps" id="stp"></span><button type="button" class="x" id="sx" aria-label="Close">✕</button></div>
+      <div class="sb idle" id="sb" role="status" aria-live="polite">Starting camera…</div>
+      <div id="g1"><div class="seg" id="sm"><button data-md="find" class="on">Violations</button><button data-md="roll">Roll call</button><button data-md="log">Event log in/out</button></div>
+        <div id="ph" hidden class="seg"><button data-ph="in" class="on">Log in</button><button data-ph="out">Log out</button></div>
+        <div class="vid" id="vd"><video id="sv" playsinline muted></video><button type="button" class="torch" id="tc" hidden aria-label="Flashlight">🔦</button><span class="pill" id="cn"></span></div>
+        <div class="scn-b"><button type="button" class="btn ghost big" id="un" hidden>↩ Undo last</button><button type="button" class="btn ghost big" id="pkb">Can’t scan? Pick</button><button type="button" class="btn gold big" id="fin" hidden>Finish ›</button></div>
+        <div id="pkw" hidden></div></div>
+      <div id="g2" hidden></div></div>`, (el, close) => {
+      el.classList.add('scnm');
       const $ = q => el.querySelector(q);
       let ac = null;
       const beep = ok => { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = ok ? 880 : 300; g.gain.value = 0.15; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + (ok ? 0.12 : 0.28)); } catch { /* no sound */ } };
       const say = (txt, kind = 'idle') => { const b = $('#sb'); b.className = 'sb ' + kind; b.textContent = txt;
         if (kind !== 'idle') { const v = $('#vd'); v.classList.remove('flash', 'ok', 'warn', 'bad'); void v.offsetWidth; v.classList.add('flash', kind); beep(kind === 'ok'); try { navigator.vibrate && navigator.vibrate(kind === 'ok' ? 60 : [80, 60, 80]); } catch { /* ignore */ } } };
-      const left = () => act.filter(x => !checked.has(x.id) && !present.has(x.id) && !inAt.has(x.id) && !outAt.has(x.id));
-      const pickBox = () => `<label style="margin-top:14px">Camera not reading? Pick the student</label><select id="pk"><option value="">Select…</option>${act.filter(x => !checked.has(x.id)).map(x => `<option value="${x.id}">${esc(x.full_name)}</option>`).join('')}</select>`;
-      const stdSel = (id, list) => `<select id="as">${list.map(x => `<option value="${x.id}"${x.id === id ? ' selected' : ''}>${esc(x.title)}${x.fine ? ` (₱${x.fine} fine)` : ''}</option>`).join('')}</select>`;
-      const recentList = () => hist.slice(0, 3).map(h => `<small class="muted" style="display:block;padding:2px 0">${esc(h.label)}</small>`).join('');
-      const refreshUndo = () => { $('#un').hidden = !hist.length; };
-      function review_(rows, stdId, title, hint) {
-        const pp = $('#sp'), sd = standards.find(x => x.id === stdId);
-        pp.innerHTML = `<div class="card pad"><b>${rows.length} ${title}</b><p class="muted" style="margin:4px 0 10px">${hint} Untick anyone who was excused. The rest are recorded for ${esc(sd?.title || 'this standard')}${sd?.fine ? ` (fine ₱${sd.fine})` : ''}.</p>
-          <div class="rvl">${rows.map(([x, why]) => `<label class="ck"><input type="checkbox" data-a="${x.id}" checked><span>${esc(x.full_name)}${why ? `<small>${esc(why)}</small>` : ''}</span></label>`).join('') || '<p class="muted">Everyone is accounted for.</p>'}</div>
-          <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="rc" style="flex:1"${rows.length ? '' : ' disabled'}>Record ${rows.length}</button><button class="btn ghost" id="bk">Back</button></div></div>`;
-        $('#bk').onclick = () => { review = false; pane(); };
-        $('#rc').onclick = async () => { const ids = [...pp.querySelectorAll('[data-a]:checked')].map(c => c.dataset.a); $('#rc').disabled = true; let done = 0;
-          try { for (const id of ids) { await write(id, stdId, $('#sd').value); done++; } toast(`${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
+      const stepsFor = () => mode === 'find' ? [['scan', 'Scan'], ['cat', 'Category'], ['fin', 'Finalize']] : [['scan', 'Scan'], ['fin', 'Finalize']];
+      const showSteps = () => { const list = stepsFor(), at = list.findIndex(x => x[0] === stage); $('#stp').innerHTML = list.map(([k, l], i) => `<span class="${i === at ? 'on' : i < at ? 'done' : ''}"><i>${i < at ? '✓' : i + 1}</i>${l}</span>`).join(''); };
+      const go = st => { stage = st; $('#g1').hidden = st !== 'scan'; $('#g2').hidden = st === 'scan'; showSteps(); if (st === 'scan') scanPane(); else (st === 'cat' ? catPane : finPane)(); };
+      function scanPane() {
+        $('#ph').hidden = mode !== 'log';
+        const n = mode === 'find' ? checked.size : mode === 'roll' ? present.size : Math.max(inAt.size, outAt.size);
+        $('#cn').textContent = mode === 'log' ? `In ${inAt.size} · Out ${outAt.size} of ${act.length}` : `${n} of ${act.length} ${mode === 'find' ? 'checked' : 'present'}${mode === 'find' && nFail ? ` · ${nFail} flagged` : ''}`;
+        $('#un').hidden = !hist.length; $('#fin').hidden = mode === 'find';
+      }
+      function pickList() {
+        const w = $('#pkw'); w.hidden = !w.hidden; if (w.hidden) return;
+        w.innerHTML = `<select id="pk"><option value="">Choose a student…</option>${act.filter(x => !checked.has(x.id)).map(x => `<option value="${x.id}">${esc(x.full_name)}</option>`).join('')}</select>`;
+        w.querySelector('#pk').onchange = e => { const mem = byId[e.target.value]; w.hidden = true; if (mem) got({ id: mem.id, name: mem.full_name }); };
+      }
+      /* stage 2: what did they fail? */
+      function catPane() {
+        const g = $('#g2'), bad = pending.bad;
+        g.innerHTML = `<div class="stg"><p class="who">${esc(pending.name)}</p><p class="muted">Tap everything this student failed.</p>
+          <div class="cats">${checkable.map(x => `<button type="button" data-f="${x.id}" class="${bad.has(x.id) ? 'on' : ''}"><b>${esc(x.title)}</b>${x.fine ? `<small>${peso1(x.fine)} fine</small>` : ''}</button>`).join('')}</div></div>
+          <div class="scn-b stick"><button class="btn ghost big" id="bk">‹ Cancel</button><button class="btn ghost big" id="ps">✓ Passed</button><button class="btn gold big" id="nx"${bad.size ? '' : ' disabled'}>Review ›</button></div>`;
+        g.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bad.has(b.dataset.f) ? bad.delete(b.dataset.f) : bad.add(b.dataset.f); catPane(); });
+        $('#bk').onclick = () => { pending = null; say('Cancelled. Scan the next card.'); go('scan'); };
+        $('#nx').onclick = () => go('fin');
+        $('#ps').onclick = async () => { const mid = pending.id, nm = pending.name; checked.add(mid); hist.unshift({ label: `${nm} · passed`, undo: async () => { checked.delete(mid); } }); pending = null; say(`${nm} passed. Scan the next card.`, 'ok'); go('scan'); };
+      }
+      /* stage 3: check and submit */
+      function finPane() {
+        const g = $('#g2'), dateBox = `<label>Date</label><input id="sd" type="date" value="${dateV}">`;
+        say(mode === 'find' ? 'Check the report, then submit it.' : 'Check the list, then submit it.');
+        const bind = () => { $('#sd').onchange = e => { dateV = e.target.value || todayISO(); }; };
+        if (mode === 'find') {
+          const rows = [...pending.bad].map(id => standards.find(y => y.id === id)), total = rows.reduce((t, x) => t + (+x.fine || 0), 0);
+          g.innerHTML = `<div class="stg"><p class="who">${esc(pending.name)}</p><p class="muted">Check the report, then submit.</p>
+            <div class="card pad">${rows.map(x => `<div class="fr"><span>${esc(x.title)}</span><b>${x.fine ? peso1(x.fine) : 'usual rule'}</b></div>`).join('')}${total ? `<div class="fr tot"><span>Fines</span><b>${peso1(total)}</b></div>` : ''}</div>
+            <p class="muted" style="margin:6px 0">${canApprove ? 'Saved straight away.' : 'Goes to the Mayor or Vice Mayor for approval.'}</p>${dateBox}</div>
+            <div class="scn-b stick"><button class="btn ghost big" id="bk">‹ Edit</button><button class="btn gold big" id="ok" style="flex:2">Submit report</button></div>`;
+          bind(); $('#bk').onclick = () => go('cat');
+          $('#ok').onclick = async () => { $('#ok').disabled = true; const nm = pending.name, mid = pending.id, bad = pending.bad, ids = [];
+            try { for (const sid of bad) ids.push(await write(mid, sid, dateV)); checked.add(mid); nFail++;
+              hist.unshift({ label: `${nm} · ${bad.size} failed`, undo: async () => { for (const id of ids) await db(sb.from('v2_violations').delete().eq('id', id)); checked.delete(mid); nFail--; } });
+              pending = null; say(`Report submitted for ${nm}. Scan the next card.`, 'ok'); go('scan'); }
+            catch (x) { toast(x.message, true); $('#ok').disabled = false; } };
+          return;
+        }
+        const isRoll = mode === 'roll', pool = isRoll ? left0() : act.filter(x => !inAt.has(x.id) || !outAt.has(x.id)).map(x => x);
+        const why = x => !inAt.has(x.id) && !outAt.has(x.id) ? 'No log in, no log out' : !inAt.has(x.id) ? 'No log in' : 'No log out';
+        const stdOpts = isRoll ? (rollStds.length ? rollStds : standards.filter(x => !x.kind)) : (logStd ? [logStd] : standards.filter(x => !x.kind));
+        const cur = isRoll ? absId : logId, sd = standards.find(x => x.id === cur);
+        g.innerHTML = `<div class="stg"><p class="who">${pool.length} ${isRoll ? 'not scanned' : 'missed log in or log out'}</p><p class="muted">${isRoll ? 'These students were not scanned.' : 'The Constitution fines a missed log in or log out.'} Untick anyone who was excused.</p>
+          ${stdOpts.length === 1 ? '' : `<label>Record for</label><select id="as">${stdOpts.map(x => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${esc(x.title)}${x.fine ? ` (${peso1(x.fine)} fine)` : ''}</option>`).join('')}</select>`}
+          ${sd ? `<p class="muted" style="margin:6px 0">Recorded as <b>${esc(sd.title)}</b>${sd.fine ? `, fine ${peso1(sd.fine)} each` : ''}.</p>` : ''}${dateBox}
+          <div class="rvl">${pool.map(x => `<label class="ck"><input type="checkbox" data-a="${x.id}" checked><span>${esc(x.full_name)}${isRoll ? '' : `<small>${why(x)}</small>`}</span></label>`).join('') || '<p class="muted">Everyone is accounted for.</p>'}</div></div>
+          <div class="scn-b stick"><button class="btn ghost big" id="bk">‹ Back</button><button class="btn gold big" id="rc" style="flex:2"${pool.length ? '' : ' disabled'}>Submit report</button></div>`;
+        bind(); $('#as')?.addEventListener('change', e => { if (isRoll) absId = e.target.value; else logId = e.target.value; finPane(); });
+        $('#bk').onclick = () => go('scan');
+        $('#rc').onclick = async () => { const sid = isRoll ? absId : logId; if (!sid) return void say('Choose what to record these under.', 'warn');
+          const ids = [...g.querySelectorAll('[data-a]:checked')].map(c => c.dataset.a); $('#rc').disabled = true; let done = 0;
+          try { for (const id of ids) { await write(id, sid, dateV); done++; } toast(`${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
           catch (x) { toast(`${done} saved before the error: ${x.message}`, true); $('#rc').disabled = false; } };
       }
-      function pane() {
-        const pp = $('#sp'); refreshUndo();
-        if (mode === 'find') {
-          if (pending) {
-            const bad = pending.bad;
-            pp.innerHTML = `<div class="card pad"><b class="who">${esc(pending.name)}</b><p class="muted" style="margin:2px 0 10px">Tap only what this student failed.</p>
-              <div class="chips">${[...want].map(id => { const x = standards.find(y => y.id === id); return `<button type="button" data-f="${id}" class="${bad.has(id) ? 'on' : ''}">${esc(x.title)}</button>`; }).join('')}</div>
-              <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold big" id="ok" style="flex:1">${bad.size ? `Record ${bad.size} violation${bad.size === 1 ? '' : 's'}` : '✓ Passed'}</button><button class="btn ghost big" id="sk">Skip</button></div></div>`;
-            pp.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bad.has(b.dataset.f) ? bad.delete(b.dataset.f) : bad.add(b.dataset.f); pane(); });
-            $('#sk').onclick = () => { pending = null; say('Skipped. Scan the next card.'); pane(); };
-            $('#ok').onclick = async () => { $('#ok').disabled = true; const nm = pending.name, mid = pending.id, ids = [];
-              try { for (const sid of bad) ids.push(await write(mid, sid, $('#sd').value)); checked.add(mid); if (bad.size) nFail++;
-                hist.unshift({ label: `${nm} · ${bad.size ? bad.size + ' failed' : 'passed'}`, undo: async () => { for (const id of ids) await db(sb.from('v2_violations').delete().eq('id', id)); checked.delete(mid); if (ids.length) nFail--; } });
-                pending = null; say(bad.size ? `Recorded for ${nm}. Scan the next card.` : `${nm} passed. Scan the next card.`, 'ok'); pane(); }
-              catch (x) { toast(x.message, true); $('#ok').disabled = false; } };
-          } else {
-            pp.innerHTML = `${want.size ? '' : '<div class="need" id="nd"><b>① Choose what you are checking</b><span>Tap one or more below, then scan the cards.</span></div>'}
-              <label style="margin-top:0">What are you checking?</label><div class="chips pick" id="ws">${checkable.map(x => `<button type="button" data-w="${x.id}" class="${want.has(x.id) ? 'on' : ''}">${esc(x.title)}</button>`).join('')}</div>
-              <p class="count"><b>${checked.size}</b> of ${act.length} checked · <b>${nFail}</b> with violations</p>${recentList()}${pickBox()}`;
-            pp.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { want.has(b.dataset.w) ? want.delete(b.dataset.w) : want.add(b.dataset.w); if (want.size) say('Ready. Scan a student’s card.'); pane(); });
-          }
-        } else if (mode === 'roll') {
-          if (review) return review_(left().map(x => [x, '']), absId, 'not scanned', 'These students were not scanned.');
-          pp.innerHTML = `<label style="margin-top:0">Record the unscanned as absent for</label>${stdSel(absId, rollStds.length ? rollStds : standards.filter(x => !x.kind))}
-            <p class="count"><b>${present.size}</b> of ${act.length} present</p>${recentList()}
-            <button class="btn gold big" id="fin" style="width:100%;margin-top:10px">Finish and review the unscanned</button>${pickBox()}`;
-          $('#as').onchange = e => { absId = e.target.value; };
-          $('#fin').onclick = () => { review = true; pane(); };
-        } else {
-          if (review) { const rows = act.filter(x => !inAt.has(x.id) || !outAt.has(x.id)).map(x => [x, !inAt.has(x.id) && !outAt.has(x.id) ? 'No log in, no log out' : !inAt.has(x.id) ? 'No log in' : 'No log out']); return review_(rows, logId, 'missed log in or log out', 'The Constitution fines a missed log in or log out.'); }
-          pp.innerHTML = `${logStd ? '' : `<label style="margin-top:0">Record misses under</label>${stdSel(logId, standards.filter(x => !x.kind))}`}
-            <div class="seg" id="ph" style="margin-top:6px"><button data-ph="in" class="${phase === 'in' ? 'on' : ''}">Log in</button><button data-ph="out" class="${phase === 'out' ? 'on' : ''}">Log out</button></div>
-            <p class="count"><b>${inAt.size}</b> logged in · <b>${outAt.size}</b> logged out · ${act.length} students</p>${recentList()}
-            <button class="btn gold big" id="fin" style="width:100%;margin-top:10px">Finish and review misses</button>${pickBox()}`;
-          pp.querySelectorAll('[data-ph]').forEach(b => b.onclick = () => { phase = b.dataset.ph; say(phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.'); pane(); });
-          $('#as')?.addEventListener('change', e => { logId = e.target.value; });
-          $('#fin').onclick = () => { if (!logId) return say('Choose where to record the misses first.', 'warn'); review = true; pane(); };
-        }
-        $('#pk')?.addEventListener('change', e => { const mem = byId[e.target.value]; if (mem) got({ id: mem.id, name: mem.full_name }); });
-      }
+      const left0 = () => act.filter(x => !present.has(x.id));
       function got(s0) {
         if (!byId[s0.id]) return void say('That student is not on the active list.', 'bad');
+        if (stage !== 'scan') return void say(`Finish ${pending ? pending.name : 'this step'} first.`, 'warn');
         if (mode === 'find') {
-          if (!want.size) { const nd = $('#nd'); if (nd) { nd.classList.remove('shake'); void nd.offsetWidth; nd.classList.add('shake'); } return void say(`Scanned ${s0.name}. First choose what you are checking, then scan again.`, 'warn'); }
-          if (pending) return void say(`Finish ${pending.name} first.`, 'warn');
           if (checked.has(s0.id)) return void say(`${s0.name} is already checked.`, 'warn');
-          pending = { id: s0.id, name: s0.name, bad: new Set() }; say(`✓ Scanned: ${s0.name}`, 'ok');
-        } else if (mode === 'roll') {
-          if (present.has(s0.id)) return void say(`${s0.name} is already marked present.`, 'warn');
-          present.add(s0.id); hist.unshift({ label: `✓ ${s0.name}`, undo: async () => { present.delete(s0.id); } }); say(`✓ Present: ${s0.name}`, 'ok');
-        } else {
-          const set = phase === 'in' ? inAt : outAt;
-          if (set.has(s0.id)) return void say(`${s0.name} already logged ${phase === 'in' ? 'in' : 'out'} at ${tm(set.get(s0.id))}.`, 'warn');
-          set.set(s0.id, new Date()); hist.unshift({ label: `${phase === 'in' ? '→' : '←'} ${s0.name} · ${tm(set.get(s0.id))}`, undo: async () => { set.delete(s0.id); } }); say(`✓ Logged ${phase}: ${s0.name}`, 'ok');
+          if (!checkable.length) return void say('No violation standards yet. Add some in the Standards tab.', 'bad');
+          pending = { id: s0.id, name: s0.name, bad: new Set() }; say(`✓ Scanned: ${s0.name}. Now choose the category.`, 'ok'); go('cat'); return true;
         }
-        pane(); return true;
+        if (mode === 'roll') {
+          if (present.has(s0.id)) return void say(`${s0.name} is already marked present.`, 'warn');
+          present.add(s0.id); hist.unshift({ label: `✓ ${s0.name}`, undo: async () => { present.delete(s0.id); } }); say(`✓ Present: ${s0.name}`, 'ok'); scanPane(); return true;
+        }
+        const set = phase === 'in' ? inAt : outAt;
+        if (set.has(s0.id)) return void say(`${s0.name} already logged ${phase === 'in' ? 'in' : 'out'} at ${tm(set.get(s0.id))}.`, 'warn');
+        set.set(s0.id, new Date()); hist.unshift({ label: `${phase} ${s0.name}`, undo: async () => { set.delete(s0.id); } }); say(`✓ Logged ${phase}: ${s0.name}`, 'ok'); scanPane(); return true;
       }
       const onRaw = async raw => {
         const now = Date.now(); if (busy || (raw === last && now - lastAt < (lastOk ? 3000 : 1200))) return; busy = true; last = raw; lastAt = now; lastOk = false;
@@ -261,13 +273,14 @@ export async function mountWatch(el, ctx) {
         busy = false;
       };
       el.addEventListener('scan', e => onRaw(e.detail));           // lets a test or a hardware scanner feed codes without the camera
-      el.querySelectorAll('[data-md]').forEach(b => b.onclick = () => { mode = b.dataset.md; review = false; pending = null; el.querySelectorAll('[data-md]').forEach(x => x.classList.toggle('on', x === b));
-        say({ find: 'Violations: choose what you are checking, then scan.', roll: 'Roll call: scan everyone who is present.', log: phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.' }[mode]); pane(); });
-      $('#un').onclick = async () => { const h = hist.shift(); if (!h) return; try { await h.undo(); say('Undone: ' + h.label, 'warn'); } catch (x) { toast(x.message, true); hist.unshift(h); } pane(); };
-      $('#sx').onclick = close; pane();
+      el.querySelectorAll('[data-md]').forEach(b => b.onclick = () => { mode = b.dataset.md; pending = null; el.querySelectorAll('[data-md]').forEach(x => x.classList.toggle('on', x === b));
+        say({ find: 'Violations: scan a student’s card.', roll: 'Roll call: scan everyone who is present.', log: phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.' }[mode]); go('scan'); });
+      el.querySelectorAll('[data-ph]').forEach(b => b.onclick = () => { phase = b.dataset.ph; el.querySelectorAll('[data-ph]').forEach(x => x.classList.toggle('on', x === b)); say(phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.'); });
+      $('#un').onclick = async () => { const h = hist.shift(); if (!h) return; try { await h.undo(); say('Undone: ' + h.label, 'warn'); } catch (x) { toast(x.message, true); hist.unshift(h); } scanPane(); };
+      $('#pkb').onclick = pickList; $('#fin').onclick = () => go('fin'); $('#sx').onclick = close; go('scan');
       scanLoop(el, $('#sv'), onRaw, stream => { const tr = stream.getVideoTracks()[0]; if (tr?.getCapabilities?.().torch) { const b = $('#tc'); b.hidden = false; let on = false; b.onclick = () => { on = !on; tr.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {}); b.classList.toggle('on', on); }; } })
-        .then(() => {}, e => say('Camera unavailable (' + (e.message || e) + '). Pick the student below instead.', 'bad'));
-      $('#sv').addEventListener('playing', () => say(mode === 'find' && !want.size ? 'Camera ready. Choose what you are checking first.' : 'Camera ready. Point at a student’s QR card.'));
+        .then(() => {}, e => say('Camera unavailable (' + (e.message || e) + '). Use “Can’t scan? Pick”.', 'bad'));
+      $('#sv').addEventListener('playing', () => say('Camera ready. Point at a student’s QR card.'));
     });
     return m;
   }
