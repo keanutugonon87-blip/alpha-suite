@@ -30,6 +30,8 @@ const ACTIONS = [
   ['Link or unlink Google Drive', ['mayor']],
   ['Copy to Google Drive (Sync now)', ['mayor', 'vice_mayor', 'secretary']],
   ['Delete a document or remove a file', ['mayor', 'secretary']],
+  ['Set events and record absences (Watch, Events)', ['mayor', 'vice_mayor']],
+  ['Scan event attendance (Watch, Events)', ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails']],
   ['Scan inspection (scan QR cards in Watch)', ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails']],
   ['Edit a standard and its fine', ['mayor', 'vice_mayor']],
   ['Collect a fine (records the payment)', ['mayor', 'treasurer']],

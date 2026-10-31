@@ -2,6 +2,7 @@ import { t, getLang } from '../i18n.js';
 import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanLoop } from '../qr.js';
+import { mountEvents } from './events.js';
 
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
@@ -18,7 +19,7 @@ export async function mountWatch(el, ctx) {
   const canApprove = ctx.can('mayor','vice_mayor');
   const TK = 'alpha-f-watch-tab';
   let kind = (() => { try { const k = localStorage.getItem('alpha-f-watch-kind'); return ['viol', 'att'].includes(k) ? k : 'all'; } catch { return 'all'; } })();
-  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
+  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'events', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
   el.innerHTML = skeleton(5);
 
   async function draw() {
@@ -67,6 +68,8 @@ export async function mountWatch(el, ctx) {
       body = `<div class="seg" id="kf" style="margin-bottom:8px">${[['all', 'All'], ['viol', 'Violations'], ['att', 'Attendance and events']].map(([k, l]) => `<button data-k="${k}" class="${kind === k ? 'on' : ''}">${l}</button>`).join('')}</div>
         <div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
+    } else if (tab === 'events') {
+      body = '<div id="evh">' + skeleton(2) + '</div>';
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
       // Attendance (PIT Handbook): every 3 tardies count as 1 absence.
@@ -80,8 +83,9 @@ export async function mountWatch(el, ctx) {
         ${ctx.can('mayor','vice_mayor') ? `<div style="display:flex;gap:4px"><button class="btn ghost sm" data-es="${s.id}">Edit</button><button class="btn ghost sm" data-rs="${s.id}">Remove</button></div>` : ''}</div>`).join('')}</div>`;
     }
     el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
-      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
+      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='events'?'':'ghost'}" data-t="events">Events</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
 
+    if (tab === 'events') mountEvents(el.querySelector('#evh'), ctx, members, standards, () => draw().catch(() => {}));
     el.querySelectorAll('[data-k]').forEach(b => b.onclick = () => { kind = b.dataset.k; try { localStorage.setItem('alpha-f-watch-kind', kind); } catch { /* ignore */ } draw(); });
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; try { localStorage.setItem(TK, tab); } catch { /* ignore */ } draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
@@ -159,29 +163,25 @@ export async function mountWatch(el, ctx) {
             toast(queued ? 'No signal. Saved on this device, will send automatically' : `${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
           catch (x) { go.disabled = false; upd(); m.querySelectorAll('#il [data-m]').forEach(b => { if (!picked.has(b.dataset.m)) { b.setAttribute('aria-checked', 'false'); b.classList.remove('on'); } }); m.querySelector('#er').textContent = `${done} saved before the error: ${x.message}. Only the rest are still selected.`; } }; });
   }
-  /* Scan inspection, in stages on a full screen so the camera stays big:
-       1 Scan   - aim at the QR card; every scan is confirmed by a banner, a flash, a beep and a vibration
-       2 Category - (Violations only) tap what the student failed
+  /* Scan inspection (violations only), in stages on a full screen so the camera stays big:
+       1 Scan     - aim at the QR card; every scan is confirmed by a banner, a flash, a beep and a vibration
+       2 Category - tap what the student failed
        3 Finalize - check the report, then submit
-     Violations: grooming and uniform.  Roll call: flag ceremony, inspection (the unscanned are recorded absent).  Event log in/out: arrival and leaving. */
+     Attendance (flag ceremony, inspection roll, event log in/out) is run from the Events tab. */
   function scanInspect(members, standards) {
     const act = members.filter(x => x.status === 'active'), byId = Object.fromEntries(act.map(x => [x.id, x]));
     const checkable = standards.filter(x => !x.kind && !ATT.test(x.title));       // grooming and uniform standards only
-    const rollStds = standards.filter(x => /flag|inspection/i.test(x.title));
-    const logStd = standards.find(x => /log\s*in|log\s*out|event log/i.test(x.title));
-    let absId = (rollStds[0] || standards.find(x => !x.kind))?.id, logId = logStd?.id || '', mode = 'find', phase = 'in', stage = 'scan', pending = null, busy = false, last = '', lastAt = 0, lastOk = false, dateV = todayISO();
-    const checked = new Set(), present = new Set(), inAt = new Map(), outAt = new Map(), hist = []; let nFail = 0;
+    let stage = 'scan', pending = null, busy = false, last = '', lastAt = 0, lastOk = false, dateV = todayISO();
+    const checked = new Set(), hist = []; let nFail = 0;
     const status = canApprove ? 'pending' : 'awaiting_approval';
     const write = async (mid, sid, d) => { const id = uuid(); await safeWrite('v2_violations', { id, member_id: mid, standard_id: sid, occurred_on: d, reported_by: `${r} ${name}`, status }); return id; };
-    const tm = d0 => d0.toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' });
     const peso1 = n => '₱' + Number(n).toLocaleString('en-PH');
     const m = modal(`<div class="scn full">
       <div class="scn-h"><b>Scan inspection</b><span class="steps" id="stp"></span><button type="button" class="x" id="sx" aria-label="Close">✕</button></div>
       <div class="sb idle" id="sb" role="status" aria-live="polite">Starting camera…</div>
-      <div id="g1"><div class="seg" id="sm"><button data-md="find" class="on">Violations</button><button data-md="roll">Roll call</button><button data-md="log">Event log in/out</button></div>
-        <div id="ph" hidden class="seg"><button data-ph="in" class="on">Log in</button><button data-ph="out">Log out</button></div>
+      <div id="g1">
         <div class="vid" id="vd"><video id="sv" playsinline muted></video><button type="button" class="torch" id="tc" hidden aria-label="Flashlight">🔦</button><span class="pill" id="cn"></span></div>
-        <div class="scn-b"><button type="button" class="btn ghost big" id="un" hidden>↩ Undo last</button><button type="button" class="btn ghost big" id="pkb">Can’t scan? Pick</button><button type="button" class="btn gold big" id="fin" hidden>Finish ›</button></div>
+        <div class="scn-b"><button type="button" class="btn ghost big" id="un" hidden>↩ Undo last</button><button type="button" class="btn ghost big" id="pkb">Can’t scan? Pick</button></div>
         <div id="pkw" hidden></div></div>
       <div id="g2" hidden></div></div>`, (el, close) => {
       el.classList.add('scnm');
@@ -190,15 +190,10 @@ export async function mountWatch(el, ctx) {
       const beep = ok => { try { ac = ac || new (window.AudioContext || window.webkitAudioContext)(); const o = ac.createOscillator(), g = ac.createGain(); o.frequency.value = ok ? 880 : 300; g.gain.value = 0.15; o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + (ok ? 0.12 : 0.28)); } catch { /* no sound */ } };
       const say = (txt, kind = 'idle') => { const b = $('#sb'); b.className = 'sb ' + kind; b.textContent = txt;
         if (kind !== 'idle') { const v = $('#vd'); v.classList.remove('flash', 'ok', 'warn', 'bad'); void v.offsetWidth; v.classList.add('flash', kind); beep(kind === 'ok'); try { navigator.vibrate && navigator.vibrate(kind === 'ok' ? 60 : [80, 60, 80]); } catch { /* ignore */ } } };
-      const stepsFor = () => mode === 'find' ? [['scan', 'Scan'], ['cat', 'Category'], ['fin', 'Finalize']] : [['scan', 'Scan'], ['fin', 'Finalize']];
-      const showSteps = () => { const list = stepsFor(), at = list.findIndex(x => x[0] === stage); $('#stp').innerHTML = list.map(([k, l], i) => `<span class="${i === at ? 'on' : i < at ? 'done' : ''}"><i>${i < at ? '✓' : i + 1}</i>${l}</span>`).join(''); };
+      const STEPS = [['scan', 'Scan'], ['cat', 'Category'], ['fin', 'Finalize']];
+      const showSteps = () => { const at = STEPS.findIndex(x => x[0] === stage); $('#stp').innerHTML = STEPS.map(([k, l], i) => `<span class="${i === at ? 'on' : i < at ? 'done' : ''}"><i>${i < at ? '✓' : i + 1}</i>${l}</span>`).join(''); };
       const go = st => { stage = st; $('#g1').hidden = st !== 'scan'; $('#g2').hidden = st === 'scan'; showSteps(); if (st === 'scan') scanPane(); else (st === 'cat' ? catPane : finPane)(); };
-      function scanPane() {
-        $('#ph').hidden = mode !== 'log';
-        const n = mode === 'find' ? checked.size : mode === 'roll' ? present.size : Math.max(inAt.size, outAt.size);
-        $('#cn').textContent = mode === 'log' ? `In ${inAt.size} · Out ${outAt.size} of ${act.length}` : `${n} of ${act.length} ${mode === 'find' ? 'checked' : 'present'}${mode === 'find' && nFail ? ` · ${nFail} flagged` : ''}`;
-        $('#un').hidden = !hist.length; $('#fin').hidden = mode === 'find';
-      }
+      function scanPane() { $('#cn').textContent = `${checked.size} of ${act.length} checked${nFail ? ` · ${nFail} flagged` : ''}`; $('#un').hidden = !hist.length; }
       function pickList() {
         const w = $('#pkw'); w.hidden = !w.hidden; if (w.hidden) return;
         w.innerHTML = `<select id="pk"><option value="">Choose a student…</option>${act.filter(x => !checked.has(x.id)).map(x => `<option value="${x.id}">${esc(x.full_name)}</option>`).join('')}</select>`;
@@ -213,59 +208,29 @@ export async function mountWatch(el, ctx) {
         g.querySelectorAll('[data-f]').forEach(b => b.onclick = () => { bad.has(b.dataset.f) ? bad.delete(b.dataset.f) : bad.add(b.dataset.f); catPane(); });
         $('#bk').onclick = () => { pending = null; say('Cancelled. Scan the next card.'); go('scan'); };
         $('#nx').onclick = () => go('fin');
-        $('#ps').onclick = async () => { const mid = pending.id, nm = pending.name; checked.add(mid); hist.unshift({ label: `${nm} · passed`, undo: async () => { checked.delete(mid); } }); pending = null; say(`${nm} passed. Scan the next card.`, 'ok'); go('scan'); };
+        $('#ps').onclick = () => { const mid = pending.id, nm = pending.name; checked.add(mid); hist.unshift({ label: `${nm} · passed`, undo: async () => { checked.delete(mid); } }); pending = null; say(`${nm} passed. Scan the next card.`, 'ok'); go('scan'); };
       }
       /* stage 3: check and submit */
       function finPane() {
-        const g = $('#g2'), dateBox = `<label>Date</label><input id="sd" type="date" value="${dateV}">`;
-        say(mode === 'find' ? 'Check the report, then submit it.' : 'Check the list, then submit it.');
-        const bind = () => { $('#sd').onchange = e => { dateV = e.target.value || todayISO(); }; };
-        if (mode === 'find') {
-          const rows = [...pending.bad].map(id => standards.find(y => y.id === id)), total = rows.reduce((t, x) => t + (+x.fine || 0), 0);
-          g.innerHTML = `<div class="stg"><p class="who">${esc(pending.name)}</p><p class="muted">Check the report, then submit.</p>
-            <div class="card pad">${rows.map(x => `<div class="fr"><span>${esc(x.title)}</span><b>${x.fine ? peso1(x.fine) : 'usual rule'}</b></div>`).join('')}${total ? `<div class="fr tot"><span>Fines</span><b>${peso1(total)}</b></div>` : ''}</div>
-            <p class="muted" style="margin:6px 0">${canApprove ? 'Saved straight away.' : 'Goes to the Mayor or Vice Mayor for approval.'}</p>${dateBox}</div>
-            <div class="scn-b stick"><button class="btn ghost big" id="bk">‹ Edit</button><button class="btn gold big" id="ok" style="flex:2">Submit report</button></div>`;
-          bind(); $('#bk').onclick = () => go('cat');
-          $('#ok').onclick = async () => { $('#ok').disabled = true; const nm = pending.name, mid = pending.id, bad = pending.bad, ids = [];
-            try { for (const sid of bad) ids.push(await write(mid, sid, dateV)); checked.add(mid); nFail++;
-              hist.unshift({ label: `${nm} · ${bad.size} failed`, undo: async () => { for (const id of ids) await db(sb.from('v2_violations').delete().eq('id', id)); checked.delete(mid); nFail--; } });
-              pending = null; say(`Report submitted for ${nm}. Scan the next card.`, 'ok'); go('scan'); }
-            catch (x) { toast(x.message, true); $('#ok').disabled = false; } };
-          return;
-        }
-        const isRoll = mode === 'roll', pool = isRoll ? left0() : act.filter(x => !inAt.has(x.id) || !outAt.has(x.id)).map(x => x);
-        const why = x => !inAt.has(x.id) && !outAt.has(x.id) ? 'No log in, no log out' : !inAt.has(x.id) ? 'No log in' : 'No log out';
-        const stdOpts = isRoll ? (rollStds.length ? rollStds : standards.filter(x => !x.kind)) : (logStd ? [logStd] : standards.filter(x => !x.kind));
-        const cur = isRoll ? absId : logId, sd = standards.find(x => x.id === cur);
-        g.innerHTML = `<div class="stg"><p class="who">${pool.length} ${isRoll ? 'not scanned' : 'missed log in or log out'}</p><p class="muted">${isRoll ? 'These students were not scanned.' : 'The Constitution fines a missed log in or log out.'} Untick anyone who was excused.</p>
-          ${stdOpts.length === 1 ? '' : `<label>Record for</label><select id="as">${stdOpts.map(x => `<option value="${x.id}"${x.id === cur ? ' selected' : ''}>${esc(x.title)}${x.fine ? ` (${peso1(x.fine)} fine)` : ''}</option>`).join('')}</select>`}
-          ${sd ? `<p class="muted" style="margin:6px 0">Recorded as <b>${esc(sd.title)}</b>${sd.fine ? `, fine ${peso1(sd.fine)} each` : ''}.</p>` : ''}${dateBox}
-          <div class="rvl">${pool.map(x => `<label class="ck"><input type="checkbox" data-a="${x.id}" checked><span>${esc(x.full_name)}${isRoll ? '' : `<small>${why(x)}</small>`}</span></label>`).join('') || '<p class="muted">Everyone is accounted for.</p>'}</div></div>
-          <div class="scn-b stick"><button class="btn ghost big" id="bk">‹ Back</button><button class="btn gold big" id="rc" style="flex:2"${pool.length ? '' : ' disabled'}>Submit report</button></div>`;
-        bind(); $('#as')?.addEventListener('change', e => { if (isRoll) absId = e.target.value; else logId = e.target.value; finPane(); });
-        $('#bk').onclick = () => go('scan');
-        $('#rc').onclick = async () => { const sid = isRoll ? absId : logId; if (!sid) return void say('Choose what to record these under.', 'warn');
-          const ids = [...g.querySelectorAll('[data-a]:checked')].map(c => c.dataset.a); $('#rc').disabled = true; let done = 0;
-          try { for (const id of ids) { await write(id, sid, dateV); done++; } toast(`${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
-          catch (x) { toast(`${done} saved before the error: ${x.message}`, true); $('#rc').disabled = false; } };
+        const g = $('#g2'), rows = [...pending.bad].map(id => standards.find(y => y.id === id)), total = rows.reduce((t, x) => t + (+x.fine || 0), 0);
+        say('Check the report, then submit it.');
+        g.innerHTML = `<div class="stg"><p class="who">${esc(pending.name)}</p><p class="muted">Check the report, then submit.</p>
+          <div class="card pad">${rows.map(x => `<div class="fr"><span>${esc(x.title)}</span><b>${x.fine ? peso1(x.fine) : 'usual rule'}</b></div>`).join('')}${total ? `<div class="fr tot"><span>Fines</span><b>${peso1(total)}</b></div>` : ''}</div>
+          <p class="muted" style="margin:6px 0">${canApprove ? 'Saved straight away.' : 'Goes to the Mayor or Vice Mayor for approval.'}</p><label>Date</label><input id="sd" type="date" value="${dateV}"></div>
+          <div class="scn-b stick"><button class="btn ghost big" id="bk">‹ Edit</button><button class="btn gold big" id="ok" style="flex:2">Submit report</button></div>`;
+        $('#sd').onchange = e => { dateV = e.target.value || todayISO(); }; $('#bk').onclick = () => go('cat');
+        $('#ok').onclick = async () => { $('#ok').disabled = true; const nm = pending.name, mid = pending.id, bad = pending.bad, ids = [];
+          try { for (const sid of bad) ids.push(await write(mid, sid, dateV)); checked.add(mid); nFail++;
+            hist.unshift({ label: `${nm} · ${bad.size} failed`, undo: async () => { for (const id of ids) await db(sb.from('v2_violations').delete().eq('id', id)); checked.delete(mid); nFail--; } });
+            pending = null; say(`Report submitted for ${nm}. Scan the next card.`, 'ok'); go('scan'); draw().catch(() => {}); }
+          catch (x) { toast(x.message, true); $('#ok').disabled = false; } };
       }
-      const left0 = () => act.filter(x => !present.has(x.id));
       function got(s0) {
         if (!byId[s0.id]) return void say('That student is not on the active list.', 'bad');
         if (stage !== 'scan') return void say(`Finish ${pending ? pending.name : 'this step'} first.`, 'warn');
-        if (mode === 'find') {
-          if (checked.has(s0.id)) return void say(`${s0.name} is already checked.`, 'warn');
-          if (!checkable.length) return void say('No violation standards yet. Add some in the Standards tab.', 'bad');
-          pending = { id: s0.id, name: s0.name, bad: new Set() }; say(`✓ Scanned: ${s0.name}. Now choose the category.`, 'ok'); go('cat'); return true;
-        }
-        if (mode === 'roll') {
-          if (present.has(s0.id)) return void say(`${s0.name} is already marked present.`, 'warn');
-          present.add(s0.id); hist.unshift({ label: `✓ ${s0.name}`, undo: async () => { present.delete(s0.id); } }); say(`✓ Present: ${s0.name}`, 'ok'); scanPane(); return true;
-        }
-        const set = phase === 'in' ? inAt : outAt;
-        if (set.has(s0.id)) return void say(`${s0.name} already logged ${phase === 'in' ? 'in' : 'out'} at ${tm(set.get(s0.id))}.`, 'warn');
-        set.set(s0.id, new Date()); hist.unshift({ label: `${phase} ${s0.name}`, undo: async () => { set.delete(s0.id); } }); say(`✓ Logged ${phase}: ${s0.name}`, 'ok'); scanPane(); return true;
+        if (checked.has(s0.id)) return void say(`${s0.name} is already checked.`, 'warn');
+        if (!checkable.length) return void say('No violation standards yet. Add some in the Standards tab.', 'bad');
+        pending = { id: s0.id, name: s0.name, bad: new Set() }; say(`✓ Scanned: ${s0.name}. Now choose the category.`, 'ok'); go('cat'); return true;
       }
       const onRaw = async raw => {
         const now = Date.now(); if (busy || (raw === last && now - lastAt < (lastOk ? 3000 : 1200))) return; busy = true; last = raw; lastAt = now; lastOk = false;
@@ -273,11 +238,8 @@ export async function mountWatch(el, ctx) {
         busy = false;
       };
       el.addEventListener('scan', e => onRaw(e.detail));           // lets a test or a hardware scanner feed codes without the camera
-      el.querySelectorAll('[data-md]').forEach(b => b.onclick = () => { mode = b.dataset.md; pending = null; el.querySelectorAll('[data-md]').forEach(x => x.classList.toggle('on', x === b));
-        say({ find: 'Violations: scan a student’s card.', roll: 'Roll call: scan everyone who is present.', log: phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.' }[mode]); go('scan'); });
-      el.querySelectorAll('[data-ph]').forEach(b => b.onclick = () => { phase = b.dataset.ph; el.querySelectorAll('[data-ph]').forEach(x => x.classList.toggle('on', x === b)); say(phase === 'in' ? 'Log in: scan students as they arrive.' : 'Log out: scan students as they leave.'); });
-      $('#un').onclick = async () => { const h = hist.shift(); if (!h) return; try { await h.undo(); say('Undone: ' + h.label, 'warn'); } catch (x) { toast(x.message, true); hist.unshift(h); } scanPane(); };
-      $('#pkb').onclick = pickList; $('#fin').onclick = () => go('fin'); $('#sx').onclick = close; go('scan');
+      $('#un').onclick = async () => { const h = hist.shift(); if (!h) return; try { await h.undo(); say('Undone: ' + h.label, 'warn'); draw().catch(() => {}); } catch (x) { toast(x.message, true); hist.unshift(h); } scanPane(); };
+      $('#pkb').onclick = pickList; $('#sx').onclick = close; say('Violations: scan a student’s card.'); go('scan');
       scanLoop(el, $('#sv'), onRaw, stream => { const tr = stream.getVideoTracks()[0]; if (tr?.getCapabilities?.().torch) { const b = $('#tc'); b.hidden = false; let on = false; b.onclick = () => { on = !on; tr.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {}); b.classList.toggle('on', on); }; } })
         .then(() => {}, e => say('Camera unavailable (' + (e.message || e) + '). Use “Can’t scan? Pick”.', 'bad'));
       $('#sv').addEventListener('playing', () => say('Camera ready. Point at a student’s QR card.'));
