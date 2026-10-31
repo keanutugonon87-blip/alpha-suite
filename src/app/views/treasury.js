@@ -3,12 +3,12 @@ import { ymManila, net as netOf, balanceAt, needsSecond, findDuplicate } from '.
 import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
 
-const CATS_IN = ['Class Dues', 'Contribution', 'Fundraising', 'Donation', 'Other'];
+const CATS_IN = ['Class Dues', 'Contribution', 'Fines', 'Fundraising', 'Donation', 'Other'];
 const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
 
 export async function mountTreasury(el, ctx) {
   const canWrite = ctx.can('mayor', 'treasurer'), isMayor = ctx.can('mayor');
-  let curPeriod = null, qtext = '', view = 'current', filter = 'all', openPast = null, members = [], charges = [], allEntries = [], limit = 500;
+  let curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
   async function draw() {
@@ -71,7 +71,7 @@ export async function mountTreasury(el, ctx) {
       rowsEl.forEach(n => { if (n.classList.contains('dayhead')) { flush(); head = n; shownInDay = 0; } else { const hit = !q || n.textContent.toLowerCase().includes(q); n.hidden = !hit; if (hit) shownInDay++; } }); flush(); };
     $('#q')?.addEventListener('input', e => { qtext = e.target.value; applyQ(); }); if (qtext) applyQ();
     el.querySelectorAll('[data-todo]').forEach(b => b.onclick = () => { const k = b.dataset.todo; if (k === 'pending') { filter = 'pending'; draw(); } else if (k === 'due') location.hash = '#/staff/balances'; else monthClose(entries, periods, closes); });
-    const flt = $('#flt'); if (flt) { flt.value = filter; flt.onchange = () => { filter = flt.value; draw(); }; }
+    const flt = $('#flt'); if (flt) { flt.value = filter; flt.onchange = () => { filter = flt.value; try { localStorage.setItem('alpha-f-tre', filter); } catch { /* ignore */ } draw(); }; }
     el.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { view = b.dataset.v; draw(); });
     el.querySelectorAll('[data-past]').forEach(b => b.onclick = () => { openPast = openPast === b.dataset.past ? null : b.dataset.past; draw(); });
     $('#addIn')?.addEventListener('click', () => entryForm('collection', cur));
@@ -206,10 +206,10 @@ export async function mountTreasury(el, ctx) {
       ${kind === 'collection' ? `<label>Student</label><select name="member" required><option value="">Select…</option>${members.map(m => `<option value="${m.id}"${m.id === pre.member ? ' selected' : ''}>${esc(m.full_name)}</option>`).join('')}</select>
         <label>Charge (optional)</label><select name="charge"><option value="">— none —</option>${openCharges.map(c => `<option value="${c.id}" data-amt="${c.amount}"${c.id === pre.charge ? ' selected' : ''}>${esc(c.title)} (${peso(c.amount)})</option>`).join('')}</select>`
         : `<label>Paid to / vendor</label><input name="payer" required>`}
-      <div id="fw"><label>Fund</label><select name="fund">${fundOptions('')}</select></div>
-      <label>Category</label><select name="cat">${cats.map(c => `<option>${c}</option>`).join('')}</select>
+      <div id="fw"><label>Fund</label><select name="fund">${fundOptions(pre.fund || '')}</select></div>
+      <label>Category</label><select name="cat">${cats.map(c => `<option${c === pre.cat ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
-      <label>Purpose / note</label><input name="purpose">
+      <label>Purpose / note</label><input name="purpose" value="${esc(pre.purpose || '')}">
       ${kind === 'collection' ? `<label>Payment method</label><div class="segpay" role="radiogroup"><label><input type="radio" name="method" value="cash" checked><span>💵 Cash</span></label><label><input type="radio" name="method" value="gcash"><span>📱 GCash</span></label></div><div id="gc" style="display:none"><label>GCash reference no.</label><input name="gref"></div>` : ''}
       <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
@@ -228,7 +228,7 @@ export async function mountTreasury(el, ctx) {
           const file0 = f.get('img');
           if (kind === 'expense' && limit > 0 && +f.get('amt') >= limit && !(file0 && file0.size)) throw new Error(`Add a receipt photo. Expenses of ${peso(limit)} or more need one.`);
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
-          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
+          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, ...(pre.violation ? { violation_id: pre.violation } : {}), fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,
             status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }, photo);
           close();

@@ -1,3 +1,4 @@
+import { t, getLang, setLang } from '../i18n.js';
 import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync, modal, watch } from '../core.js';
 /* Each screen is loaded only when it is opened, so students (who never sign in) do not download the officer screens. */
 
@@ -30,6 +31,8 @@ const TABS = [
   { id: 'system', label: 'System', load: () => import('./system.js').then(m => m.mountSystem), roles: ['mayor', 'vice_mayor', 'treasurer'] },
 ];
 
+const TABKEY = {'home': 'tabHome', 'treasury': 'tabTreasury', 'balances': 'tabBalances', 'watch': 'tabWatch', 'students': 'tabStudents', 'officers': 'tabOfficers', 'notices': 'tabNotices', 'accounts': 'tabAccounts', 'docs': 'tabDocs', 'duties': 'tabDuties', 'roles': 'tabRoles', 'system': 'tabSystem'};
+const tabLabel = t0 => TABKEY[t0.id] ? t(TABKEY[t0.id]) : t0.label;
 function authScreen(root, mode = 'in', msg = '', ok = false) {
   root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span>
     <h1 style="margin:10px 0 4px">Alpha ’28</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
@@ -98,14 +101,15 @@ export async function renderStaff(root, tabId) {
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
   const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
-    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="out">Sign out</button></div>
+    <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="lg" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><button class="btn ghost sm" id="out">${t('signout')}</button></div>
     <div class="banner" id="bn" hidden></div>
-    <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}${extra.includes(t) ? ' xtra' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}>${icon(t.id)}<span>${t.label}</span>${t.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : ''}</button>`).join('')}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? cur.label : 'More'}</span></button>` : ''}</nav><main id="view"></main></div>`;
+    <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}${extra.includes(t) ? ' xtra' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}>${icon(t.id)}<span>${tabLabel(t)}</span>${t.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : ''}</button>`).join('')}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? tabLabel(cur) : t('more')}</span></button>` : ''}</nav><main id="view"></main></div>`;
   const off = onSync((s, d, q) => {
     const c = root.querySelector('#sync'), bn = root.querySelector('#bn'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = (q ? `${q} waiting · ` : '') + { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || '';
     bn.hidden = !q; bn.textContent = q ? `${q} entr${q > 1 ? 'ies are' : 'y is'} saved on this device and will be sent when you're back online.` : '';
   });
+  root.querySelector('#lg').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); location.reload(); };
   root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.hash = '#/'; location.reload(); };
   root.querySelectorAll('.tabs button[data-t]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.t; });
   root.querySelector('#more')?.addEventListener('click', () => modal(`<h3>More</h3><div class="moregrid">${extra.map(t => `<button class="btn ghost${t.id === cur.id ? ' on' : ''}" data-go="${t.id}">${icon(t.id)}<span>${t.label}</span></button>`).join('')}</div>`,

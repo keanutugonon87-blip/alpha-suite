@@ -1,5 +1,6 @@
 import { sb, db, esc, peso, ROLE_LABEL, skeleton, watch, todayISO, toast, toastUndo, modal } from '../core.js';
 import { ymManila } from '../money.js';
+import { t, tt, getLang } from '../i18n.js';
 
 /* Today: the first screen after sign-in. It shows what needs this officer, by role, and a quick view of the class. */
 const quiet = p => Promise.resolve(p).then(r => (r && r.error ? null : r), () => null);
@@ -11,11 +12,11 @@ const DUE = d => { const n = Math.round((new Date(d + 'T00:00:00+08:00') - new D
 function dutyCard(list) {
   if (!list || !list.length) return '';
   const done = list.filter(d => d.done).length, pct = Math.round(100 * done / list.length);
-  return `<h3 class="sec">Your duties today</h3><div class="card" id="duties">
-    <div class="pad" style="padding-bottom:0"><div style="display:flex;justify-content:space-between;gap:8px"><b>${done === list.length ? 'All done. Well done.' : `${done} of ${list.length} done`}</b><span class="muted">${pct}%</span></div><div class="prog" role="img" aria-label="${pct} percent of today's duties done"><i style="width:${pct}%"></i></div></div>
+  return `<h3 class="sec">${t('dutiesToday')}</h3><div class="card" id="duties">
+    <div class="pad" style="padding-bottom:0"><div style="display:flex;justify-content:space-between;gap:8px"><b>${done === list.length ? t('allDone') : tt('dutiesDone', done, list.length)}</b><span class="muted">${pct}%</span></div><div class="prog" role="img" aria-label="${pct} percent of today's duties done"><i style="width:${pct}%"></i></div></div>
     ${list.map(d => `<div class="row duty${d.done ? ' done' : ''}"><button class="dbox" data-duty="${d.id}" role="checkbox" aria-checked="${d.done}" aria-label="${esc(d.title)}"><span aria-hidden="true">${d.done ? '✓' : ''}</span></button>
       <div class="m"><b>${esc(d.title)}</b>${d.detail ? `<small>${esc(d.detail)}</small>` : ''}${d.repeat === 'once' && d.due_on ? `<small class="${!d.done && d.due_on < todayISO() ? 'err' : ''}">One-off task, ${DUE(d.due_on)}</small>` : ''}${d.note ? `<small>📝 ${esc(d.note)}</small>` : ''}</div>
-      <button class="btn ghost sm" data-dnote="${d.id}">${d.note ? 'Edit note' : 'Note'}</button></div>`).join('')}</div>`;
+      <button class="btn ghost sm" data-dnote="${d.id}">${d.note ? t('editNote') : t('note')}</button></div>`).join('')}</div>`;
 }
 function wireDuties(el, list, redraw) {
   const find = id => (list || []).find(d => d.id === id);
@@ -57,24 +58,24 @@ export async function mountHome(el, ctx) {
       quiet(sb.rpc('v2_my_duties')).then(r => r ? r.data || [] : null),
     ]);
     const items = [];
-    if (pending) items.push(['💰', `${pending} entr${pending === 1 ? 'y' : 'ies'} waiting for approval`, can('mayor') ? 'Review and approve them' : 'Waiting for the Mayor', 'treasury']);
-    if (vioWait) items.push(['🛡️', `${vioWait} violation item${vioWait === 1 ? '' : 's'} need a decision`, 'Approvals and resolutions', 'watch']);
-    if (dueSoon && dueSoon.length) items.push(['📅', `${dueSoon.length} charge${dueSoon.length === 1 ? '' : 's'} due within a week or late`, dueSoon.slice(0, 2).map(c => c.title).join(', '), 'balances']);
+    if (pending) items.push(['💰', getLang() === 'ceb' ? tt('entriesWait', pending + ' ka entry') : tt('entriesWait', `${pending} entr${pending === 1 ? 'y' : 'ies'}`), can('mayor') ? t('reviewApprove') : t('waitMayor'), 'treasury']);
+    if (vioWait) items.push(['🛡️', getLang() === 'ceb' ? tt('violNeed', vioWait) : `${vioWait} violation item${vioWait === 1 ? '' : 's'} need a decision`, t('approvalsRes'), 'watch']);
+    if (dueSoon && dueSoon.length) items.push(['📅', getLang() === 'ceb' ? tt('chargesDue', dueSoon.length) : `${dueSoon.length} charge${dueSoon.length === 1 ? '' : 's'} due within a week or late`, dueSoon.slice(0, 2).map(c => c.title).join(', '), 'balances']);
     if (requests) items.push(['👤', `${requests} officer access request${requests === 1 ? '' : 's'}`, 'Assign a role or reject', 'accounts']);
     if (closes && apprMonth && !closes.some(c => c.month === prevMonth && c.status === 'closed')) items.push(['🔒', 'Last month is not closed yet', 'Count the money, then close the month', 'treasury']);
     if (sec && sec.locked_now.length) items.push(['🚨', `${sec.locked_now.length} student${sec.locked_now.length === 1 ? ' is' : 's are'} locked out`, sec.locked_now.slice(0, 3).map(l => l.name).join(', '), 'system']);
     const nopin = signup ? signup.filter(m => !m.has_pin).length : 0;
-    if (signup && nopin) items.push(['📲', `${nopin} of ${signup.length} students have no PIN yet`, 'Send a reminder or print the sign-up sheet', 'system']);
+    if (signup && nopin) items.push(['📲', tt('noPinYet', nopin, signup.length), t('sendRemind'), 'system']);
 
     const stat = (l, v, cls = '') => `<div class="stat ${cls}"><small>${l}</small><b>${v}</b></div>`;
     el.innerHTML = `<div class="card pad"><small class="muted">${new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' })}</small>
-      <h2 style="margin:2px 0 0;border:0;padding:0">Hello, ${esc(ctx.profile.full_name.split(' ')[0])}</h2><small class="muted">${ROLE_LABEL[role]}</small></div>
+      <h2 style="margin:2px 0 0;border:0;padding:0">${t('hello')}, ${esc(ctx.profile.full_name.split(' ')[0])}</h2><small class="muted">${ROLE_LABEL[role]}</small></div>
       ${dutyCard(duties)}
-      <h3 class="sec">${items.length ? 'Needs you' : 'All clear'}</h3>
+      <h3 class="sec">${items.length ? t('needsYou') : t('allClear')}</h3>
       <div class="card">${items.length ? items.map(([ic, t, s, h]) => `<button class="row todo-row" data-go="${h}" style="width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left;cursor:pointer"><span style="font-size:1.3rem;margin-right:10px">${ic}</span><div class="m"><b>${esc(t)}</b><small>${esc(s)}</small></div><span aria-hidden="true">›</span></button>`).join('')
-        : '<p class="empty"><b>Nothing is waiting for you</b>New approvals, due dates and sign-in problems will show up here.</p>'}</div>
-      <h3 class="sec">The class right now</h3>
-      <div class="grid">${tre ? stat('Fund balance', peso(tre.balance), 'gold') : ''}${vioOpen ? stat('Students with open violations', vioOpen.length) : ''}${signup ? stat('Have a PIN', `${signup.length - nopin} / ${signup.length}`) : ''}</div>`;
+        : `<p class="empty"><b>${t('nothingWaiting')}</b>New approvals, due dates and sign-in problems will show up here.</p>`}</div>
+      <h3 class="sec">${t('classNow')}</h3>
+      <div class="grid">${tre ? stat(t('fundBal'), peso(tre.balance), 'gold') : ''}${vioOpen ? stat(t('openViol'), vioOpen.length) : ''}${signup ? stat(t('havePin'), `${signup.length - nopin} / ${signup.length}`) : ''}</div>`;
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
     wireDuties(el, duties, draw);
   }

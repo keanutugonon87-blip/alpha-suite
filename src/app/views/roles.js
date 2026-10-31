@@ -30,6 +30,10 @@ const ACTIONS = [
   ['Link or unlink Google Drive', ['mayor']],
   ['Copy to Google Drive (Sync now)', ['mayor', 'vice_mayor', 'secretary']],
   ['Delete a document or remove a file', ['mayor', 'secretary']],
+  ['Edit a standard and its fine', ['mayor', 'vice_mayor']],
+  ['Collect a fine (records the payment)', ['mayor', 'treasurer']],
+  ['Record an excuse letter', ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails']],
+  ['Accept or reject an excuse letter', ['mayor', 'vice_mayor']],
   ['Change settings', ['mayor']],
 ];
 const grid = (title, rows) => `<div class="card pad" style="margin-bottom:12px;overflow-x:auto"><b>${title}</b>

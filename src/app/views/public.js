@@ -33,6 +33,7 @@ function installBar(box) {
   box.querySelector('#ib')?.addEventListener('click', async () => { try { deferredInstall.prompt(); await deferredInstall.userChoice; } catch { /* ignore */ } deferredInstall = null; box.innerHTML = ''; });
   box.querySelector('#in').onclick = () => { try { localStorage.setItem('alpha-install-no', '1'); } catch { /* ignore */ } box.innerHTML = ''; };
 }
+const sanctionText = (v, ord) => v.excused ? 'excused, no fine' : v.kind ? 'attendance record' : v.fine ? `Fine ₱${Number(v.fine).toLocaleString('en-PH')}` : v.offense === 1 ? '1st offense: verbal warning' : `${ord(v.offense)} offense: ₱25 fine`;
 const ordn = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
 
 /* Balance reminders: a student links their own phone to their QR card, so the Treasurer can remind only those who still owe. */
@@ -96,7 +97,7 @@ function renderMe(host, opts = {}) {
         ${owed && note ? `<div class="card pad"><b>${t('howPay')}</b><p style="margin:4px 0 8px;white-space:pre-line">${esc(note)}</p><button class="btn ghost sm" id="cpn">${t('copy')}</button></div>` : ''}
         <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${b.waived ? t('excusedNote') : `${peso(b.paid)} / ${peso(b.due)}`}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : b.waived ? t('excused') : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
         ${(data.pay || []).length ? `<h3 class="sec">${t('myPays')}</h3><div class="card">${data.pay.map(p => `<div class="row"><div class="m"><b>${esc(p.for || '—')}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : ''}${p.status === 'pending' ? ' · ' + t('pendingTag') : ''}</small></div><span class="tag ok">${peso(p.amount)}</span></div>`).join('')}</div>` : ''}
-        <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : ordn(v.offense) + ' offense: ₱25 fine'}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
+        <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${sanctionText(v, ordn)}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
         <div id="rm"></div>
         <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
       installBar(host.querySelector('#inst'));
@@ -250,7 +251,7 @@ export async function renderPublic(root) {
         const q = vq.trim().toLowerCase();
         const list = all.filter(v => (vf === 'all' || (vf === 'open' ? isOpen(v) : !isOpen(v))) && (!q || v.name.toLowerCase().includes(q) || (v.standard || '').toLowerCase().includes(q)));
         const row = v => `<div class="row"><div class="lead"><span class="ini">${esc(initials(v.name))}</span><div class="m"><b>${esc(v.name)}</b>
-          <small>${esc(v.standard)} · ${fmtDate(v.date)} · ${v.offense === 1 ? '1st offense: verbal warning' : `${ord(v.offense)} offense: ₱25 fine`}</small></div></div>
+          <small>${esc(v.standard)} · ${fmtDate(v.date)} · ${sanctionText(v, ord)}</small></div></div>
           <span class="tag ${isOpen(v) ? 'bad' : 'ok'}">${isOpen(v) ? t('outstanding') : t('resolved')}</span></div>`;
         return `<div class="card pad" style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px"><div><b style="font-size:1.4rem">${nOpen}</b><br><small class="muted">${t('outstanding').toLowerCase()}</small></div><div><b style="font-size:1.4rem">${nRes}</b><br><small class="muted">${t('resolved').toLowerCase()}</small></div><div><b style="font-size:1.4rem">${all.length}</b><br><small class="muted">${t('total')}</small></div><button class="btn ghost sm" id="shv" style="margin-left:auto;align-self:center">${t('share')}</button></div>
           <div class="seg" id="vf" style="margin-bottom:8px">${[['open',t('outstanding')],['done',t('resolved')],['all',t('all')]].map(([k,l]) => `<button data-vf="${k}" class="${vf === k ? 'on' : ''}">${l}</button>`).join('')}</div>

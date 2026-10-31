@@ -1,8 +1,12 @@
-import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog } from '../core.js';
+import { t, getLang } from '../i18n.js';
+import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
+const peso0 = n => '₱' + Number(n).toLocaleString('en-PH');
+const VCOLS = 'id,member_id,standard_id,occurred_on,source,status,reported_by,resolve_requested_by,forwarded_by,resolved_by,created_at,updated_at,excuse_note,excuse_status,excuse_by,excuse_decided_by';
+const needV19 = e => /column|schema cache|does not exist/i.test(e.message || '') ? 'Run the v19 SQL in Supabase first (supabase/v19_constitution_fines.sql).' : e.message;
 const sanction = n => n === 1 ? '1st Offense: Verbal Warning' : `${ordinal(n)} Offense: Fine (₱${FINE})`;
 const STATUS = { awaiting_approval:['awaiting approval','warn'], pending:['pending','bad'], resolve_requested:['resolve requested','warn'], resolve_forwarded:['awaiting VP approval','warn'], resolved:['resolved','ok'], rejected:['rejected',''] };
 
@@ -10,26 +14,34 @@ export async function mountWatch(el, ctx) {
   const r = ctx.profile.role, name = ctx.profile.full_name;
   const canReport = ctx.can('mayor','vice_mayor','secretary','marshall','sails');
   const canApprove = ctx.can('mayor','vice_mayor');
-  let tab = 'ledger', q = '';
+  const TK = 'alpha-f-watch-tab';
+  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
   el.innerHTML = skeleton(5);
 
   async function draw() {
-    const [members, standards, viol] = await Promise.all([
+    const [members, standards, viol, paidRows] = await Promise.all([
       db(sb.from('v2_members').select('id,full_name,section,status').order('full_name')),
       db(sb.from('v2_standards').select('*').eq('active', true).order('sort_order')),
-      db(sb.from('v2_violations').select('*').order('created_at')),
+      db(sb.from('v2_violations').select(VCOLS).order('created_at')).catch(() => db(sb.from('v2_violations').select('*').order('created_at'))),
+      db(sb.from('v2_entries').select('violation_id').not('violation_id', 'is', null).neq('status', 'voided')).catch(() => []),   // not everyone can read payments, and v19 may not be installed yet
     ]);
+    const paid = new Set(paidRows.map(x => x.violation_id));
     const mname = id => members.find(m => m.id === id)?.full_name || '?';
     const std = id => standards.find(s => s.id === id);
     // Offense numbers are always computed fresh: every approved report counts, oldest first.
     const counted = viol.filter(v => !['awaiting_approval','rejected'].includes(v.status));
     const seen = {}, num = {};
-    counted.forEach(v => { seen[v.member_id] = (seen[v.member_id] || 0) + 1; num[v.id] = seen[v.member_id]; });
+    // A standard with its own fine (or an attendance record) is not part of the "1st offense: warning" count.
+    const ruled = v => { const s = std(v.standard_id); return !(s && (s.fine || s.kind)); };
+    counted.forEach(v => { if (!ruled(v)) return; seen[v.member_id] = (seen[v.member_id] || 0) + 1; num[v.id] = seen[v.member_id]; });
+    const sanctionOf = v => { const s = std(v.standard_id); if (['awaiting_approval', 'rejected'].includes(v.status)) return 'awaiting approval'; if (v.excuse_status === 'accepted') return 'excused, no fine';
+      if (s?.kind) return 'attendance record'; if (s?.fine) return `Fine ${peso0(s.fine)}`; return num[v.id] ? sanction(num[v.id]) : 'awaiting approval'; };
+    const isCounted = v => !['awaiting_approval', 'rejected'].includes(v.status);
     const open = viol.filter(v => ['pending','resolve_requested','resolve_forwarded'].includes(v.status));
     const awaiting = viol.filter(v => v.status === 'awaiting_approval');
 
-    const vrow = v => { const [lbl, cls] = STATUS[v.status] || [v.status, '']; return `<div class="row"><div class="m"><b>${esc(mname(v.member_id))} <span class="tag ${cls}">${lbl}</span></b>
-      <small>${esc(std(v.standard_id)?.title || 'Violation')} · ${fmtDate(v.occurred_on)} · ${num[v.id] ? sanction(num[v.id]) : 'awaiting approval'}${v.reported_by ? ` · by ${esc(v.reported_by)}` : ''}</small></div>
+    const vrow = v => { const [lbl0, cls] = STATUS[v.status] || [v.status, '']; const lbl = getLang() === 'ceb' ? t({ pending: 'sPending', awaiting_approval: 'sAwaiting', resolve_requested: 'sResReq', resolve_forwarded: 'sFwd', resolved: 'sResolved', rejected: 'sRejected' }[v.status] || 'x') : lbl0; return `<div class="row"><div class="m"><b>${esc(mname(v.member_id))} <span class="tag ${cls}">${lbl}</span></b>
+      <small>${esc(std(v.standard_id)?.title || 'Violation')} · ${fmtDate(v.occurred_on)} · ${sanctionOf(v)}${paid.has(v.id) ? ' · fine paid' : ''}${v.excuse_status === 'pending' ? ' · excuse letter waiting' : v.excuse_status === 'rejected' ? ' · excuse rejected' : ''}${v.reported_by ? ` · by ${esc(v.reported_by)}` : ''}</small></div>
       <div style="display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end">${actions(v)}</div></div>`; };
     function actions(v) {
       const a = [];
@@ -37,6 +49,10 @@ export async function mountWatch(el, ctx) {
       if (v.status === 'pending' && ctx.can('marshall','sails','mayor','vice_mayor','secretary')) a.push(`<button class="btn ghost sm" data-act="reqres" data-id="${v.id}">Request resolve</button>`);
       if (v.status === 'resolve_requested' && ctx.can('secretary','mayor','vice_mayor')) a.push(`<button class="btn ghost sm" data-act="forward" data-id="${v.id}">Forward to VP</button>`);
       if (v.status === 'resolve_forwarded' && canApprove) a.push(`<button class="btn gold sm" data-act="resolve" data-id="${v.id}">Resolve</button>`);
+      const s = std(v.standard_id);
+      if (isCounted(v) && s?.fine && !paid.has(v.id) && v.excuse_status !== 'accepted' && ctx.can('mayor', 'treasurer')) a.push(`<button class="btn gold sm" data-act="collect" data-id="${v.id}">Collect ${peso0(s.fine)}</button>`);
+      if (isCounted(v) && !s?.kind && !v.excuse_status && canReport) a.push(`<button class="btn ghost sm" data-act="excuse" data-id="${v.id}">Excuse letter</button>`);
+      if (v.excuse_status === 'pending' && canApprove) a.push(`<button class="btn gold sm" data-act="review" data-id="${v.id}">Review excuse</button>`);
       if (ctx.can('mayor')) a.push(`<button class="btn ghost sm" data-act="del" data-id="${v.id}">Delete</button>`);
       return a.join('');
     }
@@ -44,20 +60,24 @@ export async function mountWatch(el, ctx) {
     let body;
     if (tab === 'ledger') {
       const shown = viol.filter(v => !q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())).slice().reverse();
-      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? '<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">Inspect</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
+      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
-      body = `<div class="card">${members.filter(m => m.status === 'active').map(m => `<div class="row"><div class="m"><b>${esc(m.full_name)}</b><small>${esc(m.section || '')}</small></div>
+      // Attendance (PIT Handbook): every 3 tardies count as 1 absence.
+      const att = {}; counted.forEach(v => { const k = std(v.standard_id)?.kind; if (!k || v.excuse_status === 'accepted') return; const o = att[v.member_id] ||= { t: 0, a: 0 }; k === 'tardy' ? o.t++ : o.a++; });
+      const attLine = id => { const o = att[id]; if (!o) return ''; const abs = o.a + Math.floor(o.t / 3), left = 3 - (o.t % 3);
+        return ` · ${o.t} tardy, ${o.a} absent = ${abs} absence${abs === 1 ? '' : 's'}${o.t % 3 ? ` (${left} more tardies makes another)` : ''}`; };
+      body = `<div class="card">${members.filter(m => m.status === 'active').map(m => `<div class="row"><div class="m"><b>${esc(m.full_name)}</b><small>${esc(m.section || '')}${attLine(m.id)}</small></div>
         <span class="tag ${by[m.id] ? 'bad' : 'ok'}">${by[m.id] ? by[m.id] + ' outstanding' : 'clear'}</span></div>`).join('')}</div>`;
     } else {
-      body = `<div class="bar">${ctx.can('mayor','vice_mayor') ? '<button class="btn gold" id="addStd">+ Standard</button>' : ''}</div><div class="card">${standards.map(s => `<div class="row"><div class="m"><b>${esc(s.title)}</b><small>${esc(s.rule)}</small></div>
-        ${ctx.can('mayor','vice_mayor') ? `<button class="btn ghost sm" data-rs="${s.id}">Remove</button>` : ''}</div>`).join('')}</div>`;
+      body = `<div class="bar">${ctx.can('mayor','vice_mayor') ? '<button class="btn gold" id="addStd">+ Standard</button>' : ''}</div><div class="card">${standards.map(s => `<div class="row"><div class="m"><b>${esc(s.title)}${s.fine ? ` <span class="tag warn">Fine ${peso0(s.fine)}</span>` : ''}${s.kind ? ' <span class="tag">attendance</span>' : ''}</b><small>${esc(s.rule)}</small></div>
+        ${ctx.can('mayor','vice_mayor') ? `<div style="display:flex;gap:4px"><button class="btn ghost sm" data-es="${s.id}">Edit</button><button class="btn ghost sm" data-rs="${s.id}">Remove</button></div>` : ''}</div>`).join('')}</div>`;
     }
-    el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>Outstanding</small><b>${open.length}</b></div><div class="stat"><small>Awaiting approval</small><b>${awaiting.length}</b></div><div class="stat"><small>Total records</small><b>${viol.length}</b></div></div>
-      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">Ledger</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">Standing</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">Standards</button></div>${body}`;
+    el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
+      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
 
-    el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; draw(); });
+    el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; try { localStorage.setItem(TK, tab); } catch { /* ignore */ } draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
     el.querySelector('#insp')?.addEventListener('click', () => inspect(members, standards));
@@ -67,11 +87,12 @@ export async function mountWatch(el, ctx) {
       try { toast('Preparing Excel…'); await exportXLSX({ filename: `Alpha-Violation-Ledger-${new Date().toISOString().slice(0, 10)}.xlsx`, by: `${ctx.profile.full_name}`, sheets: [
         { name: 'Violation Ledger', title: 'Violation Ledger', subtitle: 'BSMT 1-Alpha · Alpha Watch', summary: [['Outstanding', open.length], ['Awaiting approval', awaiting.length], ['Resolved', viol.filter(v => v.status === 'resolved').length], ['Total records', viol.length]],
           columns: [{ label: 'Date', get: v => v.occurred_on, type: 'date' }, { label: 'Student', get: v => mname(v.member_id), width: 28 }, { label: 'Violation', get: v => std(v.standard_id)?.title, width: 28 }, { label: 'Offense', get: v => num[v.id] ? ordinal(num[v.id]) + ' offense' : '' },
-            { label: 'Sanction', get: v => num[v.id] ? (num[v.id] === 1 ? 'Verbal warning' : `Fine ₱${FINE}`) : 'Awaiting approval' }, { label: 'Status', get: v => (STATUS[v.status] || [v.status])[0], type: 'status' }, { label: 'Reported by', key: 'reported_by', width: 22 }, { label: 'Resolved by', key: 'resolved_by', width: 22 }], rows: viol.slice().sort((a, b) => b.occurred_on.localeCompare(a.occurred_on)) },
+            { label: 'Sanction', get: v => sanctionOf(v) }, { label: 'Fine paid', get: v => paid.has(v.id) ? 'Yes' : '' }, { label: 'Status', get: v => (STATUS[v.status] || [v.status])[0], type: 'status' }, { label: 'Reported by', key: 'reported_by', width: 22 }, { label: 'Resolved by', key: 'resolved_by', width: 22 }], rows: viol.slice().sort((a, b) => b.occurred_on.localeCompare(a.occurred_on)) },
         { name: 'Standing', title: 'Class Standing', subtitle: 'Outstanding violations per student', summary: [['Active students', members.filter(m => m.status === 'active').length], ['With outstanding', Object.values(byM).filter(o => o.open).length]],
           columns: [{ label: 'Student', key: 'full_name', width: 30 }, { label: 'Section', key: 'section', width: 24 }, { label: 'Outstanding', get: m => byM[m.id]?.open || 0, type: 'int', total: true }, { label: 'All records', get: m => byM[m.id]?.total || 0, type: 'int', total: true }, { label: 'Standing', get: m => byM[m.id]?.open ? 'Outstanding' : 'Clear', type: 'status' }], rows: members.filter(m => m.status === 'active') }] }); toast('Excel ready'); }
       catch (e) { toast(e.message, true); } });
     el.querySelector('#addStd')?.addEventListener('click', () => newStandard());
+    el.querySelectorAll('[data-es]').forEach(b => b.onclick = () => editStandard(standards.find(x => x.id === b.dataset.es)));
     // swipe a row right to approve / resolve it (touch screens)
     el.querySelectorAll('.row').forEach(row => {
       const go = row.querySelector('[data-act=approve],[data-act=resolve]'); if (!go) return;
@@ -83,6 +104,11 @@ export async function mountWatch(el, ctx) {
     el.querySelectorAll('[data-rs]').forEach(b => b.onclick = async () => { if (await confirmDialog('Past records keep it.', { ok: 'Remove standard', danger: true, title: 'Remove this standard?' })) db(sb.from('v2_standards').update({ active: false }).eq('id', b.dataset.rs)).then(draw).catch(e => toast(e.message, true)); });
     el.querySelectorAll('[data-act]').forEach(b => b.onclick = async () => {
       const id = b.dataset.id, a = b.dataset.act;
+      if (a === 'collect') { const v = viol.find(x => x.id === id), s = std(v.standard_id);
+        try { sessionStorage.setItem('alpha-prefill', JSON.stringify({ member: v.member_id, amount: s.fine, purpose: `Fine: ${s.title}`, cat: 'Fines', fund: 'sails', violation: v.id })); } catch { /* ignore */ }
+        location.hash = '#/staff/treasury'; return; }
+      if (a === 'excuse') return void excuseForm(viol.find(x => x.id === id), mname, std);
+      if (a === 'review') return void reviewExcuse(viol.find(x => x.id === id), mname, std);
       const patch = { approve:{ status:'pending' }, reject:{ status:'rejected' }, reqres:{ status:'resolve_requested', resolve_requested_by:`${r} ${name}` },
         forward:{ status:'resolve_forwarded', forwarded_by:`${r} ${name}` }, resolve:{ status:'resolved', resolved_by:`${r} ${name}` } }[a];
       try {
@@ -98,7 +124,7 @@ export async function mountWatch(el, ctx) {
     localStorage.setItem(RK, JSON.stringify([[k, l], ...recent().filter(x => x[0] !== k)].slice(0, 4))); } catch { /* ignore */ } };
   function report(members, standards) {
     modal(`<h3>Report a violation</h3><form id="rf"><label>Student</label><select name="m" required><option value="">Select…</option>${members.filter(m=>m.status==='active').map(m=>`<option value="${m.id}">${esc(m.full_name)}</option>`).join('')}</select>
-      <label>Standard</label><select name="s" required><option value="">Select…</option>${standards.map(s=>`<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select>
+      <label>Standard</label><select name="s" required><option value="">Select…</option>${standards.map(s=>`<option value="${s.id}">${esc(s.title)}${s.fine ? ` (₱${s.fine} fine)` : ''}</option>`).join('')}</select>
       <div class="chips" id="rs">${recent().map(([k, l]) => `<button type="button" data-k="${k}">${esc(l)}</button>`).join('')}</div>
       <label>Date</label><input name="d" type="date" required value="${todayISO()}">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Submit</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
@@ -126,12 +152,44 @@ export async function mountWatch(el, ctx) {
             toast(queued ? 'No signal. Saved on this device, will send automatically' : `${done} recorded${canApprove ? '' : ' for approval'}`); close(); draw().catch(() => {}); }
           catch (x) { go.disabled = false; upd(); m.querySelectorAll('#il [data-m]').forEach(b => { if (!picked.has(b.dataset.m)) { b.setAttribute('aria-checked', 'false'); b.classList.remove('on'); } }); m.querySelector('#er').textContent = `${done} saved before the error: ${x.message}. Only the rest are still selected.`; } }; });
   }
+  function excuseForm(v, mname, std) {
+    modal(`<h3>Excuse letter</h3><p class="muted" style="margin:0 0 8px">${esc(mname(v.member_id))} · ${esc(std(v.standard_id)?.title || 'Violation')} · ${fmtDate(v.occurred_on)}. The Mayor or Vice Mayor decides. Accepted means no fine.</p><form id="xf">
+      <label>What the student said (illness, accident or another valid reason)</label><textarea name="n" rows="3" maxlength="500" required></textarea>
+      <label>Photo of the letter or proof (optional)</label><input name="img" type="file" accept="image/*">
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Send for review</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
+      (m, close) => { m.querySelector('#cx').onclick = close;
+        m.querySelector('#xf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target), file = f.get('img');
+          try { const img = file && file.size ? await blobToDataUrl(await resizeImage(file)) : null;
+            await db(sb.from('v2_violations').update({ excuse_note: f.get('n').trim(), excuse_image: img, excuse_status: 'pending', excuse_by: `${r} ${name}`, updated_at: new Date().toISOString() }).eq('id', v.id));
+            toast('Sent for review'); close(); draw().catch(() => {}); } catch (x) { m.querySelector('#er').textContent = needV19(x); } }; });
+  }
+  async function reviewExcuse(v, mname, std) {
+    let img = null; try { img = (await db(sb.from('v2_violations').select('excuse_image').eq('id', v.id).single())).excuse_image; } catch { /* ignore */ }
+    modal(`<h3>Review excuse</h3><p class="muted" style="margin:0 0 8px">${esc(mname(v.member_id))} · ${esc(std(v.standard_id)?.title || 'Violation')} · ${fmtDate(v.occurred_on)}</p>
+      <div class="card pad"><b>Reason</b><p style="margin:4px 0 0;white-space:pre-wrap">${esc(v.excuse_note || '')}</p><small class="muted">Recorded by ${esc(v.excuse_by || '')}</small></div>
+      ${img ? `<img src="${img}" alt="Proof" style="width:100%;border-radius:12px;margin-top:10px">` : '<p class="muted">No photo attached.</p>'}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1" id="ok">Accept</button><button class="btn ghost" style="flex:1" id="no">Reject</button></div>
+      <button type="button" class="btn ghost" id="cx" style="width:100%;margin-top:8px">Close</button><div class="err" id="er"></div>`,
+      (m, close) => { m.querySelector('#cx').onclick = close;
+        const go = (patch, msg) => async () => { try { await db(sb.from('v2_violations').update({ ...patch, excuse_decided_by: `${r} ${name}`, updated_at: new Date().toISOString() }).eq('id', v.id)); toast(msg); close(); draw().catch(() => {}); } catch (x) { m.querySelector('#er').textContent = x.message; } };
+        m.querySelector('#ok').onclick = go({ excuse_status: 'accepted', status: 'resolved', resolved_by: `Excused by ${r} ${name}` }, 'Excuse accepted');
+        m.querySelector('#no').onclick = go({ excuse_status: 'rejected' }, 'Excuse rejected'); });
+  }
+  function editStandard(s) {
+    modal(`<h3>${esc(s.title)}</h3><form id="ef"><label>Rule</label><textarea name="r" rows="3">${esc(s.rule)}</textarea>
+      ${s.kind ? '' : `<label>Fine each time (₱). Leave empty to use the usual rule: 1st offense a warning, then ₱${FINE}.</label><input name="f" type="number" min="1" step="1" inputmode="numeric" value="${s.fine || ''}">`}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
+      (m, close) => { m.querySelector('#cx').onclick = close;
+        m.querySelector('#ef').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target), patch = { rule: f.get('r') };
+          if (!s.kind) patch.fine = f.get('f') ? +f.get('f') : null;
+          try { await db(sb.from('v2_standards').update(patch).eq('id', s.id)); toast('Saved'); close(); draw(); } catch (x) { m.querySelector('#er').textContent = needV19(x); } }; });
+  }
   function newStandard() {
-    modal(`<h3>New standard</h3><form id="sf"><label>Title</label><input name="t" required><label>Rule</label><textarea name="r" rows="3"></textarea>
+    modal(`<h3>New standard</h3><form id="sf"><label>Title</label><input name="t" required><label>Rule</label><textarea name="r" rows="3"></textarea><label>Fine each time (₱, optional)</label><input name="f" type="number" min="1" step="1" inputmode="numeric">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
       (m, close) => { m.querySelector('#cx').onclick = close;
         m.querySelector('#sf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
-          try { await db(sb.from('v2_standards').insert({ title: f.get('t'), rule: f.get('r'), sort_order: 999 })); toast('Added'); close(); draw(); } catch (x) { m.querySelector('#er').textContent = x.message; } }; });
+          try { await db(sb.from('v2_standards').insert({ title: f.get('t'), rule: f.get('r'), sort_order: 999, ...(f.get('f') ? { fine: +f.get('f') } : {}) })); toast('Added'); close(); draw(); } catch (x) { m.querySelector('#er').textContent = x.message; } }; });
   }
 
   await draw();
