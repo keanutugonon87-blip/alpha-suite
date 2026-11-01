@@ -25,16 +25,20 @@ function sigPad(box) {
 
 export async function mountRequests(el, ctx) {
   const isTre = ctx.can('treasurer'), isMayor = ctx.can('mayor'), canFile = ctx.can('secretary', 'mayor');
-  let reqs = [], balances = {}, only = 'all';
+  let reqs = [], liqs = [], balances = {}, only = 'all';
 
   async function load() {
     try { reqs = await db(sb.from('v2_budget_requests').select('*').order('created_at', { ascending: false })); }
     catch (e) { el.innerHTML = `<div class="card pad"><p class="empty">${esc(needV24(e))}</p></div>`; return; }
+    liqs = await db(sb.from('v2_liquidations').select('*')).catch(() => []);   // empty until the v25 SQL is run
     const ent = await db(sb.from('v2_entries').select('kind,amount,fund,status').eq('status', 'approved')).catch(() => []);
     balances = {}; ent.forEach(e => { const k = e.fund || ''; balances[k] = (balances[k] || 0) + (e.kind === 'collection' ? +e.amount : -e.amount); });
     draw();
   }
-  const mine = r => (isTre && ['draft', 'returned'].includes(r.status)) || (isMayor && r.status === 'submitted') || (canFile && r.status === 'approved');
+  const liqOf = r => liqs.find(l => l.request_id === r.id);
+  const LIQ = { draft: ['Liquidation in progress', ''], submitted: ['Liquidation: waiting for the President', 'warn'], returned: ['Liquidation returned', 'bad'], approved: ['Liquidation: waiting for the Auditor', 'warn'], audited: ['Liquidation: audited, to be filed', 'ok'], filed: ['Liquidation filed', 'ok'] };
+  const mine = r => (isTre && ['draft', 'returned'].includes(r.status)) || (isMayor && r.status === 'submitted') || (canFile && r.status === 'approved')
+    || (['approved', 'filed'].includes(r.status) && (() => { const l = liqOf(r); return (isTre && (!l || ['draft', 'returned'].includes(l.status))) || (isMayor && l?.status === 'submitted') || (ctx.can('auditor') && l?.status === 'approved') || (canFile && l?.status === 'audited'); })());
 
   function draw() {
     const todo = reqs.filter(mine), shown = reqs.filter(r => only === 'all' || (only === 'todo' ? mine(r) : r.status === only));
@@ -42,7 +46,8 @@ export async function mountRequests(el, ctx) {
       <select id="fl" style="width:auto"><option value="all">All requests</option><option value="todo">Needs me (${todo.length})</option>${Object.entries(STATUS).map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
       <p class="muted" style="margin:0 0 10px">The Treasurer fills in the request and signs. The President approves. The Secretary files it. Approved requests can be linked to expenses in Treasury.</p>
       <div class="card">${shown.map(r => { const [l, c] = STATUS[r.status];
-        return `<div class="row" data-r="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)} <span class="tag ${c}">${l}</span></b><small>${esc(r.req_no)} · ${esc(fundLabel(r.fund))} · ${esc(r.category)}${r.activity_date ? ' · ' + fmtDate(r.activity_date) : ''}</small></div>
+        const lq = liqOf(r), ls = ['approved', 'filed'].includes(r.status) ? (LIQ[lq?.status] || ['Needs a liquidation report', 'bad']) : null;
+        return `<div class="row" data-r="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)} <span class="tag ${c}">${l}</span>${ls ? ` <span class="tag ${ls[1]}">${ls[0]}</span>` : ''}</b><small>${esc(r.req_no)} · ${esc(fundLabel(r.fund))} · ${esc(r.category)}${r.activity_date ? ' · ' + fmtDate(r.activity_date) : ''}</small></div>
           <div style="text-align:right"><b>${peso(r.total)}</b>${mine(r) ? '<small class="muted" style="display:block">your turn</small>' : ''}</div></div>`; }).join('') || '<p class="empty">No requests here.</p>'}</div>`;
     el.querySelector('#fl').value = only; el.querySelector('#fl').onchange = e => { only = e.target.value; draw(); };
     el.querySelector('#nr')?.addEventListener('click', () => form(null));
@@ -100,6 +105,69 @@ export async function mountRequests(el, ctx) {
     });
   }
 
+
+  /* ---- liquidation and audit report ---- */
+  const needV25 = e => /relation|schema cache|does not exist|could not find|function/i.test(e.message || '') ? 'Run the v25 SQL in Supabase first (supabase/v25_liquidation_audit.sql).' : e.message;
+  const CHECKS = [['receipts', 'Every expense has a receipt'], ['amounts', 'Amounts match the receipts and the records'], ['duplicates', 'No expense is counted twice'], ['approvals', 'The request and the expenses are approved']];
+  async function liquidation(r) {
+    let l = liqOf(r), lines, live = false;
+    if (l && l.status !== 'draft') lines = l.lines;
+    else {   // not sent yet: show what the records say right now
+      live = true;
+      const [ex, img] = await Promise.all([db(sb.from('v2_entries').select('id,occurred_at,payer_name,category,purpose,amount,status').eq('request_id', r.id).eq('kind', 'expense').in('status', ['approved', 'pending']).order('occurred_at')).catch(() => []), db(sb.from('v2_entries').select('id').not('receipt_image', 'is', null)).catch(() => [])]);
+      const has = new Set(img.map(x => x.id)); lines = ex.map(e => ({ id: e.id, date: String(e.occurred_at).slice(0, 10), payee: e.payer_name || '', category: e.category, purpose: e.purpose || '', amount: +e.amount, receipt: has.has(e.id), pending: e.status === 'pending' }));
+    }
+    const actual = live ? lines.reduce((t, x) => t + x.amount, 0) : +l.actual, left = r.total - actual, st = l?.status || 'draft';
+    const missing = lines.filter(x => !x.receipt).length, pend = lines.filter(x => x.pending).length, over = actual > r.total;
+    const sigb = (t, n, role, at, img) => sigBlock(t, n, role, at, img);
+    const body = `<div class="sum"><div>Approved<b>${peso(r.total)}</b></div><div>Spent<b>${peso(actual)}</b></div><div>${over ? 'Over by' : 'Unspent'}<b>${peso(Math.abs(left))}</b></div>${l ? `<div>Cash returned<b>${peso(l.cash_returned)}</b></div>` : ''}</div>
+      <h2>Expenses charged to ${esc(r.req_no)}</h2>${lines.length ? `<table><thead><tr><th>Date</th><th>Paid to</th><th>What for</th><th class="r">Amount</th><th>Receipt</th></tr></thead><tbody>${lines.map(x => `<tr><td>${fmtDate(x.date)}</td><td>${esc(x.payee)}</td><td>${esc(x.category)}${x.purpose ? ' · ' + esc(x.purpose) : ''}</td><td class="r">${peso(x.amount)}</td><td>${x.receipt ? 'yes' : 'no'}</td></tr>`).join('')}<tr><td colspan="3" class="r"><b>Total</b></td><td class="r"><b>${peso(actual)}</b></td><td></td></tr></tbody></table>` : '<p>No expense is linked to this request yet. Pick this request in the expense form in Treasury.</p>'}
+      ${l?.remarks ? `<h2>Treasurer’s remarks</h2><p>${esc(l.remarks)}</p>` : ''}
+      ${l?.audit_opinion ? `<h2>Audit report</h2><p><b>Opinion: ${l.audit_opinion === 'clear' ? 'Clear' : 'With findings'}</b></p>${CHECKS.map(([k, t]) => `<div class="row"><span>${t}</span><b>${l.audit_checks?.[k] ? 'yes' : 'no'}</b></div>`).join('')}${l.audit_remarks ? `<p style="margin-top:8px">${esc(l.audit_remarks)}</p>` : ''}` : ''}
+      <div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:54px">${sigb('Prepared by', l?.prepared_at ? l.prepared_by_name : '', 'Treasurer', l?.prepared_at, l?.prepared_sig)}${sigb('Approved by', ['approved', 'audited', 'filed'].includes(st) || (st === 'returned' && l?.audit_opinion) ? l.decided_by_name : '', 'President (Mayor)', l?.decided_at, l?.approved_sig)}
+        ${sigb('Audited by', l?.audited_at ? l.audited_by_name : '', 'Auditor', l?.audited_at, l?.audit_sig)}${sigb('Filed by', l?.filed_at ? l.filed_by_name : '', 'Secretary', l?.filed_at, l?.filed_sig)}</div>`;
+    const flags = [live || l ? (over ? `Spending is ${peso(actual - r.total)} over the approved amount.` : '') : '', missing ? `${missing} expense${missing > 1 ? 's have' : ' has'} no receipt photo.` : '', pend ? `${pend} linked expense${pend > 1 ? 's wait' : ' waits'} for approval.` : '', l?.auto?.possible_duplicates ? `${l.auto.possible_duplicates} possible duplicate${l.auto.possible_duplicates > 1 ? 's' : ''}.` : ''].filter(Boolean);
+    const [ll, lc] = LIQ[st] || LIQ.draft;
+    modal(`<h3>Liquidation · ${esc(r.req_no)} <span class="tag ${lc}">${ll}</span></h3>${flags.length ? `<div class="sb warn" style="margin:0 0 8px;text-align:left">${flags.map(esc).join('<br>')}</div>` : ''}${l?.decision_note && st === 'returned' ? `<div class="sb bad" style="margin:0 0 8px;text-align:left">Returned: ${esc(l.decision_note)}</div>` : ''}
+      <div id="pp" style="max-height:56vh;overflow:auto;font-size:.92rem">${body.replace(/<h2>/g, '<h4 style="margin:12px 0 4px">').replace(/<\/h2>/g, '</h4>').replace(/class="row"/g, 'style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid #d6e6ee"').replace(/<table>/g, '<table style="width:100%;border-collapse:collapse">').replace(/<th/g, '<th style="text-align:left;font-size:.78rem;padding:4px"').replace(/<td/g, '<td style="padding:4px;border-bottom:1px solid #d6e6ee;font-size:.85rem"').replace(/<div class="sum">/, '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:8px">').replace(/<div>(Approved|Spent|Unspent|Over by|Cash returned)<b>/g, '<div style="flex:1;min-width:90px;background:#f2f9fb;border:1px solid #cfe3ec;border-radius:10px;padding:6px 10px;font-size:.75rem">$1<b style="display:block;font-size:1.05rem">')}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+        ${isTre && (!l || ['draft', 'returned'].includes(st)) ? '<button class="btn gold" id="ls">Sign and send to the President</button>' : ''}
+        ${isMayor && st === 'submitted' ? '<button class="btn gold" id="la">Approve</button><button class="btn ghost" id="lr">Return</button>' : ''}
+        ${ctx.can('auditor') && st === 'approved' ? '<button class="btn gold" id="lu">Audit this report</button>' : ''}
+        ${canFile && st === 'audited' ? '<button class="btn gold" id="lf">File it</button>' : ''}
+        <button class="btn ghost" id="pr">Print / save PDF</button><button class="btn ghost" id="cx">Close</button></div>`, (m, close) => {
+      const go = fn => () => { close(); fn(); };
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#pr').onclick = () => printHTML('Liquidation ' + r.req_no, `${letterhead('Liquidation and Audit Report', `${r.req_no} · ${r.title}`)}${body}`);
+      m.querySelector('#ls')?.addEventListener('click', go(() => liqSign(r, l, 'submit', { actual, left })));
+      m.querySelector('#la')?.addEventListener('click', go(() => liqSign(r, l, 'approve')));
+      m.querySelector('#lr')?.addEventListener('click', go(() => liqSign(r, l, 'return')));
+      m.querySelector('#lu')?.addEventListener('click', go(() => liqSign(r, l, 'audit')));
+      m.querySelector('#lf')?.addEventListener('click', go(() => liqSign(r, l, 'file')));
+    });
+  }
+  function liqSign(r, l, act, x = {}) {
+    const T = { submit: ['Send the liquidation report', 'Send for approval', 'You are signing as the one who prepared this report.'], approve: ['Approve the liquidation report', 'Approve and sign', 'You are approving this report as the President.'],
+      return: ['Return the liquidation report', 'Return it', 'Say what needs to change. No signature is needed.'], audit: ['Audit report', 'Sign the audit report', 'Tick what you checked, give your opinion and sign as the Auditor.'], file: ['File the liquidation report', 'File and sign', 'You are receiving the audited report for the records.'] }[act];
+    modal(`<h3>${T[0]}</h3><p class="muted" style="margin:0 0 6px">${esc(r.req_no)} · ${esc(r.title)}</p><p class="muted" style="margin:0 0 8px">${T[2]}</p>
+      ${act === 'submit' ? `<label>Cash returned to the fund (₱)</label><input id="cr" type="number" min="0" step="0.01" inputmode="decimal" value="${Math.max(0, x.left || 0)}"><small class="muted">The unspent amount is ${peso(Math.max(0, x.left || 0))}.</small><label>Remarks (optional)</label><textarea id="nt" rows="2" maxlength="1000"></textarea>` : ''}
+      ${act === 'return' ? '<label>What needs to change</label><textarea id="nt" rows="3" maxlength="500"></textarea>' : ''}
+      ${act === 'audit' ? `${CHECKS.map(([k, t]) => `<label class="ck"><input type="checkbox" data-ck="${k}"><span>${t}</span></label>`).join('')}<label>Opinion</label><div class="seg" id="op"><button type="button" data-op="clear" class="on">Clear</button><button type="button" data-op="findings">With findings</button></div><label>Remarks (required for findings)</label><textarea id="nt" rows="3" maxlength="1000"></textarea>` : ''}
+      ${act === 'approve' ? '<label>Note (optional)</label><input id="nt" maxlength="500">' : ''}
+      ${act === 'return' ? '' : `<div class="card pad" style="margin:8px 0"><b>${esc(ctx.profile.full_name)}</b><br><small class="muted">${ROLE_LABEL[ctx.profile.role]} · stamped ${fmtDateTime(new Date())}</small></div><label>Signature (optional, draw with your finger)</label><div id="sp"></div>`}
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn ${act === 'return' ? 'danger' : 'gold'}" id="go" style="flex:2">${T[1]}</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
+      const sig = act === 'return' ? () => '' : sigPad(m.querySelector('#sp')); let opinion = 'clear'; m.querySelector('#cx').onclick = close;
+      m.querySelectorAll('[data-op]').forEach(b => b.onclick = () => { opinion = b.dataset.op; m.querySelectorAll('[data-op]').forEach(y => y.classList.toggle('on', y === b)); });
+      m.querySelector('#go').onclick = async () => { const note = m.querySelector('#nt')?.value || ''; m.querySelector('#go').disabled = true;
+        try { if (act === 'submit') await db(sb.rpc('v2_liq_submit', { p_request: r.id, p_cash_returned: +m.querySelector('#cr').value || 0, p_remarks: note, p_sig: sig() }));
+          else if (act === 'file') await db(sb.rpc('v2_liq_file', { p_id: l.id, p_sig: sig() }));
+          else if (act === 'audit') await db(sb.rpc('v2_liq_audit', { p_id: l.id, p_checks: Object.fromEntries([...m.querySelectorAll('[data-ck]')].map(c => [c.dataset.ck, c.checked])), p_opinion: opinion, p_remarks: note, p_sig: sig() }));
+          else await db(sb.rpc('v2_liq_decide', { p_id: l.id, p_approve: act === 'approve', p_note: note, p_sig: sig() }));
+          toast({ submit: 'Sent to the President', approve: 'Approved. It goes to the Auditor.', return: 'Returned to the Treasurer', audit: opinion === 'clear' ? 'Audit signed. The Secretary can file it.' : 'Findings sent back to the Treasurer', file: 'Filed. A copy is in Documents.' }[act]); close(); load();
+        } catch (e) { m.querySelector('#er').textContent = needV25(e); m.querySelector('#go').disabled = false; } };
+    });
+  }
+
   /* ---- read-only view with the actions for whoever's turn it is ---- */
   const sigBlock = (title, name, role, at, img) => `<div style="flex:1;min-width:150px;border-top:1.5px solid #14233f;padding-top:4px;text-align:center">${img ? `<img src="${img}" alt="" style="height:44px;display:block;margin:-46px auto 2px">` : '<div style="height:0"></div>'}<b>${name ? esc(name) : '&nbsp;'}</b><br><small>${esc(title)}${name ? ` · ${esc(role)}<br>${fmtDateTime(at)}` : ''}</small></div>`;
   const paper = r => `<h2>Request details</h2><div class="row"><span>Request no.</span><b>${esc(r.req_no)}</b></div><div class="row"><span>Activity or project</span><b>${esc(r.title)}</b></div><div class="row"><span>Category</span><b>${esc(r.category)}</b></div>
@@ -117,8 +185,10 @@ export async function mountRequests(el, ctx) {
         ${isTre && ['draft', 'returned'].includes(r.status) ? '<button class="btn gold" id="ed">Edit</button><button class="btn gold" id="sn">Send to the President</button><button class="btn ghost" id="dl">Delete</button>' : ''}
         ${isMayor && r.status === 'submitted' ? '<button class="btn gold" id="ap">Approve</button><button class="btn ghost" id="rt">Return</button>' : ''}
         ${canFile && r.status === 'approved' ? '<button class="btn gold" id="fi">File it</button>' : ''}
+        ${['approved', 'filed'].includes(r.status) ? '<button class="btn gold" id="lq">Liquidation and audit report</button>' : ''}
         <button class="btn ghost" id="pr">Print / save PDF</button><button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
       const go = (fn) => () => { close(); fn(); };
+      m.querySelector('#lq')?.addEventListener('click', go(() => liquidation(r)));
       m.querySelector('#cx').onclick = close;
       m.querySelector('#pr').onclick = () => printHTML(r.req_no, `${letterhead('Fund Budget Request', 'BSMT 1-Alpha · Batch 28 · PIT-COMED')}${paper(r)}`);
       m.querySelector('#ed')?.addEventListener('click', go(() => form(r)));
@@ -131,7 +201,7 @@ export async function mountRequests(el, ctx) {
   }
 
   el.innerHTML = skeleton(3);
-  const off = watch(['v2_budget_requests'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
+  const off = watch(['v2_budget_requests', 'v2_liquidations'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   await load();
   return off;
 }
