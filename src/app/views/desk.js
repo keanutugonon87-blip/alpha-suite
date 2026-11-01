@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, peso, fmtDate, toast, modal, skeleton, safeWrite, uuid, confirmDialog, initials, FUNDS, fundLabel, todayISO } from '../core.js';
+import { sb, db, watch, esc, peso, fmtDate, toast, modal, skeleton, safeWrite, uuid, confirmDialog, initials, todayISO } from '../core.js';
 import { findDuplicate } from '../money.js';
 import { scanMember, showReceipt } from '../qr.js';
 
@@ -12,9 +12,9 @@ const readGoal = () => { try { return +localStorage.getItem(GK) || 0; } catch { 
 
 export async function mountDesk(el, ctx) {
   const isMayor = ctx.can('mayor');
-  let q = '', only = 'owing', data = null, pane = 'collect';
+  let q = '', only = 'owing', data = null;
   el.innerHTML = skeleton(4);
-  const off = watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_promises', 'v2_budgets'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
+  const off = watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_promises'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   await load();
   return off;
 
@@ -28,10 +28,9 @@ export async function mountDesk(el, ctx) {
     ]);
     let viol = [], stds = [];
     try { [viol, stds] = await Promise.all([db(sb.from('v2_violations').select('id,member_id,standard_id,status,excuse_status,occurred_on')), db(sb.from('v2_standards').select('id,title,fine'))]); } catch { /* fines need the v19 SQL */ }
-    let promises = [], budgets = [], spent = [], v23 = true;   // promises and budgets need the v23 SQL
-    try { [promises, budgets] = await Promise.all([db(sb.from('v2_promises').select('*').eq('status', 'open').order('promised_on')), db(sb.from('v2_budgets').select('*'))]); } catch { v23 = false; }
-    spent = await db(sb.from('v2_entries').select('fund,amount').eq('kind', 'expense').in('status', ['approved', 'pending'])).catch(() => []);
-    data = { members, charges, bal, cur: periods[0], entries, viol, stds, promises, budgets, spent, v23 };
+    let promises = [], v23 = true;   // promises need the v23 SQL
+    try { promises = await db(sb.from('v2_promises').select('*').eq('status', 'open').order('promised_on')); } catch { v23 = false; }
+    data = { members, charges, bal, cur: periods[0], entries, viol, stds, promises, v23 };
     draw();
   }
 
@@ -53,9 +52,7 @@ export async function mountDesk(el, ctx) {
     const outstanding = rows.reduce((t, r) => t + r.total, 0), owing = rows.filter(r => r.total > 0);
     const shown = rows.filter(r => (only === 'all' || r.total > 0) && (!q || r.m.full_name.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.total - a.total || a.m.full_name.localeCompare(b.m.full_name));
     const today = todayISO(), prom = id => data.promises.filter(x => x.member_id === id), due = data.promises.filter(x => x.promised_on <= today);
-    const seg = `<div class="seg" id="pn" style="margin-bottom:10px"><button data-p="collect" class="${pane === 'collect' ? 'on' : ''}">Collect</button><button data-p="budgets" class="${pane === 'budgets' ? 'on' : ''}">Budgets</button></div>`;
-    if (pane === 'budgets') return drawBudgets(seg);
-    el.innerHTML = `${seg}<div class="grid"><div class="stat gold"><small>Still to collect</small><b>${peso(outstanding)}</b></div><div class="stat"><small>Students owing</small><b>${owing.length}</b></div><div class="stat"><small>Collected this week</small><b>${peso(got)}</b></div></div>
+    el.innerHTML = `<div class="grid"><div class="stat gold"><small>Still to collect</small><b>${peso(outstanding)}</b></div><div class="stat"><small>Students owing</small><b>${owing.length}</b></div><div class="stat"><small>Collected this week</small><b>${peso(got)}</b></div></div>
       <div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Weekly goal</b><button class="btn ghost sm" id="gl">${goal ? 'Change' : 'Set a goal'}</button></div>
         ${goal ? `<div class="prog" style="margin-top:8px"><i style="width:${Math.min(100, got / goal * 100)}%"></i></div><small class="muted">${peso(got)} of ${peso(goal)}${got >= goal ? ' · goal reached' : ` · ${peso(goal - got)} to go`}</small>` : '<small class="muted">Pick an amount to collect each week. The bar fills as payments come in.</small>'}</div>
       ${due.length ? `<div class="card pad" style="margin-bottom:10px"><b>Promised to pay by now (${due.length})</b>${due.map(x => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px"><span>${esc(data.members.find(m => m.id === x.member_id)?.full_name || '?')} · ${peso(x.amount)}<small class="muted" style="display:block">${x.promised_on < today ? 'was due ' : 'due '}${fmtDate(x.promised_on)}${x.note ? ' · ' + esc(x.note) : ''}</small></span><span style="display:flex;gap:4px"><button class="btn gold sm" data-pk="${x.id}">Collect</button><button class="btn ghost sm" data-pb="${x.id}">Broken</button></span></div>`).join('')}</div>` : ''}
@@ -70,7 +67,6 @@ export async function mountDesk(el, ctx) {
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close; m.querySelector('#gf').onsubmit = e => { e.preventDefault(); try { localStorage.setItem(GK, String(+new FormData(e.target).get('g') || 0)); } catch { /* ignore */ } close(); draw(); }; });
     el.querySelector('#sc').onclick = async () => { const r = await scanMember(); if (!r) return; const row = rows.find(x => x.m.id === r.id); if (!row) return toast('That student is not on the active list.', true); toast('Scanned: ' + r.name); collect(row); };
-    el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { pane = b.dataset.p; draw(); });
     el.querySelectorAll('[data-pk]').forEach(b => b.onclick = e => { e.stopPropagation(); const x = data.promises.find(y => y.id === b.dataset.pk); collect(rows.find(r => r.m.id === x.member_id)); });
     el.querySelectorAll('[data-pb]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await db(sb.from('v2_promises').update({ status: 'broken' }).eq('id', b.dataset.pb)); toast('Marked as broken'); load(); } catch (x) { toast(x.message, true); } });
     el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => collect(rows.find(x => x.m.id === b.dataset.m)));
@@ -86,23 +82,6 @@ export async function mountDesk(el, ctx) {
       m.querySelector('#pf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
         try { await db(sb.from('v2_promises').insert({ member_id: row.m.id, amount: +f.get('a'), promised_on: f.get('d'), note: f.get('n').trim() || null })); toast('Promise saved. It shows on the Desk when it is due.'); close(); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } };
     });
-  }
-
-  /* budgets: what is set aside for each fund and what has gone out of it */
-  function drawBudgets(seg) {
-    const { budgets, spent, v23 } = data;
-    if (!v23) { el.innerHTML = `${seg}<div class="card pad"><p class="empty">Run the v23 SQL in Supabase first (supabase/v23_promises_budgets.sql).</p></div>`; el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { pane = b.dataset.p; draw(); }); return; }
-    const sp = k => spent.filter(x => (x.fund || '') === k).reduce((t, x) => t + +x.amount, 0);
-    el.innerHTML = `${seg}<p class="muted" style="margin:0 0 10px">Set an amount for each fund. When an expense would go over it, the Treasury form asks first.</p>
-      ${FUNDS.map(f => { const b = budgets.find(x => x.fund === f.k), s0 = sp(f.k), left = b ? +b.amount - s0 : null, pct = b && +b.amount ? Math.min(100, s0 / +b.amount * 100) : 0;
-        return `<div class="card pad" style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>${esc(f.label)}</b><button class="btn ghost sm" data-b="${f.k}">${b ? 'Change' : 'Set budget'}</button></div>
-          ${b ? `<div class="prog" style="margin:8px 0"><i style="width:${pct}%${left < 0 ? ';background:#c0392b' : ''}"></i></div><small class="muted">Spent ${peso(s0)} of ${peso(b.amount)} · ${left < 0 ? `<b style="color:#c0392b">over by ${peso(-left)}</b>` : `${peso(left)} left`}</small>` : `<small class="muted">No budget set. Spent so far: ${peso(s0)}</small>`}</div>`; }).join('')}`;
-    el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { pane = b.dataset.p; draw(); });
-    el.querySelectorAll('[data-b]').forEach(b => b.onclick = () => { const k = b.dataset.b, cur0 = budgets.find(x => x.fund === k);
-      modal(`<h3>${esc(fundLabel(k))} budget</h3><form id="bf"><label>Total to spend from this fund (₱)</label><input name="a" type="number" min="0" step="50" inputmode="numeric" value="${cur0?.amount ?? ''}" required>
-        <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
-        m.querySelector('#cx').onclick = close; m.querySelector('#bf').onsubmit = async e => { e.preventDefault();
-          try { await db(sb.from('v2_budgets').upsert({ fund: k, amount: +new FormData(e.target).get('a') }, { onConflict: 'fund' })); toast('Budget saved'); close(); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } }; }); });
   }
 
   /* tick what the student is paying now; each ticked item becomes its own entry (and its own receipt) */

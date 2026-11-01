@@ -8,7 +8,7 @@ const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'S
 
 export async function mountTreasury(el, ctx) {
   const canWrite = ctx.can('mayor', 'treasurer'), isMayor = ctx.can('mayor');
-  let curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
+  let reqs = [], curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
   async function draw() {
@@ -22,6 +22,7 @@ export async function mountTreasury(el, ctx) {
       sb.from('v2_settings').select('value').eq('key', 'expense_second_approval').maybeSingle().then(r => r.data?.value, () => null),
     ]);
     limit = lim != null && lim !== '' && !isNaN(+lim) ? +lim : 500; const lockedMonths = new Set(closes.filter(c => c.status === 'closed').map(c => c.month));
+    reqs = await db(sb.from('v2_budget_requests').select('id,req_no,title,fund,category,total').in('status', ['approved', 'filed']).order('created_at', { ascending: false })).catch(() => []);   // empty until the v24 SQL is run
     members = mem; charges = chg; const hasImg = new Set(flags.map(r => r.id));
     const nameOf = id => members.find(m => m.id === id)?.full_name;
     const entries = raw.map(e => ({ ...e, who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '', locked: lockedMonths.has(ymManila(e.occurred_at)) }));
@@ -214,7 +215,7 @@ export async function mountTreasury(el, ctx) {
     modal(`<h3>${kind === 'collection' ? 'Record collection' : 'Record expense'}</h3><form id="ef">
       ${kind === 'collection' ? `<label>Student</label><select name="member" required><option value="">Select…</option>${members.map(m => `<option value="${m.id}"${m.id === pre.member ? ' selected' : ''}>${esc(m.full_name)}</option>`).join('')}</select>
         <label>Charge (optional)</label><select name="charge"><option value="">— none —</option>${openCharges.map(c => `<option value="${c.id}" data-amt="${c.amount}"${c.id === pre.charge ? ' selected' : ''}>${esc(c.title)} (${peso(c.amount)})</option>`).join('')}</select>`
-        : `${recentOut().length ? `<label>Recent</label><div class="chips" id="rx">${recentOut().map((r, n) => `<button type="button" data-rx="${n}">${esc(r.payer)} · ${esc(r.cat)}</button>`).join('')}</div>` : ''}<label>Paid to / vendor</label><input name="payer" required>`}
+        : `${recentOut().length ? `<label>Recent</label><div class="chips" id="rx">${recentOut().map((r, n) => `<button type="button" data-rx="${n}">${esc(r.payer)} · ${esc(r.cat)}</button>`).join('')}</div>` : ''}${reqs.length ? `<label>Budget request (optional)</label><select name="request"><option value="">— none —</option>${reqs.map(x => `<option value="${x.id}" data-fund="${x.fund}" data-cat="${esc(x.category)}">${esc(x.req_no)} · ${esc(x.title)} (${peso(x.total)})</option>`).join('')}</select>` : ''}<label>Paid to / vendor</label><input name="payer" required>`}
       <div id="fw"><label>Fund</label><select name="fund">${fundOptions(pre.fund || '')}</select></div>
       <label>Category</label><select name="cat">${cats.map(c => `<option${c === pre.cat ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
@@ -223,6 +224,7 @@ export async function mountTreasury(el, ctx) {
       <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
+      m.querySelector('[name=request]')?.addEventListener('change', e => { const o = e.target.selectedOptions[0], f = m.querySelector('#ef'); if (o?.dataset.fund) { f.elements.fund.value = o.dataset.fund; if (o.dataset.cat) f.elements.cat.value = o.dataset.cat; } });
       m.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => { const r = recentOut()[+b.dataset.rx], f = m.querySelector('#ef'); f.elements.payer.value = r.payer; f.elements.cat.value = r.cat; if (r.fund !== undefined) f.elements.fund.value = r.fund || ''; if (r.purpose) f.elements.purpose.value = r.purpose; f.elements.amt.focus(); });
       m.querySelectorAll('[name=method]').forEach(r => r.onchange = () => { m.querySelector('#gc').style.display = m.querySelector('[name=method]:checked')?.value === 'gcash' ? 'block' : 'none'; });
       const chSel = m.querySelector('[name=charge]'), amt = m.querySelector('[name=amt]');
@@ -237,13 +239,13 @@ export async function mountTreasury(el, ctx) {
           if (dup && !(await confirmDialog(`The same amount (${peso(dup.amount)}) for ${dup.who} was already recorded a few minutes ago${dup.receipt_no ? ` (${dup.receipt_no})` : ''}. Save it again?`, { ok: 'Save anyway', title: 'Possible duplicate' }))) { btn.disabled = false; btn.textContent = 'Save'; return; }
           const file0 = f.get('img');
           if (kind === 'expense' && limit > 0 && +f.get('amt') >= limit && !(file0 && file0.size)) throw new Error(`Add a receipt photo. Expenses of ${peso(limit)} or more need one.`);
-          if (kind === 'expense' && f.get('fund')) {   // over the fund's budget? (needs the v23 SQL; skipped quietly without it)
-            const bd = await sb.from('v2_budgets').select('amount').eq('fund', f.get('fund')).maybeSingle().then(r => r.data, () => null);
-            if (bd) { const sp = await sb.from('v2_entries').select('amount').eq('kind', 'expense').eq('fund', f.get('fund')).in('status', ['approved', 'pending']).then(r => (r.data || []).reduce((t, x) => t + +x.amount, 0), () => 0);
-              if (sp + +f.get('amt') > +bd.amount && !(await confirmDialog(`${fundLabel(f.get('fund'))} has a budget of ${peso(bd.amount)} and ${peso(sp)} is already spent. This ${peso(f.get('amt'))} would go over by ${peso(sp + +f.get('amt') - bd.amount)}. Save it anyway?`, { ok: 'Save anyway', title: 'Over budget' }))) { btn.disabled = false; btn.textContent = 'Save'; return; } }
+          if (kind === 'expense' && f.get('request')) {   // linked to an approved budget request: warn when the spending passes its total
+            const rq = reqs.find(x => x.id === f.get('request'));
+            if (rq) { const sp = await sb.from('v2_entries').select('amount').eq('kind', 'expense').eq('request_id', rq.id).neq('status', 'voided').then(r => (r.data || []).reduce((t, x) => t + +x.amount, 0), () => 0);
+              if (sp + +f.get('amt') > +rq.total && !(await confirmDialog(`${rq.req_no} was approved for ${peso(rq.total)} and ${peso(sp)} is already spent on it. This ${peso(f.get('amt'))} would go over by ${peso(sp + +f.get('amt') - rq.total)}. Save it anyway?`, { ok: 'Save anyway', title: 'Over the approved budget' }))) { btn.disabled = false; btn.textContent = 'Save'; return; } }
           }
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
-          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, ...(pre.violation ? { violation_id: pre.violation } : {}), fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
+          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, ...(pre.violation ? { violation_id: pre.violation } : {}), ...(f.get('request') ? { request_id: f.get('request') } : {}), fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,
             status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }, photo);
           close();

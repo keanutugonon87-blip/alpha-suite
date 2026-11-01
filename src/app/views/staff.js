@@ -4,6 +4,7 @@ import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync
 
 const ICON = {
   desk: '<path d="M4 9h16v10H4z"/><path d="M8 9V6h8v3"/><path d="M9 14h6"/>',
+  requests: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/>',
   attendance: '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/>',
   home: '<path d="M4 11l8-7 8 7"/><path d="M6 10v10h12V10"/><path d="M10 20v-6h4v6"/>',
   treasury: '<path d="M4 7h16v11H4z"/><path d="M4 11h16"/><path d="M8 15h3"/>',
@@ -25,6 +26,7 @@ const TABS = [
   { id: 'balances', label: 'Balances', load: () => import('./balances.js').then(m => m.mountBalances), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
   { id: 'watch', label: 'Watch', load: () => import('./watch.js').then(m => m.mountWatch), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
   { id: 'attendance', label: 'Attendance', load: () => import('./attendance.js').then(m => m.mountAttendance), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
+  { id: 'requests', label: 'Budget', load: () => import('./requests.js').then(m => m.mountRequests), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'] },
   { id: 'students', label: 'Students', load: () => import('./students.js').then(m => m.mountStudents), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },
   { id: 'officers', label: 'Officers', load: () => import('./officers.js').then(m => m.mountOfficers), roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
   { id: 'notices', label: 'Notices', load: () => import('./notices.js').then(m => m.mountNotices), roles: ['mayor', 'vice_mayor', 'secretary', 'pio'] },
@@ -35,7 +37,7 @@ const TABS = [
   { id: 'system', label: 'System', load: () => import('./system.js').then(m => m.mountSystem), roles: ['mayor', 'vice_mayor', 'treasurer'] },
 ];
 
-const TABKEY = {'home': 'tabHome', 'treasury': 'tabTreasury', 'balances': 'tabBalances', 'watch': 'tabWatch', 'attendance': 'tabAttend', 'desk': 'tabDesk', 'students': 'tabStudents', 'officers': 'tabOfficers', 'notices': 'tabNotices', 'accounts': 'tabAccounts', 'docs': 'tabDocs', 'duties': 'tabDuties', 'roles': 'tabRoles', 'system': 'tabSystem'};
+const TABKEY = {'home': 'tabHome', 'treasury': 'tabTreasury', 'balances': 'tabBalances', 'watch': 'tabWatch', 'attendance': 'tabAttend', 'desk': 'tabDesk', 'requests': 'tabBudget', 'students': 'tabStudents', 'officers': 'tabOfficers', 'notices': 'tabNotices', 'accounts': 'tabAccounts', 'docs': 'tabDocs', 'duties': 'tabDuties', 'roles': 'tabRoles', 'system': 'tabSystem'};
 const tabLabel = t0 => TABKEY[t0.id] ? t(TABKEY[t0.id]) : t0.label;
 function authScreen(root, mode = 'in', msg = '', ok = false) {
   root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span>

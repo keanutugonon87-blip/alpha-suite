@@ -3,6 +3,10 @@ const ROLES = [['mayor', 'Mayor'], ['vice_mayor', 'Vice'], ['secretary', 'Sec'],
 const ALL = ROLES.map(r => r[0]);
 const SCREENS = [
   ['Today (own duties)', ALL],
+  ['Fill in and send a fund budget request (Budget)', ['treasurer']],
+  ['Approve or return a fund budget request (Budget)', ['mayor']],
+  ['File an approved budget request (Budget)', ['secretary', 'mayor']],
+  ['Read budget requests (Budget)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
   ['Collection Desk (everything a student owes, one-tap collecting, weekly goal)', ['mayor', 'treasurer']],
   ['Treasury, Balances', ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary']],
   ['Watch', ALL],
