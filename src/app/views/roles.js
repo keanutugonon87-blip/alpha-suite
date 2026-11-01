@@ -39,7 +39,7 @@ const ACTIONS = [
   ['Link or unlink Google Drive', ['mayor']],
   ['Copy to Google Drive (Sync now)', ['mayor', 'vice_mayor', 'secretary']],
   ['Delete a document or remove a file', ['mayor', 'secretary']],
-  ['Set events and their category (Attendance)', ['mayor']],
+  ['Set events and their category (Attendance)', ['mayor', 'vice_mayor']],
   ['Scan log in and log out (Attendance)', ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails']],
   ['Compile attendance and send the fines report (Attendance)', ['mayor', 'secretary']],
   ['See the fines report (Attendance)', ['mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio']],

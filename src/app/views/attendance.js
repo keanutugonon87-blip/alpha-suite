@@ -2,7 +2,7 @@ import { sb, db, watch, esc, fmtDate, toast, modal, uuid, todayISO, confirmDialo
 import { scanLoop } from '../qr.js';
 
 /* Attendance: log in and log out by QR card.
-   The Mayor (the President) is the only one who sets an event and its category.
+   Only the President (Mayor) and the Vice Mayor (Internal and External) set an event and its category.
    The Marshals scan the students' cards and confirm each scan.
    The Secretary compiles who was missed (excused students unticked), then sends the fines report to the Mayor, Vice Mayor, Marshals and Treasurer.
    The PIO sends the report to the students through the app. */
@@ -26,7 +26,7 @@ export async function mountAttendance(el, ctx) {
 }
 
 async function draw(host, ctx, members, standards, redraw) {
-  const manage = ctx.can('mayor'), canScan = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails'), canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
+  const manage = ctx.can('mayor', 'vice_mayor'), canScan = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails'), canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
   const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor'), collects = ctx.can('mayor', 'treasurer');
   const act = members.filter(x => x.status === 'active'), mname = id => members.find(m => m.id === id)?.full_name || '?';
   let events, scans, viol = [], paid = new Set();
@@ -55,7 +55,7 @@ async function draw(host, ctx, members, standards, redraw) {
       ${canCompile && e.finalized_at && !e.report_sent_at ? `<button class="btn gold sm" data-sr="${e.id}">Send fines report</button>` : ''}
       ${canNotify && e.report_sent_at && !e.notified_at ? `<button class="btn gold sm" data-nt="${e.id}">Send to students</button>` : ''}
       ${manage ? `<button class="btn ghost sm" data-cl="${e.id}">${open ? 'Close' : 'Reopen'}</button><button class="btn ghost sm" data-dl="${e.id}">Delete</button>` : ''}</div></div>`; };
-  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President sets the event. Marshals scan, the Secretary compiles, the PIO tells the students.</p>'}
+  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President or Vice Mayor sets the event. Marshals scan, the Secretary compiles, the PIO tells the students.</p>'}
     <div class="card">${events.map(card).join('') || '<p class="empty">No events yet.</p>'}</div>`;
   const ev = id => events.find(e => e.id === id);
   host.querySelector('#ne')?.addEventListener('click', () => newEvent());
