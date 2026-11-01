@@ -6,9 +6,9 @@ import { scanLoop } from '../qr.js';
    The Marshals scan the students' cards and confirm each scan.
    The Secretary compiles who was missed (excused students unticked), then sends the fines report to the Mayor, Vice Mayor, Marshals and Treasurer.
    The PIO sends the report to the students through the app. */
-const KINDS = { flag: 'Flag ceremony', inspection: 'Inspection', event: 'Event (log in / log out)' };
+const KINDS = { flag: 'Flag ceremony', event: 'Event (log in / log out)', inspection: 'Inspection' };   // inspection is only kept so old events still show a name; it is run from Watch
 const needV2 = e => /relation|schema cache|does not exist|function .* not|could not find/i.test(e.message || '') ? 'Run the v21 and v22 SQL in Supabase first (supabase/v21_events_attendance.sql, then v22_attendance_report.sql).' : e.message;
-const defStd = (k, stds) => (stds.find(s => (k === 'flag' ? /flag/i : k === 'inspection' ? /inspection/i : /log\s*in|event log/i).test(s.title)) || stds.find(s => !s.kind) || {}).id || '';
+const defStd = (k, stds) => (stds.find(s => (k === 'flag' ? /flag/i : /log\s*in|event log/i).test(s.title)) || stds.find(s => !s.kind) || {}).id || '';
 const peso = n => '₱' + Number(n || 0).toLocaleString('en-PH');
 
 export async function mountAttendance(el, ctx) {
@@ -76,7 +76,7 @@ async function draw(host, ctx, members, standards, redraw) {
 
   function newEvent() {
     modal(`<h3>New event</h3><form id="nf">
-      <label>Type</label><select name="k">${Object.entries(KINDS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
+      <label>Type</label><select name="k">${Object.entries(KINDS).filter(([k]) => k !== 'inspection').map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
       <label>Name</label><input name="t" maxlength="80" required value="Flag ceremony">
       <label>Date</label><input name="d" type="date" value="${todayISO()}" required>
       <label class="ck" id="oc" hidden><input type="checkbox" name="o" checked><span>Students also log out</span></label>
