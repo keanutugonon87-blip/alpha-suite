@@ -4,6 +4,7 @@ import { sb, esc, ROLE_LABEL, getProfile, onSync, queueSize, flushQueue, setSync
 
 const ICON = {
   vp: '<path d="M12 3l8 4v5c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V7z"/><path d="M9 12l2 2 4-4"/>',
+  office: '<path d="M5 4h10l4 4v12H5z"/><path d="M14 4v5h5"/><path d="M8 13l2 2 4-4"/>',
   desk: '<path d="M4 9h16v10H4z"/><path d="M8 9V6h8v3"/><path d="M9 14h6"/>',
   requests: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/><path d="M9 13h7M9 17h5"/>',
   attendance: '<path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z"/><path d="M14 14h2v2h-2zM18 14h2v2h-2zM14 18h2v2h-2zM18 18h2v2h-2z"/>',
@@ -23,6 +24,7 @@ const ICON = {
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
   { id: 'vp', label: 'VP Desk', load: () => import('./vp.js').then(m => m.mountVp), roles: ['vp_internal', 'vp_external', 'vice_mayor', 'mayor'] },
+  { id: 'office', label: 'Desk', load: () => import('./office.js').then(m => m.mountOffice), roles: ['secretary', 'auditor', 'pio', 'marshall'] },
   { id: 'treasury', label: 'Treasury', load: () => import('./treasury.js').then(m => m.mountTreasury), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
   { id: 'desk', label: 'Desk', load: () => import('./desk.js').then(m => m.mountDesk), roles: ['mayor', 'treasurer'] },
   { id: 'balances', label: 'Balances', load: () => import('./balances.js').then(m => m.mountBalances), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
@@ -104,7 +106,8 @@ export async function renderStaff(root, tabId) {
 
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor'));
   const ctx = { profile: p, can: (...r) => has(r) };
-  const tabs = TABS.filter(t => has(t.roles));
+  const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk' };
+  const tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
   // On a phone the bar holds 4 sections and a "More" button; on a wide screen the side menu lists them all.
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
