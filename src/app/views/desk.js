@@ -1,6 +1,7 @@
 import { sb, db, watch, esc, peso, fmtDate, toast, modal, skeleton, safeWrite, uuid, confirmDialog, initials, todayISO } from '../core.js';
 import { findDuplicate } from '../money.js';
 import { scanMember, showReceipt } from '../qr.js';
+import { drawOverview } from './dash.js';
 
 /* Collection Desk (Treasurer and Mayor).
    One list of everything each student still owes: charges (dues, contributions) and fines.
@@ -8,11 +9,13 @@ import { scanMember, showReceipt } from '../qr.js';
    Scan a student's QR card to open their line directly. A weekly goal shows how the collecting is going. */
 const GK = 'alpha-desk-goal';
 const weekStart = () => { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); return d; };   // Monday
+const PK = 'alpha-desk-pane';
+const readPane = () => { try { return localStorage.getItem(PK) === 'collect' ? 'collect' : 'overview'; } catch { return 'overview'; } };
 const readGoal = () => { try { return +localStorage.getItem(GK) || 0; } catch { return 0; } };
 
 export async function mountDesk(el, ctx) {
   const isMayor = ctx.can('mayor');
-  let q = '', only = 'owing', data = null;
+  let q = '', only = 'owing', data = null, pane = readPane();
   el.innerHTML = skeleton(4);
   const off = watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_promises'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   await load();
@@ -21,7 +24,7 @@ export async function mountDesk(el, ctx) {
   async function load() {
     const [members, charges, bal, periods, entries] = await Promise.all([
       db(sb.from('v2_members').select('id,full_name,section,status').order('full_name')),
-      db(sb.from('v2_charges').select('id,title,amount,fund,closed')),
+      db(sb.from('v2_charges').select('id,title,amount,fund,closed,due_on')),
       db(sb.rpc('v2_balances')),
       db(sb.from('v2_periods').select('id,status').eq('status', 'open')),
       db(sb.from('v2_entries').select('id,member_id,kind,amount,charge_id,status,occurred_at,payer_name,violation_id').neq('status', 'voided').order('occurred_at', { ascending: false }).limit(600)),
@@ -46,13 +49,24 @@ export async function mountDesk(el, ctx) {
     return members.filter(m => m.status === 'active').map(m => { const items = by[m.id] || []; return { m, items, total: items.reduce((t, i) => t + i.owed, 0) }; });
   }
 
+  function seg() { return `<div class="seg" style="display:flex;gap:6px;margin-bottom:12px"><button class="btn ${pane === 'overview' ? 'gold' : 'ghost'}" data-pane="overview" style="flex:1">Overview</button><button class="btn ${pane === 'collect' ? 'gold' : 'ghost'}" data-pane="collect" style="flex:1">Collect</button></div>`; }
+  function bindSeg() { el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; try { localStorage.setItem(PK, pane); } catch { /* ignore */ } draw(); }); }
+
   function draw() {
+    if (pane !== 'overview') return drawCollect();
+    const rows = owedBy(), goal = readGoal();
+    el.innerHTML = seg() + '<div id="ov">' + skeleton(3) + '</div>'; bindSeg();
+    const host = el.querySelector('#ov');
+    drawOverview(host, ctx, data, { goal, rows, isMayor, collect: () => { pane = 'collect'; try { localStorage.setItem(PK, pane); } catch { /* ignore */ } draw(); } }).catch(x => { host.innerHTML = `<p class="empty">Could not load the overview. ${esc(x.message || '')}</p>`; });
+  }
+
+  function drawCollect() {
     const rows = owedBy(), { entries } = data, wk = weekStart().getTime(), goal = readGoal();
     const got = entries.filter(e => e.kind === 'collection' && e.status !== 'rejected' && new Date(e.occurred_at).getTime() >= wk).reduce((t, e) => t + +e.amount, 0);
     const outstanding = rows.reduce((t, r) => t + r.total, 0), owing = rows.filter(r => r.total > 0);
     const shown = rows.filter(r => (only === 'all' || r.total > 0) && (!q || r.m.full_name.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.total - a.total || a.m.full_name.localeCompare(b.m.full_name));
     const today = todayISO(), prom = id => data.promises.filter(x => x.member_id === id), due = data.promises.filter(x => x.promised_on <= today);
-    el.innerHTML = `<div class="grid"><div class="stat gold"><small>Still to collect</small><b>${peso(outstanding)}</b></div><div class="stat"><small>Students owing</small><b>${owing.length}</b></div><div class="stat"><small>Collected this week</small><b>${peso(got)}</b></div></div>
+    el.innerHTML = seg() + `<div class="grid"><div class="stat gold"><small>Still to collect</small><b>${peso(outstanding)}</b></div><div class="stat"><small>Students owing</small><b>${owing.length}</b></div><div class="stat"><small>Collected this week</small><b>${peso(got)}</b></div></div>
       <div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Weekly goal</b><button class="btn ghost sm" id="gl">${goal ? 'Change' : 'Set a goal'}</button></div>
         ${goal ? `<div class="prog" style="margin-top:8px"><i style="width:${Math.min(100, got / goal * 100)}%"></i></div><small class="muted">${peso(got)} of ${peso(goal)}${got >= goal ? ' · goal reached' : ` · ${peso(goal - got)} to go`}</small>` : '<small class="muted">Pick an amount to collect each week. The bar fills as payments come in.</small>'}</div>
       ${due.length ? `<div class="card pad" style="margin-bottom:10px"><b>Promised to pay by now (${due.length})</b>${due.map(x => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px"><span>${esc(data.members.find(m => m.id === x.member_id)?.full_name || '?')} · ${peso(x.amount)}<small class="muted" style="display:block">${x.promised_on < today ? 'was due ' : 'due '}${fmtDate(x.promised_on)}${x.note ? ' · ' + esc(x.note) : ''}</small></span><span style="display:flex;gap:4px"><button class="btn gold sm" data-pk="${x.id}">Collect</button><button class="btn ghost sm" data-pb="${x.id}">Broken</button></span></div>`).join('')}</div>` : ''}
@@ -61,7 +75,7 @@ export async function mountDesk(el, ctx) {
       <div class="card">${shown.map(r => `<div class="row" data-m="${r.m.id}" style="cursor:pointer"><div class="lead"><span class="ini">${esc(initials(r.m.full_name))}</span><div class="m"><b>${esc(r.m.full_name)}</b>
         <small>${r.items.length ? r.items.map(i => esc(i.label)).slice(0, 3).join(', ') + (r.items.length > 3 ? ` +${r.items.length - 3} more` : '') : 'All paid'}</small></div></div>
         <span style="text-align:right"><span class="tag ${r.total ? 'bad' : 'ok'}">${r.total ? peso(r.total) : 'clear'}</span>${prom(r.m.id)[0] ? `<small class="muted" style="display:block">promised ${fmtDate(prom(r.m.id)[0].promised_on)}</small>` : ''}</span></div>`).join('') || '<p class="empty">Nobody here. Everyone is paid up.</p>'}</div>`;
-    el.querySelector('#fo').value = only; el.querySelector('#fo').onchange = e => { only = e.target.value; draw(); };
+    bindSeg(); el.querySelector('#fo').value = only; el.querySelector('#fo').onchange = e => { only = e.target.value; draw(); };
     const qi = el.querySelector('#q'); qi.oninput = () => { q = qi.value; const p = qi.selectionStart; draw(); const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(p, p); };
     el.querySelector('#gl').onclick = () => modal(`<h3>Weekly goal</h3><form id="gf"><label>Amount to collect each week (₱)</label><input name="g" type="number" min="0" step="50" inputmode="numeric" value="${goal || ''}" required>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div></form>`, (m, close) => {
