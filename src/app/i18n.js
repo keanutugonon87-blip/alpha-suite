@@ -42,7 +42,7 @@ const D = {
 };
 /* Officer screens (Today, section names, Watch headings). Bisaya wording is a first draft: please have a native speaker check it. {0} and {1} are filled in by tt(). */
 Object.assign(D, {
-  tabHome: ['Today', 'Karon'], tabTreasury: ['Treasury', 'Treasury'], tabBalances: ['Balances', 'Balanse'], tabWatch: ['Watch', 'Pagbantay'], tabAttend: ['Attendance', 'Attendance'], tabStudents: ['Students', 'Mga Estudyante'], tabOfficers: ['Officers', 'Mga Opisyal'],
+  tabHome: ['Today', 'Karon'], tabTreasury: ['Treasury', 'Treasury'], tabBalances: ['Balances', 'Balanse'], tabWatch: ['Watch', 'Pagbantay'], tabAttend: ['Attendance', 'Attendance'], tabDesk: ['Desk', 'Desk'], tabStudents: ['Students', 'Mga Estudyante'], tabOfficers: ['Officers', 'Mga Opisyal'],
   tabNotices: ['Notices', 'Mga Pahibalo'], tabAccounts: ['Accounts', 'Mga Account'], tabDocs: ['Documents', 'Mga Dokumento'], tabDuties: ['Duties', 'Mga Katungdanan'], tabRoles: ['Roles', 'Mga Papel'], tabSystem: ['System', 'Sistema'], more: ['More', 'Dugang'], signout: ['Sign out', 'Mogawas'],
   hello: ['Hello', 'Kumusta'], dutiesToday: ['Your duties today', 'Imong buluhaton karon'], dutiesDone: ['{0} of {1} done', '{0} sa {1} nahuman'], allDone: ['All done. Well done.', 'Nahuman na tanan. Maayo kaayo.'], note: ['Note', 'Nota'], editNote: ['Edit note', 'Usba ang nota'],
   needsYou: ['Needs you', 'Nagkinahanglan nimo'], allClear: ['All clear', 'Tanan klaro'], nothingWaiting: ['Nothing is waiting for you', 'Walay naghulat nimo'], classNow: ['The class right now', 'Ang klase karon'], fundBal: ['Fund balance', 'Balanse sa pondo'], openViol: ['Students with open violations', 'Mga estudyante nga may bukas nga paglapas'], havePin: ['Have a PIN', 'Naay PIN'],
