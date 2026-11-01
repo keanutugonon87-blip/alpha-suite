@@ -135,11 +135,15 @@ export async function mountRequests(el, ctx) {
         ${isMayor && st === 'submitted' ? '<button class="btn gold" id="la">Approve</button><button class="btn ghost" id="lr">Return</button>' : ''}
         ${ctx.can('auditor') && st === 'approved' ? '<button class="btn gold" id="lu">Audit this report</button>' : ''}
         ${canFile && st === 'audited' ? '<button class="btn gold" id="lf">File it</button>' : ''}
+        ${isMayor && l ? '<button class="btn ghost" id="ld">Delete report</button>' : ''}
         <button class="btn ghost" id="pr">Print / save PDF</button><button class="btn ghost" id="cx">Close</button></div>`, (m, close) => {
       const go = fn => () => { close(); fn(); };
       m.querySelector('#cx').onclick = close;
       m.querySelector('#pr').onclick = () => printHTML('Liquidation ' + r.req_no, `${letterhead('Liquidation and Audit Report', `${r.req_no} · ${r.title}`)}${body}`);
       m.querySelector('#ls')?.addEventListener('click', go(() => liqSign(r, l, 'submit', { actual, left })));
+      m.querySelector('#ld')?.addEventListener('click', async () => {
+        if (!(await confirmDialog('The liquidation report and its signatures will be deleted, so the Treasurer can prepare it again. The expenses stay. This cannot be undone.', { ok: 'Delete report', danger: true, title: 'Delete this report?' }))) return;
+        try { await db(sb.rpc('v2_liq_delete', { p_id: l.id })); close(); toast('Report deleted'); load(); } catch (x) { toast(/function|schema cache|could not find/i.test(x.message) ? 'Run the v26 SQL in Supabase first (supabase/v26_delete_requests.sql).' : x.message, true); } });
       m.querySelector('#la')?.addEventListener('click', go(() => liqSign(r, l, 'approve')));
       m.querySelector('#lr')?.addEventListener('click', go(() => liqSign(r, l, 'return')));
       m.querySelector('#lu')?.addEventListener('click', go(() => liqSign(r, l, 'audit')));
@@ -186,9 +190,13 @@ export async function mountRequests(el, ctx) {
         ${isMayor && r.status === 'submitted' ? '<button class="btn gold" id="ap">Approve</button><button class="btn ghost" id="rt">Return</button>' : ''}
         ${canFile && r.status === 'approved' ? '<button class="btn gold" id="fi">File it</button>' : ''}
         ${['approved', 'filed'].includes(r.status) ? '<button class="btn gold" id="lq">Liquidation and audit report</button>' : ''}
+        ${isMayor ? '<button class="btn ghost" id="dx">Delete</button>' : ''}
         <button class="btn ghost" id="pr">Print / save PDF</button><button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
       const go = (fn) => () => { close(); fn(); };
       m.querySelector('#lq')?.addEventListener('click', go(() => liquidation(r)));
+      m.querySelector('#dx')?.addEventListener('click', async () => { const lq = liqOf(r);
+        if (!(await confirmDialog(`${r.req_no} “${r.title}” will be deleted${lq ? ', together with its liquidation report' : ''}${r.status === 'filed' || lq?.status === 'filed' ? ' and the copy kept in Documents' : ''}. Expenses linked to it stay, they are only unlinked. This cannot be undone.`, { ok: 'Delete', danger: true, title: 'Delete this request?' }))) return;
+        try { await db(sb.rpc('v2_fbr_delete', { p_id: r.id })); close(); toast('Deleted'); load(); } catch (x) { m.querySelector('#er').textContent = /function|schema cache|could not find/i.test(x.message) ? 'Run the v26 SQL in Supabase first (supabase/v26_delete_requests.sql).' : x.message; } });
       m.querySelector('#cx').onclick = close;
       m.querySelector('#pr').onclick = () => printHTML(r.req_no, `${letterhead('Fund Budget Request', 'BSMT 1-Alpha · Batch 28 · PIT-COMED')}${paper(r)}`);
       m.querySelector('#ed')?.addEventListener('click', go(() => form(r)));
