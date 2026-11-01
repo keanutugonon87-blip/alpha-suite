@@ -4,6 +4,8 @@ import { pushState, enablePush, disablePush } from '../push.js';
 const ROLE_INFO = {
   mayor: 'Full control. Approves entries, closes periods, manages accounts.',
   vice_mayor: 'Co-manages students, violations and accounts. Approves violation resolutions.',
+  vp_internal: 'Chief Mate – Internal. Everything the Vice Mayor can do, plus the VP Desk: meetings and programs, committee tasks, resolutions.',
+  vp_external: 'Chief Mate – External. Everything the Vice Mayor can do, plus the VP Desk: partners, joint activities, representation log, Coordinating Council.',
   secretary: 'Keeps the student list, officer profiles and violation records.',
   treasurer: 'Records collections and expenses. Entries wait for the Mayor to approve.',
   auditor: 'Checks the money and the audit log. Does not record entries.',

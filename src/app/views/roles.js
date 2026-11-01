@@ -1,5 +1,5 @@
 /* Read-only table of who can do what. Keep it in step with the role checks in the SQL files. */
-const ROLES = [['mayor', 'Mayor'], ['vice_mayor', 'Vice'], ['secretary', 'Sec'], ['treasurer', 'Treas'], ['auditor', 'Aud'], ['marshall', 'Marsh'], ['sails', 'SAILS'], ['pio', 'PIO']];
+const ROLES = [['mayor', 'Mayor'], ['vice_mayor', 'Vice'], ['vp_internal', 'VP Int'], ['vp_external', 'VP Ext'], ['secretary', 'Sec'], ['treasurer', 'Treas'], ['auditor', 'Aud'], ['marshall', 'Marsh'], ['sails', 'SAILS'], ['pio', 'PIO']];
 const ALL = ROLES.map(r => r[0]);
 const SCREENS = [
   ['Today (own duties)', ALL],
@@ -10,6 +10,11 @@ const SCREENS = [
   ['Approve or return the liquidation report (Budget)', ['mayor']],
   ['Audit the liquidation report and sign the audit (Budget)', ['auditor']],
   ['File the audited liquidation report (Budget)', ['secretary', 'mayor']],
+  ['Propose meetings, programs, committee work, resolution progress (VP Desk, Internal)', ['vp_internal']],
+  ['Propose partners and joint activities, keep the representation log (VP Desk, External)', ['vp_external']],
+  ['Approve or return what a VP proposes (VP Desk)', ['mayor']],
+  ['Give a VP a task while the Mayor is away (VP Desk)', ['mayor']],
+  ['Coordinating Council agenda and resolutions (VP Desk)', ['mayor', 'vp_external']],
   ['Read budget requests (Budget)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
   ['Collection Desk (everything a student owes, one-tap collecting, weekly goal)', ['mayor', 'treasurer']],
   ['Treasury, Balances', ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary']],
@@ -53,7 +58,7 @@ const ACTIONS = [
 ];
 const grid = (title, rows) => `<div class="card pad" style="margin-bottom:12px;overflow-x:auto"><b>${title}</b>
   <table class="rolegrid"><thead><tr><th></th>${ROLES.map(r => `<th scope="col">${r[1]}</th>`).join('')}</tr></thead><tbody>
-  ${rows.map(([n, who]) => `<tr><th scope="row">${n}</th>${ROLES.map(r => who.includes(r[0]) ? `<td aria-label="${r[1]}: yes"><span class="tag ok">✓</span></td>` : `<td aria-label="${r[1]}: no" class="muted">–</td>`).join('')}</tr>`).join('')}
+  ${rows.map(([n, who]) => `<tr><th scope="row">${n}</th>${ROLES.map(r => (who.includes(r[0]) || (r[0].startsWith('vp_') && who.includes('vice_mayor'))) ? `<td aria-label="${r[1]}: yes"><span class="tag ok">✓</span></td>` : `<td aria-label="${r[1]}: no" class="muted">–</td>`).join('')}</tr>`).join('')}
   </tbody></table></div>`;
 export async function mountRoles(el) {
   el.innerHTML = `<h2 style="margin:0 0 4px">Who can do what</h2><p class="muted" style="margin:0 0 12px">Each officer sees only the screens and buttons their role allows. The database enforces it too, so a hidden button cannot be bypassed.</p>${grid('Screens', SCREENS)}${grid('Actions', ACTIONS)}`;
