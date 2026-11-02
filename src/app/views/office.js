@@ -8,6 +8,9 @@ const dayMs = 864e5;
 const ST = { draft: ['draft', 'warn'], filed: ['filed', 'ok'], adopted: ['adopted', 'ok'], implemented: ['implemented', 'ok'], open: ['open', 'warn'], replied: ['replied', 'ok'], review: ['in review', 'warn'], reported: ['reported', 'warn'],
   resolved: ['resolved', 'ok'], approved: ['approved', 'ok'], published: ['published', 'ok'], planned: ['planned', 'warn'], done: ['done', 'ok'], cancelled: ['cancelled', ''] };
 const tag = s => `<span class="tag ${(ST[s] || [])[1] || ''}">${(ST[s] || [s])[0]}</span>`;
+const FLOW = { draft: ['draft', 'warn'], reviewed: ['with the approver', 'warn'], returned: ['returned', 'bad'], approved: ['approved', 'ok'], classified: ['classified', 'ok'], published: ['posted to members', 'ok'] };
+const ftag = r => r.flow ? `<span class="tag ${FLOW[r.flow][1]}">${FLOW[r.flow][0]}</span>` : tag(r.status);
+const SEC = ['minutes', 'resolution', 'letter_in', 'letter_out'];
 const LEVEL = { low: ['low', 'ok'], medium: ['medium', 'warn'], high: ['high', 'bad'] };
 const CHECKLIST = 'Venue opened and arranged\nSeating and crowd flow set\nFirst-aid kit at the venue\nExits kept clear\nAttendance scanners ready\nMarshal posts assigned\nWater, trash and cleanup';
 
@@ -27,9 +30,9 @@ const OFFICES = {
   secretary: { title: 'Secretary (Second Mate)', blurb: 'Maintain minutes, attendance records, resolutions, notices, membership records and official correspondence; safeguard records; give members reasonable access to non-confidential documents.',
     panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']]], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
   auditor: { title: 'Auditor (Third Mate)', blurb: 'Independently examine financial records, verify receipts and disbursements, report discrepancies to the Executive Board and adviser, and present findings to the General Assembly. The Auditor does not approve or carry out the transactions being audited.',
-    panes: [['over', 'Overview'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
+    panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
-    panes: [['over', 'Overview'], ['posts', 'Posts', ['post']]], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
+    panes: [['over', 'Overview'], ['publish', 'Post files'], ['posts', 'Posts', ['post']]], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
   marshall: { title: 'Marshal (Bosun)', blurb: 'Help keep order, logistics, attendance support and safety during authorized activities. Marshals report and assist. They do not use coercive or disciplinary powers.',
     panes: [['over', 'Overview'], ['plans', 'Activity plans', ['plan']], ['safety', 'Safety log', ['incident']]], go: [['attendance', 'Attendance'], ['watch', 'Watch']] },
 };
@@ -82,14 +85,18 @@ export async function mountOffice(el, ctx) {
       c((X.docs || []).filter(d => d.due_on && d.due_on <= new Date(Date.now() + 3 * dayMs).toISOString().slice(0, 10)).length, 'document(s) due within 3 days or late', 'go:docs');
       const minuted = new Set(of('minutes').map(r => r.on_date)); c((X.meet || []).filter(m => m.held_on < today && m.status !== 'cancelled' && !minuted.has(m.held_on)).length, 'meeting(s) held with no minutes recorded', 'minutes');
       c(of('letter_in').filter(r => r.status === 'open').length, 'letter(s) received that still need a reply', 'letters');
+      c(recs.filter(r => r.flow === 'returned').length, 'record(s) returned for changes', 'minutes');
+      c(recs.filter(r => r.flow === 'draft').length, 'record(s) not sent for approval yet', 'minutes');
       c(recs.filter(r => r.status === 'draft' && ['minutes', 'resolution', 'letter_out'].includes(r.kind)).length, 'draft record(s) not filed yet', 'minutes');
     } else if (role === 'auditor') {
       c((X.noReceipt || []).length, 'expense(s) in the last 60 days with no receipt photo', 'go:treasury'); c((X.dups || []).length, 'possible duplicate entry group(s)', 'go:treasury');
       c((X.self || []).length, 'entr' + ((X.self || []).length === 1 ? 'y' : 'ies') + ' recorded and approved by the same person', 'go:treasury'); c((X.liq || []).length, 'liquidation report(s) waiting for your audit', 'go:requests');
       c((X.months || []).length, 'past month(s) with no cash count verified (' + (X.months || []).slice(0, 3).join(', ') + ')', 'go:treasury');
+      c(recs.filter(r => r.flow === 'approved').length, 'approved file(s) waiting for you to classify as public or confidential', 'classify');
       c(of('finding').filter(r => r.status === 'open').length, 'open finding(s) not reported yet', 'findings'); c(of('finding').filter(r => r.status === 'reported' && !(r.flags || {}).assembly).length, 'reported finding(s) not yet presented to the General Assembly', 'findings');
     } else if (role === 'pio') {
       c(X.events.filter(e => e.report_sent_at && !e.notified_at).length, 'attendance fines report(s) waiting to be sent to the students', 'go:attendance');
+      c(recs.filter(r => r.flow === 'classified' && r.classification === 'public').length, 'public file(s) ready to post to the members', 'publish');
       c(of('post').filter(r => r.status === 'review').length, 'post(s) in review', 'posts'); c(of('post').filter(r => r.status === 'approved').length, 'approved post(s) not published yet', 'posts');
       const posted = new Set(of('post').map(r => r.event_id).filter(Boolean)); c(X.events.filter(e => e.status === 'open' && e.event_date >= today).length && X.events.filter(e => e.status === 'open' && e.event_date >= today && !posted.has(e.id)).length, 'upcoming event(s) with no announcement drafted', 'posts');
       c(of('post').filter(r => r.status === 'draft').length, 'draft(s) to finish', 'posts');
@@ -122,7 +129,12 @@ export async function mountOffice(el, ctx) {
     const rows = recs.filter(r => kinds.includes(r.kind)), K = KIND[kinds[0]];
     return `${role === 'marshall' && kinds[0] === 'incident' ? '<p class="muted" style="margin:0 2px 8px">Record what happened and who was told. Marshals do not take disciplinary action.</p>' : ''}<button class="btn gold" id="add" style="width:100%;margin-bottom:10px">+ Add ${kinds.length > 1 ? 'letter' : K.l.toLowerCase()}</button>
       <div class="card">${rows.map(r => `<div class="row" data-i="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)}</b><small>${[r.ref_no, KIND[r.kind].l, fmtDate(r.on_date), r.party].filter(Boolean).map(esc).join(' · ')}${r.confidential ? ' · 🔒' : ''}${r.kind === 'plan' ? ` · ${(r.items || []).filter(i => i.done).length}/${(r.items || []).length} checked` : ''}</small></div>
-        <span style="display:flex;gap:4px">${r.level ? `<span class="tag ${LEVEL[r.level][1]}">${LEVEL[r.level][0]}</span>` : ''}${tag(r.status)}</span></div>`).join('') || '<p class="empty">Nothing here yet.</p>'}</div>`;
+        <span style="display:flex;gap:4px">${r.level ? `<span class="tag ${LEVEL[r.level][1]}">${LEVEL[r.level][0]}</span>` : ''}${ftag(r)}</span></div>`).join('') || '<p class="empty">Nothing here yet.</p>'}</div>`;
+  }
+
+  function flowList(test, empty, lead) {
+    const rows = recs.filter(r => SEC.includes(r.kind) && test(r));
+    return `<p class="muted" style="margin:0 2px 8px">${lead}</p><div class="card">${rows.map(r => `<div class="row" data-i="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)}</b><small>${[r.ref_no, KIND[r.kind].l, fmtDate(r.on_date)].filter(Boolean).map(esc).join(' · ')}${r.classification ? ' · ' + (r.classification === 'public' ? 'non-confidential' : 'confidential 🔒') : ''}</small></div>${ftag(r)}</div>`).join('') || `<p class="empty">${empty}</p>`}</div>`;
   }
 
   function report() {
@@ -147,7 +159,7 @@ export async function mountOffice(el, ctx) {
     const P = O.panes.find(p => p[0] === pane) || O.panes[0];
     el.innerHTML = `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
       <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
-      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : list(P[2])}</div>`;
+      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
     if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
@@ -161,17 +173,24 @@ export async function mountOffice(el, ctx) {
     if (!r) return; const K = KIND[r.kind], canW = ['secretary', 'auditor', 'pio', 'marshall'].includes(role) && ({ minutes: 'secretary', resolution: 'secretary', letter_in: 'secretary', letter_out: 'secretary', finding: 'auditor', post: 'pio', plan: 'marshall', incident: 'marshall' }[r.kind] === role);
     const ev = X.events.find(e => e.id === r.event_id);
     modal(`<h3>${esc(r.title)}</h3><p style="margin:0 0 8px">${tag(r.status)} ${r.level ? `<span class="tag ${LEVEL[r.level][1]}">${LEVEL[r.level][0]}</span>` : ''} <small class="muted">${esc([r.ref_no, K.l, fmtDate(r.on_date)].filter(Boolean).join(' · '))}${r.confidential ? ' · confidential' : ''}</small></p>
+      ${r.flow ? `<div class="card pad" style="margin:6px 0"><small class="muted">Where it is</small><div>${ftag(r)} ${r.classification ? `<span class="tag ${r.classification === 'public' ? 'ok' : 'bad'}">${r.classification === 'public' ? 'non-confidential' : 'confidential'}</span>` : ''}</div>${r.flow_note ? `<div style="margin-top:6px"><small class="muted">Note</small><div>${esc(r.flow_note)}</div></div>` : ''}
+        <small class="muted" style="display:block;margin-top:6px">${[r.reviewed_by_name && 'Sent by ' + r.reviewed_by_name, r.approved_by_name && 'Approved by ' + r.approved_by_name, r.classified_by_name && 'Classified by ' + r.classified_by_name, r.published_by_name && 'Posted by ' + r.published_by_name].filter(Boolean).map(esc).join(' · ')}</small></div>` : ''}
       ${r.party ? `<div style="margin:6px 0"><small class="muted">${esc(K.p)}</small><div>${esc(r.party)}</div></div>` : ''}${ev ? `<div style="margin:6px 0"><small class="muted">Event</small><div>${esc(ev.title)} · ${fmtDate(ev.event_date)}</div></div>` : ''}
       ${r.body ? `<div style="margin:6px 0"><small class="muted">${esc(K.b)}</small><div style="white-space:pre-wrap">${esc(r.body)}</div></div>` : ''}
       ${r.link ? `<div style="margin:6px 0"><small class="muted">Link</small><div><a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">${esc(r.link)}</a></div></div>` : ''}
       ${K.flags ? `<div style="margin:8px 0">${K.flags.map(([k, l]) => `<label class="ck"><input type="checkbox" data-f="${k}"${(r.flags || {})[k] ? ' checked' : ''}${canW ? '' : ' disabled'}><span>${esc(l)}</span></label>`).join('')}</div>` : ''}
       ${K.items ? `<div style="margin:8px 0">${(r.items || []).map((it, i) => `<label class="ck"><input type="checkbox" data-it="${i}"${it.done ? ' checked' : ''}${canW ? '' : ' disabled'}><span>${esc(it.t)}</span></label>`).join('') || '<small class="muted">No checklist.</small>'}</div>` : ''}
       <small class="muted">Added by ${esc(r.created_by_name || '—')}</small>
-      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${canW ? '<button class="btn ghost" id="ed">Edit</button><button class="btn ghost" id="rm" style="color:#c0392b">Delete</button>' : ''}<button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${canW && r.flow && ['draft', 'returned'].includes(r.flow) ? '<button class="btn gold" id="sa">Send for approval</button>' : ''}${role === 'auditor' && ['approved', 'classified', 'published'].includes(r.flow) ? `<button class="btn ${r.classification === 'public' ? 'gold' : 'ghost'}" data-cl="public">Non-confidential</button><button class="btn ${r.classification === 'confidential' ? 'gold' : 'ghost'}" data-cl="confidential">Confidential</button>` : ''}${role === 'pio' && r.flow === 'classified' && r.classification === 'public' ? '<button class="btn gold" id="po">Post to members</button>' : ''}${role === 'pio' && r.flow === 'published' ? '<button class="btn ghost" id="td">Take down</button>' : ''}${canW && (!r.flow || ['draft', 'returned'].includes(r.flow)) ? '<button class="btn ghost" id="ed">Edit</button><button class="btn ghost" id="rm" style="color:#c0392b">Delete</button>' : ''}<button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const save = async patch => { try { await db(sb.from('v2_office_records').update(patch).eq('id', r.id)); Object.assign(r, patch); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } };
       m.querySelectorAll('[data-f]').forEach(b => b.onchange = () => { const flags = { ...(r.flags || {}), [b.dataset.f]: b.checked }; save({ flags }); });
       m.querySelectorAll('[data-it]').forEach(b => b.onchange = () => { const items = (r.items || []).map((x, i) => i === +b.dataset.it ? { ...x, done: b.checked } : x); save({ items }); });
+      const rpc = (fn, args, msg) => async () => { try { await db(sb.rpc(fn, args)); close(); toast(msg); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } };
+      m.querySelector('#sa')?.addEventListener('click', rpc('v2_doc_review', { p_id: r.id }, 'Sent for approval'));
+      m.querySelectorAll('[data-cl]').forEach(b => b.onclick = rpc('v2_doc_classify', { p_id: r.id, p_class: b.dataset.cl }, b.dataset.cl === 'public' ? 'Marked non-confidential' : 'Marked confidential'));
+      m.querySelector('#po')?.addEventListener('click', rpc('v2_doc_publish', { p_id: r.id, p_on: true }, 'Posted. Members can read it now.'));
+      m.querySelector('#td')?.addEventListener('click', rpc('v2_doc_publish', { p_id: r.id, p_on: false }, 'Taken down'));
       m.querySelector('#ed')?.addEventListener('click', () => { close(); form([r.kind], r); });
       m.querySelector('#rm')?.addEventListener('click', async () => { if (!(await confirmDialog(`Delete "${r.title}"?`, { ok: 'Delete', title: 'Delete' }))) return; try { await db(sb.from('v2_office_records').delete().eq('id', r.id)); close(); toast('Deleted'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
     });
@@ -189,7 +208,7 @@ export async function mountOffice(el, ctx) {
         ${K.items ? `<label>${K.items}</label><textarea name="items" rows="6">${esc(editing ? (v.items || []).map(i => i.t).join('\n') : CHECKLIST)}</textarea>` : ''}
         ${K.level ? `<label>How serious</label><select name="level"><option value="low"${v.level === 'low' ? ' selected' : ''}>Low</option><option value="medium"${!v.level || v.level === 'medium' ? ' selected' : ''}>Medium</option><option value="high"${v.level === 'high' ? ' selected' : ''}>High</option></select>` : ''}
         <label>Status</label><select name="status">${K.st.map(s => `<option value="${s[0]}"${(v.status || K.st[0][0]) === s[0] ? ' selected' : ''}>${s[1]}</option>`).join('')}</select>
-        ${K.conf ? `<label class="ck" style="margin-top:10px"><input type="checkbox" name="confidential"${v.confidential ? ' checked' : ''}><span>Confidential (only the Mayor, Secretary and Auditor can read it)</span></label>` : ''}`; };
+        ${K.conf ? `<label class="ck" style="margin-top:10px"><input type="checkbox" name="confidential"${v.confidential ? ' checked' : ''}><span>Looks confidential (keeps it hidden from other officers until the Auditor classifies it)</span></label>` : ''}`; };
     modal(`<h3>${editing ? 'Edit' : 'Add'} ${kinds.length > 1 && !editing ? 'letter' : KIND[k0].l.toLowerCase()}</h3><form id="f"><div id="fb">${html(k0)}</div>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;

@@ -10,8 +10,8 @@ import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
-const TABS = ['fund', 'standing', 'me', 'officers', 'learn', 'bulletin'];
-const GUEST_HIDE = ['standing', 'me'];
+const TABS = ['fund', 'standing', 'me', 'officers', 'learn', 'docs', 'bulletin'];
+const GUEST_HIDE = ['standing', 'me', 'docs'];
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
 function countUp(el, to) {
   if (reduceMotion()) { el.textContent = peso(to); return; }
@@ -180,7 +180,7 @@ export async function renderPublic(root) {
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
-  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'fund', data = null, animated = false, vf = 'open', vq = '';
+  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'fund', data = null, animated = false, vf = 'open', vq = '', pdOpen = null;
   const ord = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
@@ -261,6 +261,9 @@ export async function renderPublic(root) {
       officers: () => `<div class="officers">${officers.map((o, i) => `<button class="ocard" data-o="${i}" aria-label="View ${esc(o.name)}’s profile"><div class="ph">${o.photo ? `<img src="${o.photo}" alt="${esc(o.name)}" style="object-position:${o.x}% ${o.y}%">` : esc(initials(o.name))}</div><div class="tx"><b>${esc(o.name)}</b><small>${esc(o.position)}</small></div></button>`).join('')}</div><p class="muted" style="text-align:center;font-size:.85rem">Tap an officer to see their leadership profile.</p>`,
       me: () => '',
       learn: () => '',
+      docs: () => { const dl = data.docs || [], open = pdOpen;
+        return `<p class="muted" style="margin:0 2px 8px">${t('pubDocsNote')}</p><div class="card">${dl.map(x => `<div class="row" data-dc="${x.id}" style="cursor:pointer;display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(x.title)}</b><small>${esc([x.ref_no, fmtDate(x.on_date)].filter(Boolean).join(' · '))}</small></div><span class="muted">${open === x.id ? '▾' : '›'}</span></div>
+          ${open === x.id ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body || '')}</div>${x.link ? `<p style="margin:8px 0 0"><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${t('pubDocsOpen')}</a></p>` : ''}` : ''}</div>`).join('') || `<div class="empty"><b>${t('pubDocsNone')}</b></div>`}</div>`; },
       bulletin: () => `<iframe class="fb" src="${FB}" width="500" height="600" scrolling="yes" loading="lazy" title="Class Facebook page" allow="encrypted-media"></iframe>`,
     };
     const hs = heroScene(tab);
@@ -269,7 +272,7 @@ export async function renderPublic(root) {
         <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
           <p>${esc(tre.open?.name || '')}${stand.length ? ` · ${stand.length} ${t('openv')}` : ' · ' + t('good')}</p>${fundChips()}</div>
         ${hs.html}</div>
-      <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="tablist">${[['fund', t('fund')], ['standing', t('viol')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['docs', t('pubDocs')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
     {
       /* the compass answers the tap: swing to this tab's bearing, fade the scenery, ease the sky colour */
@@ -291,6 +294,7 @@ export async function renderPublic(root) {
     m.querySelector('#shf')?.addEventListener('click', () => share({ title: 'BSMT 1-Alpha class fund', text: `BSMT 1-Alpha fund balance: ${peso(tre.balance)}.`, url: location.origin + location.pathname }));
     m.querySelector('#shv')?.addEventListener('click', () => share({ title: 'BSMT 1-Alpha violations', text: 'BSMT 1-Alpha public violation ledger.', url: location.origin + location.pathname }));
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
+    m.querySelectorAll('[data-dc]').forEach(b => b.onclick = e => { if (e.target.closest('a')) return; pdOpen = pdOpen === b.dataset.dc ? null : b.dataset.dc; paint(); });
     m.querySelectorAll('[data-o]').forEach(b => b.onclick = () => showOfficerProfile(officers[+b.dataset.o]));
     m.querySelectorAll('[data-vf]').forEach(b => b.onclick = () => { vf = b.dataset.vf; paint(); });
     const qi = m.querySelector('#vq'); if (qi) qi.oninput = () => { vq = qi.value; const pos = qi.selectionStart; paint(); const n = m.querySelector('#vq'); n.focus(); n.setSelectionRange(pos, pos); };
@@ -299,8 +303,8 @@ export async function renderPublic(root) {
   async function load() {
     try {
       const opt = p => db(p).catch(() => []);
-      const [o, tr, s, vv, ann, prog] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing')), db(sb.rpc('v2_public_violations')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_progress'))]);
-      const first = !data; data = { off: o, tre: tr, stand: s, viol: vv, ann, prog }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
+      const [o, tr, s, vv, ann, prog, docs] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), db(sb.rpc('v2_public_standing')), db(sb.rpc('v2_public_violations')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_progress')), opt(sb.rpc('v2_public_documents'))]);   // docs stay empty until the v30 SQL is run
+      const first = !data; data = { off: o, tre: tr, stand: s, viol: vv, ann, prog, docs }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
     } catch (e) {
       if (!data) {   // no connection: still show the student's own saved status, if this phone has one
         m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div><div id="offme"></div>`;

@@ -10,7 +10,7 @@ const ADV = { pending: 'Adviser has not reviewed yet', endorsed: 'Adviser endors
 const tag = s => `<span class="tag ${(ST[s] || [])[1] || ''}">${(ST[s] || [s])[0]}</span>`;
 
 const SIDE = {
-  int: { label: 'Internal', title: 'Chief Mate – Internal', panes: [['over', 'Overview'], ['meet', 'Meetings'], ['res', 'Resolutions'], ['com', 'Committee'], ['del', 'From Mayor']] },
+  int: { label: 'Internal', title: 'Chief Mate – Internal', panes: [['over', 'Overview'], ['meet', 'Meetings'], ['res', 'Resolutions'], ['docs', 'Records'], ['com', 'Committee'], ['del', 'From Mayor']] },
   ext: { label: 'External', title: 'Chief Mate – External', panes: [['over', 'Overview'], ['par', 'Partners'], ['act', 'Activities'], ['reg', 'Register'], ['rep', 'Rep log'], ['cou', 'Council']] },
 };
 
@@ -55,12 +55,13 @@ const FETCH = { meet: 'v2_vp_meetings', com: 'v2_vp_tasks', res: 'v2_vp_resoluti
 export async function mountVp(el, ctx) {
   const role = ctx.profile.role, isMayor = ctx.can('mayor'), both = !['vp_internal', 'vp_external'].includes(role);
   const sides = role === 'vp_internal' ? ['int'] : role === 'vp_external' ? ['ext'] : ['int', 'ext'];
-  let side = (() => { try { const s = localStorage.getItem(SK); return sides.includes(s) ? s : sides[0]; } catch { return sides[0]; } })(), pane = 'over', d = null, snap = null, missing = false;
+  let side = (() => { try { const s = localStorage.getItem(SK); return sides.includes(s) ? s : sides[0]; } catch { return sides[0]; } })(), pane = 'over', d = null, snap = null, missing = false, recs = [];
   async function load() {
     try {
       const out = await Promise.all(Object.entries(FETCH).map(([k, t]) => db(sb.from(t).select('*').order(CFG[k] ? CFG[k].order[0] : 'created_at', { ascending: CFG[k] ? CFG[k].order[1] : false }).limit(500)).then(r => [k, r])));
       d = Object.fromEntries(out); missing = false;
     } catch (e) { if (/does not exist|schema cache|relation/i.test(e.message || '')) { missing = true; d = null; } else throw e; }
+    recs = await db(sb.from('v2_office_records').select('*').in('kind', ['minutes', 'resolution', 'letter_in', 'letter_out']).not('flow', 'is', null).order('on_date', { ascending: false }).limit(300)).catch(() => []);   // empty until the v29 and v30 SQL are run
     try {   // how the class is turning out, from the latest event
       const [ev] = await db(sb.from('v2_events').select('id,title,event_date').order('event_date', { ascending: false }).limit(1));
       if (ev) { const [sc, mem] = await Promise.all([db(sb.from('v2_event_scans').select('member_id').eq('event_id', ev.id).eq('kind', 'in')), db(sb.from('v2_members').select('id').eq('status', 'active'))]); snap = { ev, in: new Set(sc.map(x => x.member_id)).size, all: mem.length }; } else snap = null;
@@ -74,6 +75,7 @@ export async function mountVp(el, ctx) {
     const soon = x => x && (new Date(x) - new Date(today)) / dayMs;
     const dels = d.del.filter(x => x.status === 'open' && mine(x));
     if (dels.length) add(`${dels.length} task${dels.length === 1 ? '' : 's'} from the Mayor ${isMayor ? 'not done yet' : 'for you'}`, sides.includes('int') ? 'int' : 'ext', 'del');
+    const waiting = recs.filter(x => x.flow === 'reviewed').length; if (waiting && (isMayor || role === 'vp_internal' || role === 'vice_mayor')) add(`${waiting} record(s) from the Secretary waiting for your approval`, 'int', 'docs');
     if (isMayor) {
       const w = (k, label, s, p) => { const c = d[k].filter(x => x.status === 'proposed').length; if (c) add(`${c} ${label} waiting for your decision`, s, p); };
       w('meet', 'meeting or program(s)', 'int', 'meet'); w('par', 'partner(s)', 'ext', 'par'); w('act', 'joint activit' + (d.act.filter(x => x.status === 'proposed').length === 1 ? 'y' : 'ies'), 'ext', 'act');
@@ -108,6 +110,26 @@ export async function mountVp(el, ctx) {
         : 'External Affairs: coordinate authorized relations with other organizations, alumni and outside partners; prepare partnership proposals for adviser and institutional review; make sure outside communications describe SAILS authority correctly; keep records of approved collaborations.'}</p>`;
   }
 
+  const FL = { reviewed: ['waiting for approval', 'warn'], returned: ['returned', 'bad'], approved: ['approved', 'ok'], classified: ['classified', 'ok'], published: ['posted', 'ok'], draft: ['draft', 'warn'] };
+  function docsList() {
+    const can = isMayor || role === 'vp_internal' || role === 'vice_mayor', rows = recs.filter(x => x.flow && x.flow !== 'draft').sort((a, b) => (b.flow === 'reviewed') - (a.flow === 'reviewed'));
+    return `<p class="muted" style="margin:0 2px 8px">Minutes, resolutions and letters the Secretary sent for approval. ${can ? 'Approve them, or return them with a note.' : ''} After approval the Auditor classifies them and the PIO posts the non-confidential ones to the members.</p>
+      <div class="card">${rows.map(r => `<div class="row" data-di="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)}</b><small>${[r.ref_no, fmtDate(r.on_date), r.classification === 'confidential' ? 'confidential 🔒' : r.classification ? 'non-confidential' : ''].filter(Boolean).map(esc).join(' · ')}</small></div><span class="tag ${FL[r.flow][1]}">${FL[r.flow][0]}</span></div>`).join('') || '<p class="empty">Nothing sent for approval yet.</p>'}</div>`;
+  }
+  function docView(r) {
+    if (!r) return; const can = (isMayor || role === 'vp_internal' || role === 'vice_mayor') && r.flow === 'reviewed';
+    modal(`<h3>${esc(r.title)}</h3><p style="margin:0 0 8px"><span class="tag ${FL[r.flow][1]}">${FL[r.flow][0]}</span> <small class="muted">${esc([r.ref_no, fmtDate(r.on_date)].filter(Boolean).join(' · '))}</small></p>
+      ${r.party ? `<div style="margin:6px 0"><small class="muted">Party</small><div>${esc(r.party)}</div></div>` : ''}${r.body ? `<div style="margin:6px 0;white-space:pre-wrap">${esc(r.body)}</div>` : ''}${r.link ? `<div style="margin:6px 0"><a href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">${esc(r.link)}</a></div>` : ''}
+      ${r.flow_note ? `<div class="card pad" style="margin:8px 0"><small class="muted">Note</small><div>${esc(r.flow_note)}</div></div>` : ''}<small class="muted">Sent by ${esc(r.reviewed_by_name || '—')}${r.approved_by_name ? ' · approved by ' + esc(r.approved_by_name) : ''}</small>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${can ? '<button class="btn gold" id="ap">Approve</button><button class="btn ghost" id="rt">Return with a note</button>' : ''}<button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#ap')?.addEventListener('click', async () => { try { await db(sb.rpc('v2_doc_approve', { p_id: r.id, p_ok: true, p_note: null })); close(); toast('Approved. The Auditor classifies it next.'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
+      m.querySelector('#rt')?.addEventListener('click', () => { close(); modal(`<h3>Return with a note</h3><label>What needs to change</label><textarea id="nt" rows="3" maxlength="300" required></textarea><div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:1">Return</button><button class="btn ghost" id="cx2">Cancel</button></div><div class="err" id="er"></div>`, (m2, close2) => {
+        m2.querySelector('#cx2').onclick = close2;
+        m2.querySelector('#go').onclick = async () => { const n = m2.querySelector('#nt').value.trim(); if (!n) return void (m2.querySelector('#er').textContent = 'Write what needs to change.'); try { await db(sb.rpc('v2_doc_approve', { p_id: r.id, p_ok: false, p_note: n })); close2(); toast('Returned'); load(); } catch (x) { m2.querySelector('#er').textContent = x.message; } }; }); });
+    });
+  }
+
   function register() {
     const ok = d.act.filter(x => ['approved', 'ongoing', 'done'].includes(x.status));
     return `<p class="muted" style="margin:0 2px 8px">Approved collaborations and where their papers are kept.</p><div class="card">${ok.map(r => `<div class="row" data-reg="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)}</b><small>${esc(d.par.find(p => p.id === r.partner_id)?.name || 'No partner')}${r.planned_on ? ' · ' + fmtDate(r.planned_on) : ''}<br>${r.papers ? esc(r.papers) : 'No papers recorded'}</small></div>${tag(r.status)}</div>`).join('') || '<p class="empty">No approved collaborations yet.</p>'}</div>`;
@@ -126,10 +148,11 @@ export async function mountVp(el, ctx) {
     el.innerHTML = `${sides.length > 1 ? `<div style="display:flex;gap:6px;margin-bottom:8px">${sides.map(s => `<button class="btn ${s === side ? 'gold' : 'ghost'}" data-side="${s}" style="flex:1">${SIDE[s].label}</button>`).join('')}</div>` : ''}
       <div style="margin:0 2px 8px"><b>${S.title}</b></div>
       <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${S.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
-      <div id="pb">${pane === 'over' ? overview() : pane === 'reg' ? register() : list(pane)}</div>`;
+      <div id="pb">${pane === 'over' ? overview() : pane === 'reg' ? register() : pane === 'docs' ? docsList() : list(pane)}</div>`;
     el.querySelectorAll('[data-side]').forEach(b => b.onclick = () => { side = b.dataset.side; pane = 'over'; try { localStorage.setItem(SK, side); } catch { /* ignore */ } draw(); });
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const x = nd[+r.dataset.n]; side = x.s; pane = x.p; draw(); }); return; }
+    if (pane === 'docs') { el.querySelectorAll('[data-di]').forEach(r => r.onclick = () => docView(recs.find(x => x.id === r.dataset.di))); return; }
     if (pane === 'reg') { el.querySelectorAll('[data-reg]').forEach(r => r.onclick = () => view('act', d.act.find(x => x.id === r.dataset.reg))); return; }
     el.querySelector('#add')?.addEventListener('click', () => form(pane, null));
     el.querySelectorAll('[data-i]').forEach(r => r.onclick = () => view(pane, d[pane].find(x => x.id === r.dataset.i)));
@@ -197,7 +220,7 @@ export async function mountVp(el, ctx) {
   }
 
   el.innerHTML = skeleton(4);
-  const off = watch(Object.values(FETCH).concat(['v2_events']), () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
+  const off = watch(Object.values(FETCH).concat(['v2_events', 'v2_office_records']), () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   await load();
   return off;
 }
