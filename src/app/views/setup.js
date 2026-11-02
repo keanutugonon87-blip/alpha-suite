@@ -16,6 +16,7 @@ export const STEPS = [
   { v: 'v28', file: 'v28_vice_presidents.sql', does: 'VP Internal and VP External desks', check: table('v2_vp_meetings') },
   { v: 'v29', file: 'v29_office_records.sql', does: 'Secretary, Auditor, PIO and Marshal desks', check: table('v2_office_records') },
   { v: 'v30', file: 'v30_document_flow.sql', does: 'Document approval, classification and posting to members', check: table('v2_office_records', 'flow') },
+  { v: 'v32', file: 'v32_auditor_independence.sql', does: 'Auditor no longer approves spending', check: async () => null },
   { v: 'v31', file: 'v31_treasurer_controls.sql', does: 'Treasurer: approval needed to disburse, acknowledgments for funds received', check: table('v2_entries', 'approval_ref') },
 ];
 export async function checkSetup() { return Promise.all(STEPS.map(async s => { let ok = null; if (s.check) { try { ok = await s.check(); } catch { ok = null; } } return { ...s, ok }; })); }
