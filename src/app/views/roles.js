@@ -29,6 +29,7 @@ const SCREENS = [
   ['Desk overview: money, what needs attention, who owes (view only for the Mayor)', ['mayor', 'treasurer']],
   ['VP Desk overview and decisions (the VPs do the work, the Mayor approves)', ['mayor']],
   ['Treasury, Balances', ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary']],
+  ['Monthly report pack (one printable page from every office)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'pio']],
   ['Watch', ALL],
   ['Students', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor']],
   ['Officers', ALL],
