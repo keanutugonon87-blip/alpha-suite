@@ -1,4 +1,5 @@
 import { sb, db, esc, toast, fmtDateTime, confirmDialog, peso, modal, printHTML, letterhead } from '../core.js';
+import { checkSetup, setupHtml } from './setup.js';
 
 const ago = d => { const s = (Date.now() - new Date(d)) / 1000; if (s < 90) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; };
 const EV = { login: 'signed in', setup: 'made a PIN', fail: 'wrong PIN', locked: 'locked out (too many tries)', reset: 'PIN reset by an officer' };
@@ -37,6 +38,7 @@ export async function mountSystem(el, ctx) {
   async function draw() {
     let h = null, miss = false, note = '';
     if (canSee) { try { h = await db(sb.rpc('v2_health')); } catch (e) { if (NEED_SQL(e)) miss = true; else throw e; } }
+    const setup = canSee ? await checkSetup().catch(() => null) : null;
     let su = null, sec = null;
     if (ctx.can('mayor', 'vice_mayor', 'secretary', 'treasurer')) su = await sb.rpc('v2_signup_status').then(r => r.data || null, () => null);
     if (canSee) sec = await sb.rpc('v2_security_overview').then(r => r.data || null, () => null);
@@ -63,6 +65,7 @@ export async function mountSystem(el, ctx) {
 
     el.innerHTML = `${miss ? '<div class="alertbar bad"><span>⚠️ The system page is not switched on in the database yet. Run the v4 SQL in Supabase.</span></div>' : ''}
       ${h && h.problems && h.problems.length ? `<div class="alertbar bad"><span>⚠️ ${h.problems.map(esc).join('. ')}.</span></div>` : ''}
+      ${setup ? setupHtml(setup) : ''}
       ${h ? `<h3 class="sec">Health</h3><div class="card">${lines.map(([k, v, ok]) => `<div class="row"><div class="m"><b>${esc(k)}</b><small>${esc(v)}</small></div><span class="tag ${ok ? 'ok' : 'bad'}">${ok ? 'OK' : 'Check'}</span></div>`).join('')}</div>
         <p class="muted" style="font-size:.85rem">Checked ${fmtDateTime(h.now)}. The list refreshes when you open this tab.</p>` : ''}
       ${canNote ? `<h3 class="sec">Payment note for students</h3><form class="card pad" id="pn"><p class="muted" style="margin:0 0 8px">Shown on every student's My Status page while they still owe something. For example your GCash number and who to pay.</p>

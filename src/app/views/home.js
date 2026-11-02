@@ -1,4 +1,5 @@
 import { sb, db, esc, peso, ROLE_LABEL, skeleton, watch, todayISO, toast, toastUndo, modal } from '../core.js';
+import { deskItems } from './inbox.js';
 import { ymManila } from '../money.js';
 import { t, tt, getLang } from '../i18n.js';
 
@@ -44,6 +45,7 @@ export async function mountHome(el, ctx) {
   async function draw() {
     const today = todayISO(), week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const prevMonth = ymManila(new Date(Date.now() - 31 * 864e5));
+    const desk = await deskItems(ctx).catch(() => []);
     const [pending, vioWait, dueSoon, requests, closes, apprMonth, signup, sec, tre, vioOpen, duties] = await Promise.all([
       can('mayor', 'vice_mayor', 'auditor', 'treasurer') ? count(sb.from('v2_entries').select('id', { count: 'exact', head: true }).eq('status', 'pending')) : null,
       can('mayor', 'vice_mayor', 'secretary') ? count(sb.from('v2_violations').select('id', { count: 'exact', head: true }).in('status', ['awaiting_approval', 'resolve_requested', 'resolve_forwarded'])) : null,
@@ -67,6 +69,8 @@ export async function mountHome(el, ctx) {
     const nopin = signup ? signup.filter(m => !m.has_pin).length : 0;
     if (signup && nopin) items.push(['📲', tt('noPinYet', nopin, signup.length), t('sendRemind'), 'system']);
 
+    desk.forEach(d => items.push(d));
+
     const stat = (l, v, cls = '') => `<div class="stat ${cls}"><small>${l}</small><b>${v}</b></div>`;
     el.innerHTML = `<div class="card pad"><small class="muted">${new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' })}</small>
       <h2 style="margin:2px 0 0;border:0;padding:0">${t('hello')}, ${esc(ctx.profile.full_name.split(' ')[0])}</h2><small class="muted">${ROLE_LABEL[role]}</small></div>
@@ -80,5 +84,5 @@ export async function mountHome(el, ctx) {
     wireDuties(el, duties, draw);
   }
   await draw();
-  return watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_profiles'], () => draw().catch(() => {}));
+  return watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_profiles', 'v2_budget_requests', 'v2_liquidations', 'v2_office_records', 'v2_vp_meetings', 'v2_vp_partners', 'v2_vp_activities', 'v2_vp_delegations'], () => draw().catch(() => {}));
 }

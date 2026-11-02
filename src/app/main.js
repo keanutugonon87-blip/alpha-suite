@@ -38,6 +38,11 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
     b.innerHTML = '<span>A new version of Alpha ’28 is ready.</span><button class="btn gold sm">Refresh</button>';
     b.querySelector('button').onclick = () => location.reload(); document.body.appendChild(b);
   });
-  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  // An app left open for days never reloads by itself, so ask the browser to look for a new version when it comes back to the front and every 20 minutes
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').then(reg => {
+    const look = () => reg.update().catch(() => {});
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') look(); });
+    setInterval(look, 20 * 60 * 1000);
+  }).catch(() => {}));
 }
 

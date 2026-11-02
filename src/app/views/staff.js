@@ -116,7 +116,7 @@ export async function renderStaff(root, tabId) {
   const GROUPS = [['Overview', ['home', 'vp', 'office']], ['Money', ['treasury', 'desk', 'balances', 'requests']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   const NK = 'alpha-nav-collapsed', GK = 'alpha-nav-groups', rd = k => { try { return localStorage.getItem(k); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   let navCollapsed = rd(NK) === '1', shut = new Set((() => { try { return JSON.parse(rd(GK) || '[]'); } catch { return []; } })());
-  const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : ''}</button>`;
+  const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : t0.id === 'home' ? '<i class="badge" id="bdh" hidden></i>' : ''}</button>`;
   const grouped = new Set(GROUPS.flatMap(g => g[1])), rest = tabs.filter(t0 => !grouped.has(t0.id));
   const navHtml = GROUPS.concat(rest.length ? [['More', rest.map(t0 => t0.id)]] : []).map(([name, ids]) => { const items = tabs.filter(t0 => ids.includes(t0.id)); if (!items.length) return '';
     const open = !shut.has(name) || items.some(t0 => t0.id === cur.id);
@@ -144,11 +144,14 @@ export async function renderStaff(root, tabId) {
       .then(r => { const n = r.count || 0; if (bdg) { bdg.hidden = !n; bdg.textContent = n > 9 ? '9+' : n; bdg.closest('button').setAttribute('aria-label', n ? `Treasury, ${n} waiting for approval` : 'Treasury'); } }, () => {});
     count(); try { stopBadge = watch(['v2_entries'], () => count()) || stopBadge; } catch { /* realtime unavailable: the number refreshes on the next visit */ }
   }
+  // a number on Today shows how much is waiting on the desks (budget, VP, records)
+  const homeBadge = () => import('./inbox.js').then(m => m.deskItems(ctx)).then(l => { const b = root.querySelector('#bdh'); if (b) { b.hidden = !l.length; b.textContent = l.length > 9 ? '9+' : l.length; } }).catch(() => {});
+  homeBadge(); let stopHome = () => {}; try { stopHome = watch(['v2_budget_requests', 'v2_liquidations', 'v2_office_records', 'v2_vp_meetings', 'v2_vp_partners', 'v2_vp_activities', 'v2_vp_delegations'], homeBadge) || stopHome; } catch { /* refreshes on the next visit */ }
   const view = root.querySelector('#view');
   let stop = null;
   try { stop = await (await cur.load())(view, ctx); }
   catch (e) { console.error(e); view.innerHTML = `<div class="card"><b>Couldn't load ${cur.label}.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Reload</button></div>`; }
   flushQueue();
   setTimeout(() => tabs.forEach(t => t.load().catch(() => {})), 2000);   // fetch the other screens in the background so they also open offline
-  return () => { off(); stop && stop(); typeof stopBadge === 'function' && stopBadge(); };
+  return () => { off(); stop && stop(); typeof stopBadge === 'function' && stopBadge(); typeof stopHome === 'function' && stopHome(); };
 }

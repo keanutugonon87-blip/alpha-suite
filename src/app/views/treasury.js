@@ -7,7 +7,7 @@ const CATS_IN = ['Class Dues', 'Contribution', 'Fines', 'Fundraising', 'Donation
 const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
 
 export async function mountTreasury(el, ctx) {
-  const canWrite = ctx.can('mayor', 'treasurer'), isMayor = ctx.can('mayor');
+  const canWrite = ctx.can('treasurer'), isMayor = ctx.can('mayor');
   let reqs = [], curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
@@ -35,7 +35,7 @@ export async function mountTreasury(el, ctx) {
     const canApprove = e => e.status === 'pending' && (needsSecond(e, limit) ? ctx.can('mayor', 'vice_mayor', 'auditor', 'treasurer') && e.recorded_by !== ctx.profile.user_id : isMayor);
     const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span>${e.locked ? ' <span class="tag" title="This month is closed">🔒</span>' : ''}${e.status === 'pending' && needsSecond(e, limit) ? ' <span class="tag warn" title="Big expense: another officer must approve it">needs a 2nd officer</span>' : ''}</b>
       <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
-      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? (needsSecond(e, limit) && !e.hasImg ? '<span class="tag bad" title="Add a receipt photo first">no receipt photo</span>' : `<button class="btn gold sm" data-ok="${e.id}">Approve</button>`) : ''}${actions && canWrite && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
+      <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? (needsSecond(e, limit) && !e.hasImg ? '<span class="tag bad" title="Add a receipt photo first">no receipt photo</span>' : `<button class="btn gold sm" data-ok="${e.id}">Approve</button>`) : ''}${actions && (canWrite || isMayor) && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
       <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
     const rows = (arr, actions) => {
       if (!arr.length) return '<div class="empty"><b>Nothing here yet</b>Entries you record will show up in this list.</div>';
