@@ -296,7 +296,26 @@ button.ocard:focus-visible{outline:3px solid var(--brass);outline-offset:2px}
 .segpay span{display:grid;place-items:center;min-height:48px;border:2px solid var(--line);border-radius:12px;font-weight:700;cursor:pointer;background:var(--card);color:var(--navy)}
 .segpay input:checked+span{border-color:var(--sea);background:var(--sky)}.segpay input:focus-visible+span{outline:3px solid var(--gold)}
 .tabs button{position:relative}
-@media(max-width:899px){.tabs button.xtra{display:none}}
+@media(max-width:899px){.tabs button.xtra{display:none}.tabs .grp,.tabs .gb{display:contents}.tabs .gh,.tabs .navtoggle{display:none}}
+/* wide screens: grouped menu that folds, and shrinks to an icon rail */
+.tabs .gh,.tabs .navtoggle{flex:none;grid-auto-flow:column;justify-content:space-between;align-items:center;width:100%;gap:8px;background:none;border:0;cursor:pointer;color:var(--soft)}
+.tabs .gh{padding:10px 12px 4px;font-size:.7rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;border-radius:8px}
+.tabs .gh svg{width:14px;height:14px;transition:transform .2s}.tabs .grp.shut .gh svg{transform:rotate(-90deg)}
+.tabs .grp.shut .gb{display:none}.tabs .gb{display:flex;flex-direction:column;gap:2px}
+.tabs .navtoggle{justify-content:start;gap:12px;padding:8px 12px;margin-bottom:4px;font-size:.85rem;border-radius:10px}.tabs .navtoggle svg{width:18px;height:18px;transition:transform .2s}
+.tabs .navtoggle:hover,.tabs .gh:hover{background:var(--sky)}
+@media(min-width:900px){
+  .shell{transition:grid-template-columns .2s}
+  .shell.nav-c{grid-template-columns:68px 1fr}
+  .shell.nav-c .tabs{padding:14px 8px;overflow:visible}
+  .shell.nav-c .tabs button span,.shell.nav-c .tabs .gh span,.shell.nav-c .tabs .gh svg{display:none}
+  .shell.nav-c .tabs button{justify-content:center;padding:11px 0}
+  .shell.nav-c .tabs .gh{padding:4px 0;height:1px;margin:6px 10px;background:var(--line);width:auto}
+  .shell.nav-c .tabs .grp.shut .gb{display:flex}
+  .shell.nav-c .tabs .navtoggle{justify-content:center;padding:8px 0}.shell.nav-c .tabs .navtoggle svg{transform:rotate(180deg)}
+  .shell.nav-c .tabs .badge{top:4px;right:6px;transform:none}
+  .tabs{overflow-y:auto}
+}
 .tabs .badge{position:absolute;top:2px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--flag);color:#fff;font:700 .7rem/18px var(--body);font-style:normal;text-align:center;box-shadow:0 0 0 2px var(--card)}
 @media(min-width:900px){.tabs .badge{top:50%;left:auto;right:10px;transform:translateY(-50%)}}
 .tabs button.on::after{content:"";position:absolute;top:0;left:30%;right:30%;height:3px;border-radius:0 0 3px 3px;background:var(--sea)}

@@ -112,10 +112,19 @@ export async function renderStaff(root, tabId) {
   // On a phone the bar holds 4 sections and a "More" button; on a wide screen the side menu lists them all.
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
   const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
+  // The side menu (wide screens) is grouped, each group folds away, and the whole menu can shrink to icons. Both choices are remembered.
+  const GROUPS = [['Overview', ['home', 'vp', 'office']], ['Money', ['treasury', 'desk', 'balances', 'requests']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  const NK = 'alpha-nav-collapsed', GK = 'alpha-nav-groups', rd = k => { try { return localStorage.getItem(k); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
+  let navCollapsed = rd(NK) === '1', shut = new Set((() => { try { return JSON.parse(rd(GK) || '[]'); } catch { return []; } })());
+  const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : ''}</button>`;
+  const grouped = new Set(GROUPS.flatMap(g => g[1])), rest = tabs.filter(t0 => !grouped.has(t0.id));
+  const navHtml = GROUPS.concat(rest.length ? [['More', rest.map(t0 => t0.id)]] : []).map(([name, ids]) => { const items = tabs.filter(t0 => ids.includes(t0.id)); if (!items.length) return '';
+    const open = !shut.has(name) || items.some(t0 => t0.id === cur.id);
+    return `<div class="grp${open ? '' : ' shut'}" data-g="${name}"><button class="gh" type="button" aria-expanded="${open}"><span>${name}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="gb">${items.map(btn).join('')}</div></div>`; }).join('');
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="lg" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><button class="btn ghost sm" id="out">${t('signout')}</button></div>
     <div class="banner" id="bn" hidden></div>
-    <div class="shell"><nav class="tabs" aria-label="Sections">${tabs.map(t => `<button data-t="${t.id}" class="${t.id === cur.id ? 'on' : ''}${extra.includes(t) ? ' xtra' : ''}" ${t.id === cur.id ? 'aria-current="page"' : ''}>${icon(t.id)}<span>${tabLabel(t)}</span>${t.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : ''}</button>`).join('')}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? tabLabel(cur) : t('more')}</span></button>` : ''}</nav><main id="view"></main></div>`;
+    <div class="shell${navCollapsed ? ' nav-c' : ''}"><nav class="tabs" aria-label="Sections"><button class="navtoggle" id="nt" type="button" aria-expanded="${navCollapsed ? 'false' : 'true'}" aria-label="Collapse or expand the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg><span>Hide menu</span></button>${navHtml}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? tabLabel(cur) : t('more')}</span></button>` : ''}</nav><main id="view"></main></div>`;
   const off = onSync((s, d, q) => {
     const c = root.querySelector('#sync'), bn = root.querySelector('#bn'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = (q ? `${q} waiting · ` : '') + { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || '';
@@ -123,6 +132,8 @@ export async function renderStaff(root, tabId) {
   });
   root.querySelector('#lg').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); location.reload(); };
   root.querySelector('#out').onclick = async () => { await sb.auth.signOut(); location.hash = '#/'; location.reload(); };
+  root.querySelector('#nt').onclick = () => { navCollapsed = !navCollapsed; root.querySelector('.shell').classList.toggle('nav-c', navCollapsed); root.querySelector('#nt').setAttribute('aria-expanded', String(!navCollapsed)); wr(NK, navCollapsed ? '1' : '0'); };
+  root.querySelectorAll('.tabs .gh').forEach(g => g.onclick = () => { const box = g.parentElement, name = box.dataset.g, closing = !box.classList.contains('shut'); box.classList.toggle('shut', closing); g.setAttribute('aria-expanded', String(!closing)); closing ? shut.add(name) : shut.delete(name); wr(GK, JSON.stringify([...shut])); });
   root.querySelectorAll('.tabs button[data-t]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.t; });
   root.querySelector('#more')?.addEventListener('click', () => modal(`<h3>More</h3><div class="moregrid">${extra.map(t => `<button class="btn ghost${t.id === cur.id ? ' on' : ''}" data-go="${t.id}">${icon(t.id)}<span>${t.label}</span></button>`).join('')}</div>`,
     (m, close) => m.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { close(); location.hash = '#/staff/' + b.dataset.go; })));
