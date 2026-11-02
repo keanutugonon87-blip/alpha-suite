@@ -24,6 +24,7 @@ const SCREENS = [
   ['Post a non-confidential file to the members (PIO Desk)', ['pio']],
   ['Read posted documents (Documents tab on the student screen)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
   ['Read budget requests (Budget)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
+  ['Issue acknowledgments for funds received; give the approval reference for a disbursement', ['treasurer']],
   ['Collection Desk: collect payments, record promises, weekly goal', ['treasurer']],
   ['Desk overview: money, what needs attention, who owes (view only for the Mayor)', ['mayor', 'treasurer']],
   ['VP Desk overview and decisions (the VPs do the work, the Mayor approves)', ['mayor']],

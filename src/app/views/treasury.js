@@ -11,6 +11,12 @@ export async function mountTreasury(el, ctx) {
   let reqs = [], curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
+  async function entryExtras() {
+    for (const cols of ['id,request_id,approval_ref,ack_at', 'id,request_id']) { try { return await db(sb.from('v2_entries').select(cols).limit(5000)); } catch { /* column not installed yet */ } }
+    return [];
+  }
+  const basis = e => e.kind !== 'expense' ? '' : e.request_id ? ` · Request ${esc(reqs.find(r => r.id === e.request_id)?.req_no || '')}` : e.approval_ref ? ` · Approval: ${esc(e.approval_ref)}` : '';
+
   async function draw() {
     const [mem, chg, periods, raw, flags, closes, lim] = await Promise.all([
       db(sb.from('v2_members').select('id,full_name').order('full_name')),
@@ -24,8 +30,9 @@ export async function mountTreasury(el, ctx) {
     limit = lim != null && lim !== '' && !isNaN(+lim) ? +lim : 500; const lockedMonths = new Set(closes.filter(c => c.status === 'closed').map(c => c.month));
     reqs = await db(sb.from('v2_budget_requests').select('id,req_no,title,fund,category,total').in('status', ['approved', 'filed']).order('created_at', { ascending: false })).catch(() => []);   // empty until the v24 SQL is run
     members = mem; charges = chg; const hasImg = new Set(flags.map(r => r.id));
+    const xtra = new Map((await entryExtras()).map(r => [r.id, r]));   // request, approval reference and acknowledgment: empty until the v24 and v31 SQL are run
     const nameOf = id => members.find(m => m.id === id)?.full_name;
-    const entries = raw.map(e => ({ ...e, who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '', locked: lockedMonths.has(ymManila(e.occurred_at)) }));
+    const entries = raw.map(e => ({ ...e, ...(xtra.get(e.id) || {}), who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '', locked: lockedMonths.has(ymManila(e.occurred_at)) }));
     allEntries = entries;
     const cur = periods.find(p => p.status === 'open'); curPeriod = cur; const past = periods.filter(p => p.status === 'closed');
     const curE = entries.filter(e => e.period_id === cur.id), ok = curE.filter(e => e.status === 'approved');
@@ -34,7 +41,7 @@ export async function mountTreasury(el, ctx) {
 
     const canApprove = e => e.status === 'pending' && (needsSecond(e, limit) ? ctx.can('mayor', 'vice_mayor', 'auditor', 'treasurer') && e.recorded_by !== ctx.profile.user_id : isMayor);
     const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span>${e.locked ? ' <span class="tag" title="This month is closed">🔒</span>' : ''}${e.status === 'pending' && needsSecond(e, limit) ? ' <span class="tag warn" title="Big expense: another officer must approve it">needs a 2nd officer</span>' : ''}</b>
-      <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
+      <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.kind === 'collection' && e.status === 'approved' && e.ack_at ? ' · acknowledged' : ''}${basis(e)}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
       <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? (needsSecond(e, limit) && !e.hasImg ? '<span class="tag bad" title="Add a receipt photo first">no receipt photo</span>' : `<button class="btn gold sm" data-ok="${e.id}">Approve</button>`) : ''}${actions && (canWrite || isMayor) && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
       <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
     const rows = (arr, actions) => {
@@ -95,7 +102,7 @@ export async function mountTreasury(el, ctx) {
     $('#mrep')?.addEventListener('click', () => monthly(entries, periods, closes));
     $('#mclose')?.addEventListener('click', () => monthClose(entries, periods, closes));
     el.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { const p = periods.find(x => x.id === b.dataset.rep); report(p, entries.filter(e => e.period_id === p.id && e.status === 'approved'), p.closing_balance); });
-    el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => showReceipt(b.dataset.rc).catch(e => toast(e.message, true)));
+    el.querySelectorAll('[data-rc]').forEach(b => b.onclick = () => { showReceipt(b.dataset.rc).catch(e => toast(e.message, true)); sb.rpc('v2_entry_ack', { p_ids: [b.dataset.rc] }).then(() => {}, () => {}); });   // opening the receipt counts as issuing the acknowledgment
     el.querySelectorAll('[data-img]').forEach(b => b.onclick = () => showPhoto(b.dataset.img));
     el.querySelectorAll('[data-ok]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_approve_entry', { p_id: b.dataset.ok })); toast('Approved'); draw().catch(() => {}); } catch (e) { toast(/function|schema cache/i.test(e.message) ? 'Approval is not switched on in the database yet. Run the v4 SQL.' : e.message, true); } });
     el.querySelectorAll('[data-void]').forEach(b => b.onclick = async () => { const r = await askText('Void this entry', 'Reason', { ok: 'Void entry' }); if (!r) return;
@@ -219,6 +226,7 @@ export async function mountTreasury(el, ctx) {
       <div id="fw"><label>Fund</label><select name="fund">${fundOptions(pre.fund || '')}</select></div>
       <label>Category</label><select name="cat">${cats.map(c => `<option${c === pre.cat ? ' selected' : ''}>${c}</option>`).join('')}</select>
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
+      ${kind === 'expense' ? `<label>Approval reference${limit > 0 ? ` (needed when there is no budget request and the amount is ${peso(limit)} or more)` : ''}</label><input name="aref" maxlength="120" placeholder="Adviser memo, PIT approval no.…">` : ''}
       <label>Purpose / note</label><input name="purpose" value="${esc(pre.purpose || '')}">
       ${kind === 'collection' ? `<label>Payment method</label><div class="segpay" role="radiogroup"><label><input type="radio" name="method" value="cash" checked><span>💵 Cash</span></label><label><input type="radio" name="method" value="gcash"><span>📱 GCash</span></label></div><div id="gc" style="display:none"><label>GCash reference no.</label><input name="gref"></div>` : ''}
       <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
@@ -239,13 +247,14 @@ export async function mountTreasury(el, ctx) {
           if (dup && !(await confirmDialog(`The same amount (${peso(dup.amount)}) for ${dup.who} was already recorded a few minutes ago${dup.receipt_no ? ` (${dup.receipt_no})` : ''}. Save it again?`, { ok: 'Save anyway', title: 'Possible duplicate' }))) { btn.disabled = false; btn.textContent = 'Save'; return; }
           const file0 = f.get('img');
           if (kind === 'expense' && limit > 0 && +f.get('amt') >= limit && !(file0 && file0.size)) throw new Error(`Add a receipt photo. Expenses of ${peso(limit)} or more need one.`);
+          if (kind === 'expense' && limit > 0 && +f.get('amt') >= limit && !f.get('request') && !String(f.get('aref') || '').trim()) throw new Error(`No disbursement without approval. Pick the approved budget request, or enter the approval reference (adviser memo or PIT approval). Spending of ${peso(limit)} or more needs one.`);
           if (kind === 'expense' && f.get('request')) {   // linked to an approved budget request: warn when the spending passes its total
             const rq = reqs.find(x => x.id === f.get('request'));
             if (rq) { const sp = await sb.from('v2_entries').select('amount').eq('kind', 'expense').eq('request_id', rq.id).neq('status', 'voided').then(r => (r.data || []).reduce((t, x) => t + +x.amount, 0), () => 0);
               if (sp + +f.get('amt') > +rq.total && !(await confirmDialog(`${rq.req_no} was approved for ${peso(rq.total)} and ${peso(sp)} is already spent on it. This ${peso(f.get('amt'))} would go over by ${peso(sp + +f.get('amt') - rq.total)}. Save it anyway?`, { ok: 'Save anyway', title: 'Over the approved budget' }))) { btn.disabled = false; btn.textContent = 'Save'; return; } }
           }
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
-          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, ...(pre.violation ? { violation_id: pre.violation } : {}), ...(f.get('request') ? { request_id: f.get('request') } : {}), fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
+          const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, ...(pre.violation ? { violation_id: pre.violation } : {}), ...(f.get('request') ? { request_id: f.get('request') } : {}), ...(kind === 'expense' && String(f.get('aref') || '').trim() ? { approval_ref: String(f.get('aref')).trim() } : {}), fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,
             status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }, photo);
           close();
