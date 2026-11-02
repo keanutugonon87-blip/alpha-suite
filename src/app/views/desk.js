@@ -15,7 +15,7 @@ const readGoal = () => { try { return +localStorage.getItem(GK) || 0; } catch { 
 
 export async function mountDesk(el, ctx) {
   const isMayor = ctx.can('mayor');
-  let q = '', only = 'owing', data = null, pane = readPane();
+  let q = '', only = 'owing', data = null, pane = isMayor ? 'overview' : readPane();   // the Mayor gets the overview only; collecting is the Treasurer's work
   el.innerHTML = skeleton(4);
   const off = watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_promises'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   await load();
@@ -49,7 +49,7 @@ export async function mountDesk(el, ctx) {
     return members.filter(m => m.status === 'active').map(m => { const items = by[m.id] || []; return { m, items, total: items.reduce((t, i) => t + i.owed, 0) }; });
   }
 
-  function seg() { return `<div class="seg" style="display:flex;gap:6px;margin-bottom:12px"><button class="btn ${pane === 'overview' ? 'gold' : 'ghost'}" data-pane="overview" style="flex:1">Overview</button><button class="btn ${pane === 'collect' ? 'gold' : 'ghost'}" data-pane="collect" style="flex:1">Collect</button></div>`; }
+  function seg() { if (isMayor) return ''; return `<div class="seg" style="display:flex;gap:6px;margin-bottom:12px"><button class="btn ${pane === 'overview' ? 'gold' : 'ghost'}" data-pane="overview" style="flex:1">Overview</button><button class="btn ${pane === 'collect' ? 'gold' : 'ghost'}" data-pane="collect" style="flex:1">Collect</button></div>`; }
   function bindSeg() { el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; try { localStorage.setItem(PK, pane); } catch { /* ignore */ } draw(); }); }
 
   function draw() {
@@ -57,7 +57,7 @@ export async function mountDesk(el, ctx) {
     const rows = owedBy(), goal = readGoal();
     el.innerHTML = seg() + '<div id="ov">' + skeleton(3) + '</div>'; bindSeg();
     const host = el.querySelector('#ov');
-    drawOverview(host, ctx, data, { goal, rows, isMayor, collect: () => { pane = 'collect'; try { localStorage.setItem(PK, pane); } catch { /* ignore */ } draw(); } }).catch(x => { host.innerHTML = `<p class="empty">Could not load the overview. ${esc(x.message || '')}</p>`; });
+    drawOverview(host, ctx, data, { goal, rows, isMayor, readonly: isMayor, collect: () => { pane = 'collect'; try { localStorage.setItem(PK, pane); } catch { /* ignore */ } draw(); } }).catch(x => { host.innerHTML = `<p class="empty">Could not load the overview. ${esc(x.message || '')}</p>`; });
   }
 
   function drawCollect() {

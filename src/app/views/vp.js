@@ -69,6 +69,8 @@ export async function mountVp(el, ctx) {
     draw();
   }
 
+  /* The Mayor oversees the VP Desk: decisions (approve, return) and the tasks handed to the VPs, plus the Council he co-heads. The VPs do the rest. */
+  function writes(k) { return CFG[k].who.includes(role) && (!isMayor || ['del', 'cou'].includes(k)); }
   const mine = r => role === 'vice_mayor' || isMayor || r.to_role === 'both' || r.to_role === role;
   function needs() {
     const today = todayISO(), n = [], add = (t, s, p) => n.push({ t, s, p });
@@ -136,7 +138,7 @@ export async function mountVp(el, ctx) {
   }
 
   function list(k) {
-    const c = CFG[k], canW = c.who.includes(role), rows = d[FETCH_KEY(k)];
+    const c = CFG[k], canW = writes(k), rows = d[FETCH_KEY(k)];
     return `${canW ? `<button class="btn gold" id="add" style="width:100%;margin-bottom:10px">+ Add ${c.name}${c.approval && !isMayor ? ' (goes to the Mayor)' : ''}</button>` : ''}
       <div class="card">${rows.map(r => { const [a, b, s] = c.row(r, d); return `<div class="row" data-i="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(a)}</b><small>${b}</small></div>${s ? tag(s) : '<span class="muted">›</span>'}</div>`; }).join('') || `<p class="empty">Nothing here yet.</p>`}</div>`;
   }
@@ -162,7 +164,7 @@ export async function mountVp(el, ctx) {
 
   function view(k, r) {
     if (!r) return;
-    const c = CFG[k], canW = c.who.includes(role), pending = c.approval && r.status === 'proposed';
+    const c = CFG[k], canW = writes(k), pending = c.approval && r.status === 'proposed';
     const steps = canW && c.next && !isMayorOnlyBlock(r) ? c.next(r) : [];
     const canDel = canW && (isMayor || !c.approval || ['proposed', 'returned'].includes(r.status)) && k !== 'del' || (k === 'del' && isMayor);
     modal(`<h3>${esc(r.title || r.name)}</h3>${r.status && k !== 'rep' ? `<p style="margin:0 0 8px">${tag(k === 'del' ? (r.status === 'done' ? 'done' : 'open') : r.status)}</p>` : ''}

@@ -7,7 +7,7 @@ const dayMs = 864e5;
 const wkStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
 const short = d => d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 
-export async function drawOverview(host, ctx, base, { goal, rows, collect, isMayor }) {
+export async function drawOverview(host, ctx, base, { goal, rows, collect, isMayor, readonly }) {
   const [ent, reqs, liqs, closes, img] = await Promise.all([
     db(sb.from('v2_entries').select('id,kind,amount,fund,status,occurred_at').in('status', ['approved', 'pending']).order('occurred_at', { ascending: false }).limit(5000)).catch(() => []),
     db(sb.from('v2_budget_requests').select('id,req_no,title,status,total')).catch(() => []),          // empty until the v24 SQL is run
@@ -63,8 +63,9 @@ export async function drawOverview(host, ctx, base, { goal, rows, collect, isMay
 
   host.innerHTML = `<div class="grid"><div class="stat gold"><small>Money on hand</small><b>${peso(total)}</b></div><div class="stat"><small>Collected this week</small><b>${peso(weekIn)}</b></div><div class="stat"><small>Spent this month</small><b>${peso(monthOut)}</b></div></div>
     ${goal ? `<div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between"><b>Weekly goal</b><small class="muted">${peso(weekIn)} of ${peso(goal)}</small></div><div class="prog" style="margin-top:8px"><i style="width:${Math.min(100, weekIn / goal * 100)}%"></i></div></div>` : ''}
-    <h3 style="margin:16px 2px 8px">Needs you</h3>
-    <div class="card">${needs.length ? needs.map((n, i) => `<div class="row" data-n="${i}" style="cursor:pointer"><div class="m"><b>${esc(n.text)}</b></div><span class="muted">›</span></div>`).join('') : '<p class="empty">Nothing is waiting. Everything is up to date.</p>'}</div>
+    ${readonly ? '<p class="muted" style="margin:12px 2px 0;font-size:.85rem">This is the Treasurer’s desk, shown to you as an overview only. Approving entries is under Treasury.</p>' : ''}
+    <h3 style="margin:16px 2px 8px">${readonly ? 'At the Treasurer\'s desk' : 'Needs you'}</h3>
+    <div class="card">${needs.length ? needs.map((n, i) => `<div class="row" ${readonly && n.act ? '' : `data-n="${i}" style="cursor:pointer"`}><div class="m"><b>${esc(n.text)}</b></div>${readonly && n.act ? '' : '<span class="muted">›</span>'}</div>`).join('') : '<p class="empty">Nothing is waiting. Everything is up to date.</p>'}</div>
     <h3 style="margin:16px 2px 8px">Money by fund</h3>
     <div class="card pad">${funds.map(f => `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--line,#d6e6ee)"><span>${esc(f.label)}</span><b style="${f.v < 0 ? 'color:#c0392b' : ''}">${peso(f.v)}</b></div>`).join('')}
       <small class="muted" style="display:block;margin-top:6px">From approved entries. This month: ${peso(monthIn)} collected, ${peso(monthOut)} spent.</small></div>
