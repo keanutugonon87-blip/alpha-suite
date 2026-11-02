@@ -400,3 +400,4 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 #pkw{margin-top:10px}
 .scn [hidden],.scnm [hidden]{display:none!important}
 .ck span small,.rvl .ck small{display:block}
+@media(max-width:899px){.tabs .grp,.tabs .gb{display:contents}.tabs{justify-content:space-around;align-items:stretch}.tabs button{flex:1 1 0;min-width:0}.tabs button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
