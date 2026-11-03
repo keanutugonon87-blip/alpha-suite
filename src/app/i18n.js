@@ -28,7 +28,7 @@ const D = {
   sendRequest: ['Send request', 'Ipadala ang hangyo'],
   requestSent: ['Request sent to the Secretary', 'Napadala na ang hangyo sa Sekretaryo'],
   requestNotReady: ['Requests are not set up yet. Tell the Secretary.', 'Wala pa na-set up ang mga hangyo. Sultihi ang Sekretaryo.'],
-  signInToAsk: ['Sign in as a student to request a record.', 'Mag-sign in isip estudyante aron mangayo og rekord.'],
+  signInToAsk: ['Open My Status and sign in as a student to request a record.', 'Ablihi ang My Status ug mag-sign in isip estudyante aron mangayo og rekord.'],
   myRequests: ['My requests', 'Akong mga hangyo'],
   daysAgo: ['days ago', 'ka adlaw na'],
   reqOpen: ['waiting', 'naghulat'],

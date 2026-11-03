@@ -207,7 +207,8 @@ export async function renderPublic(root) {
 
   /* CBL Article XVI: the official archive (Sections 1 and 2) and the data-protection notice (Sections 3 to 5) */
   const CATS = [['CBL and amendments'], ['Membership records'], ['Election documents'], ['Minutes', 'minutes'], ['Resolutions', 'resolution'], ['Annual plans'], ['Accomplishment reports'], ['Financial reports'], ['Inventory and turnover documents']];
-  const canAsk = () => ['student', 'officer'].includes(auth.kind);
+  const tok = () => { try { return localStorage.getItem(ME) || null; } catch { return null; } };   // the QR-card token My Status already keeps on this phone
+  const canAsk = () => ['student', 'officer'].includes(auth.kind) || !!tok();
   const age = d => Math.floor((Date.now() - new Date(d)) / 864e5);
   function askRecord(title = '', hint = '') {
     modal(`<h3>${t('askRecord')}</h3><p class="muted" style="margin:0 0 8px">${t('askRecordNote')}</p>
@@ -218,7 +219,7 @@ export async function renderPublic(root) {
       el.querySelector('#rq-go').onclick = async e => {
         const ttl = el.querySelector('#rq-t').value.trim(); if (ttl.length < 3) return toast(t('whichRecord'), true);
         e.target.disabled = true;
-        try { await db(sb.rpc('v2_record_request', { p_title: ttl, p_note: el.querySelector('#rq-n').value.trim() || null })); close(); toast(t('requestSent')); await load(); }
+        try { await db(sb.rpc('v2_record_request', { p_title: ttl, p_note: el.querySelector('#rq-n').value.trim() || null, p_token: tok() })); close(); toast(t('requestSent')); await load(); }
         catch (x) { e.target.disabled = false; toast(/function|schema cache|does not exist/i.test(x.message || '') ? t('requestNotReady') : x.message, true); }
       };
     });
@@ -315,7 +316,7 @@ export async function renderPublic(root) {
   async function load() {
     try {
       const opt = p => db(p).catch(() => []);
-      const [o, tr, ann, docs, mine] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests'))]);   // docs stay empty until the v30 SQL is run
+      const [o, tr, ann, docs, mine] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() }))]);   // docs stay empty until the v30 SQL is run
       const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
     } catch (e) {
       if (!data) {   // no connection: still show the student's own saved status, if this phone has one
