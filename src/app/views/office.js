@@ -38,6 +38,8 @@ const OFFICES = {
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
     panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['pubs', 'Publications', ['post'], ['publication']], ['media', 'Photos and media', ['post'], ['documentation', 'media']], ['publish', 'Post files']], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
+  mayor: { title: 'President’s approvals', blurb: 'The President approves every official announcement before the PIO sends it, and orders each event by naming the officers who scan. You see the PIO’s work here; you do not write it.',
+    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']]], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
   marshall: { title: 'Marshal (Bosun)', blurb: 'Help keep order, logistics, attendance support and safety during authorized activities. Marshals report and assist. They do not use coercive or disciplinary powers.',
     panes: [['over', 'Overview'], ['plans', 'Activity plans', ['plan']], ['safety', 'Safety log', ['incident']]], go: [['attendance', 'Attendance'], ['watch', 'Watch']] },
 };
@@ -101,17 +103,23 @@ export async function mountOffice(el, ctx) {
       c((X.months || []).length, 'past month(s) with no cash count verified (' + (X.months || []).slice(0, 3).join(', ') + ')', 'go:treasury');
       c(recs.filter(r => r.flow === 'approved').length, 'approved file(s) waiting for you to classify as public or confidential', 'classify');
       c(of('finding').filter(r => r.status === 'open').length, 'open finding(s) not reported yet', 'findings'); c(of('finding').filter(r => r.status === 'reported' && !(r.flags || {}).assembly).length, 'reported finding(s) not yet presented to the General Assembly', 'findings');
+    } else if (role === 'mayor') {
+      const rv = of('post').filter(r => ptype(r) === 'announcement' && r.status === 'review'); c(rv.length, 'announcement(s) waiting for your approval', 'announce');
     } else if (role === 'pio') {
       const posts = of('post'), typed = ts => posts.filter(r => ts.includes(ptype(r))), live = r => ['approved', 'published'].includes(r.status);
       const pp = rs => rs.some(r => ptype(r) === 'announcement') ? 'announce' : rs.some(r => ['documentation', 'media'].includes(ptype(r))) ? 'media' : 'pubs';
       const iso = d => new Date(Date.now() + d * dayMs).toISOString().slice(0, 10);
       c(X.events.filter(e => e.report_sent_at && !e.notified_at).length, 'attendance fines report(s) waiting to be sent to the students', 'go:attendance');
       c(recs.filter(r => r.flow === 'classified' && r.classification === 'public').length, 'public file(s) ready to post to the members', 'publish');
-      const rv = posts.filter(r => r.status === 'review'); c(rv.length, 'post(s) in review', pp(rv));
-      const ap = posts.filter(r => r.status === 'approved'); c(ap.length, 'approved post(s) not published yet', pp(ap));
+      const ann = typed(['announcement']), fl = r => r.flags || {};
+      c(ann.filter(r => r.status === 'draft' && fl(r).return_note).length, 'announcement(s) returned by the Mayor with a note', 'announce');
+      c(ann.filter(r => r.status === 'approved' && !fl(r).notice).length, 'announcement(s) approved by the Mayor, ready to send as a notice', 'announce');
+      c(ann.filter(r => r.status === 'review').length, 'announcement(s) waiting for the Mayor’s approval', 'announce');
+      const rv = posts.filter(r => r.status === 'review' && ptype(r) !== 'announcement'); c(rv.length, 'post(s) in review', pp(rv));
+      const ap = posts.filter(r => r.status === 'approved' && ptype(r) !== 'announcement'); c(ap.length, 'approved post(s) not published yet', pp(ap));
       const bad = posts.filter(r => live(r) && !postChecks(ptype(r)).every(([k]) => (r.flags || {})[k])); c(bad.length, 'approved or published post(s) with a privacy, branding or communication check not ticked', pp(bad));
       const annEv = new Set(typed(['announcement']).map(r => r.event_id).filter(Boolean));
-      c(X.events.filter(e => e.status === 'open' && e.event_date >= today && !annEv.has(e.id)).length, 'upcoming event(s) with no announcement drafted', 'announce');
+      c(X.events.filter(e => e.status === 'open' && e.event_date >= today && !annEv.has(e.id)).length, 'upcoming event(s) with no announcement drafted (announce events the Mayor ordered first)', 'announce');
       const docEv = new Set(typed(['documentation', 'media']).map(r => r.event_id).filter(Boolean));
       c(X.events.filter(e => e.event_date < today && e.event_date >= iso(-30) && !docEv.has(e.id)).length, 'recent event(s) with no photos or media filed', 'media');
       c(posts.filter(r => r.status === 'draft').length, 'draft(s) to finish', pp(posts.filter(r => r.status === 'draft')));
@@ -128,6 +136,7 @@ export async function mountOffice(el, ctx) {
     const s = (l, v, c = '') => `<div class="stat ${c}"><small>${l}</small><b>${v}</b></div>`, up = X.events.filter(e => e.status === 'open' && e.event_date >= todayISO()).length;
     if (role === 'secretary') return s('Minutes on file', of('minutes').filter(r => r.status === 'filed').length, 'gold') + s('Resolutions adopted', of('resolution').filter(r => r.status !== 'draft').length) + s('Letters to answer', of('letter_in').filter(r => r.status === 'open').length) + s('Drafts', recs.filter(r => r.status === 'draft').length);
     if (role === 'auditor') return s('Entries examined', X.count ?? 0, 'gold') + s('Open findings', of('finding').filter(r => r.status !== 'resolved').length) + s('No receipt photo', (X.noReceipt || []).length) + s('Possible duplicates', (X.dups || []).length);
+    if (role === 'mayor') return s('Waiting for your approval', of('post').filter(r => ptype(r) === 'announcement' && r.status === 'review').length, 'gold') + s('Approved this month', of('post').filter(r => ptype(r) === 'announcement' && (r.flags || {}).approved_at && String((r.flags || {}).approved_at).startsWith(todayISO().slice(0, 7))).length) + s('Sent as notices', of('post').filter(r => (r.flags || {}).notice).length) + s('Returned for changes', of('post').filter(r => ptype(r) === 'announcement' && r.status === 'draft' && (r.flags || {}).return_note).length);
     if (role === 'pio') { const mon = r => (r.on_date || '').startsWith(todayISO().slice(0, 7)) && ['approved', 'published'].includes(r.status), np = ts => of('post').filter(r => ts.includes(ptype(r)) && mon(r)).length;
       return s('Announcements this month', np(['announcement']), 'gold') + s('Publications this month', np(['publication'])) + s('Photos and media this month', np(['documentation', 'media'])) + s('In review', of('post').filter(r => r.status === 'review').length); }
     return s('Events ahead', up, 'gold') + s('Plans ready', of('plan').filter(r => r.status === 'planned').length) + s('Open safety entries', of('incident').filter(r => r.status === 'open').length) + s('Events open to scan', X.events.filter(e => e.status === 'open').length);
@@ -160,7 +169,7 @@ export async function mountOffice(el, ctx) {
 
   function list(kinds, types) {
     const rows = recs.filter(r => kinds.includes(r.kind) && (!types || types.includes(ptype(r)))), K = KIND[kinds[0]], what = types ? (types.length > 1 ? 'photos or media' : PTYPE[types[0]][0].toLowerCase()) : null;
-    return `${role === 'marshall' && kinds[0] === 'incident' ? '<p class="muted" style="margin:0 2px 8px">Record what happened and who was told. Marshals do not take disciplinary action.</p>' : ''}<button class="btn gold" id="add" style="width:100%;margin-bottom:10px">+ Add ${what || (kinds.length > 1 ? 'letter' : K.l.toLowerCase())}</button>
+    return `${role === 'mayor' ? '<p class="muted" style="margin:0 2px 8px">Open an announcement the PIO sent you. Approve it, or return it with a note saying what to fix.</p>' : ''}${role === 'marshall' && kinds[0] === 'incident' ? '<p class="muted" style="margin:0 2px 8px">Record what happened and who was told. Marshals do not take disciplinary action.</p>' : ''}${role === 'mayor' ? '' : `<button class="btn gold" id="add" style="width:100%;margin-bottom:10px">+ Add ${what || (kinds.length > 1 ? 'letter' : K.l.toLowerCase())}</button>`}
       <div class="card">${rows.map(r => `<div class="row" data-i="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)}</b><small>${[r.ref_no, r.kind === 'post' ? PTYPE[ptype(r)][0] : KIND[r.kind].l, fmtDate(r.on_date), r.party].filter(Boolean).map(esc).join(' · ')}${r.confidential ? ' · 🔒' : ''}${r.kind === 'plan' ? ` · ${(r.items || []).filter(i => i.done).length}/${(r.items || []).length} checked` : ''}</small></div>
         <span style="display:flex;gap:4px">${r.level ? `<span class="tag ${LEVEL[r.level][1]}">${LEVEL[r.level][0]}</span>` : ''}${ftag(r)}</span></div>`).join('') || '<p class="empty">Nothing here yet.</p>'}</div>`;
   }
@@ -231,7 +240,9 @@ export async function mountOffice(el, ctx) {
       ${FL && FL.length ? `<div style="margin:8px 0">${FL.map(([k, l]) => `<label class="ck"><input type="checkbox" data-f="${k}"${(r.flags || {})[k] ? ' checked' : ''}${canW ? '' : ' disabled'}><span>${esc(l)}</span></label>`).join('')}</div>` : ''}
       ${K.items ? `<div style="margin:8px 0">${(r.items || []).map((it, i) => `<label class="ck"><input type="checkbox" data-it="${i}"${it.done ? ' checked' : ''}${canW ? '' : ' disabled'}><span>${esc(it.t)}</span></label>`).join('') || '<small class="muted">No checklist.</small>'}</div>` : ''}
       <small class="muted">Added by ${esc(r.created_by_name || '—')}</small>
-      ${r.kind === 'post' && ptype(r) === 'announcement' && canW && ['approved', 'published'].includes(r.status) && !(r.flags || {}).notice ? '<div style="margin-top:10px"><button class="btn gold" id="sn">Send as a notice (phone alert)</button></div>' : ''}${(r.flags || {}).notice ? '<small class="muted" style="display:block;margin-top:6px">Sent as a notice with a phone alert.</small>' : ''}
+      ${r.kind === 'post' && ptype(r) === 'announcement' ? `<div class="card pad" style="margin:8px 0"><small class="muted">Official announcement</small><div>${(r.flags || {}).approved_by ? `Approved by ${esc(r.flags.approved_by)}${r.flags.approved_at ? ' · ' + fmtDate(r.flags.approved_at) : ''}` : r.status === 'review' ? 'Waiting for the Mayor’s approval' : 'Not sent to the Mayor yet'}</div>${(r.flags || {}).return_note ? `<div style="margin-top:6px"><small class="muted">Returned by the Mayor</small><div>${esc(r.flags.return_note)}</div></div>` : ''}</div>` : ''}
+      ${role === 'mayor' && r.kind === 'post' && ptype(r) === 'announcement' && ['review', 'approved'].includes(r.status) && !(r.flags || {}).notice ? `<div style="display:flex;gap:8px;margin-top:10px">${r.status === 'review' ? '<button class="btn gold" id="ma">Approve announcement</button>' : ''}<button class="btn ghost" id="mr">Return with a note</button></div>` : ''}
+      ${r.kind === 'post' && ptype(r) === 'announcement' && canW && ['approved', 'published'].includes(r.status) && (r.flags || {}).approved_by && !(r.flags || {}).notice ? '<div style="margin-top:10px"><button class="btn gold" id="sn">Send as a notice (phone alert)</button></div>' : ''}${(r.flags || {}).notice ? '<small class="muted" style="display:block;margin-top:6px">Sent as a notice with a phone alert.</small>' : ''}
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${canW && r.flow && ['draft', 'returned'].includes(r.flow) ? '<button class="btn gold" id="sa">Send for approval</button>' : ''}${role === 'auditor' && ['approved', 'classified', 'published'].includes(r.flow) ? `<button class="btn ${r.classification === 'public' ? 'gold' : 'ghost'}" data-cl="public">Non-confidential</button><button class="btn ${r.classification === 'confidential' ? 'gold' : 'ghost'}" data-cl="confidential">Confidential</button>` : ''}${role === 'pio' && r.flow === 'classified' && r.classification === 'public' ? '<button class="btn gold" id="po">Post to members</button>' : ''}${role === 'pio' && r.flow === 'published' ? '<button class="btn ghost" id="td">Take down</button>' : ''}${canW && (!r.flow || ['draft', 'returned'].includes(r.flow)) ? '<button class="btn ghost" id="ed">Edit</button><button class="btn ghost" id="rm" style="color:#c0392b">Delete</button>' : ''}<button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const save = async patch => { try { await db(sb.from('v2_office_records').update(patch).eq('id', r.id)); Object.assign(r, patch); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } };
@@ -242,13 +253,21 @@ export async function mountOffice(el, ctx) {
       m.querySelectorAll('[data-cl]').forEach(b => b.onclick = rpc('v2_doc_classify', { p_id: r.id, p_class: b.dataset.cl }, b.dataset.cl === 'public' ? 'Marked non-confidential' : 'Marked confidential'));
       m.querySelector('#po')?.addEventListener('click', rpc('v2_doc_publish', { p_id: r.id, p_on: true }, 'Posted. Members can read it now.'));
       m.querySelector('#td')?.addEventListener('click', rpc('v2_doc_publish', { p_id: r.id, p_on: false }, 'Taken down'));
-      m.querySelector('#sn')?.addEventListener('click', async () => { if (!(await confirmDialog(`Post "${r.title}" as a notice? Everyone who turned phone alerts on gets an alert.`, { ok: 'Send notice', title: 'Send notice' }))) return;
-        try { await db(sb.from('v2_announcements').insert({ title: String(r.title).slice(0, 120), body: String(r.body || '').slice(0, 600), pinned: false, expires_on: null, created_by_name: ctx.profile.full_name })); await save({ status: 'published', flags: { ...(r.flags || {}), notice: true } }); toast('Notice sent'); close(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
+      m.querySelector('#sn')?.addEventListener('click', async () => { if (!(await confirmDialog(`Send "${r.title}" as a notice? Everyone who turned phone alerts on gets an alert.`, { ok: 'Send notice', title: 'Send notice' }))) return;
+        try { await db(sb.rpc('v2_announce_post', { p_post: r.id })); close(); toast('Notice sent'); load(); } catch (x) { m.querySelector('#er').textContent = /function|schema cache/i.test(x.message || '') ? 'Run the v35 SQL in Supabase first (supabase/v35_event_orders.sql).' : x.message; } });
+      m.querySelector('#ma')?.addEventListener('click', async () => { try { await db(sb.from('v2_office_records').update({ status: 'approved' }).eq('id', r.id)); close(); toast('Approved. The PIO can send it now.'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
+      m.querySelector('#mr')?.addEventListener('click', async () => { const note = await askText('Return the announcement', 'What should the PIO fix?', { ok: 'Return' }); if (note === null) return; if (!String(note).trim()) { m.querySelector('#er').textContent = 'Say what needs to change.'; return; }
+        try { await db(sb.from('v2_office_records').update({ status: 'draft', flags: { ...(r.flags || {}), return_note: String(note).trim().slice(0, 300) } }).eq('id', r.id)); close(); toast('Returned to the PIO'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
       m.querySelector('#ed')?.addEventListener('click', () => { close(); form([r.kind], r); });
       m.querySelector('#rm')?.addEventListener('click', async () => { if (!(await confirmDialog(`Delete "${r.title}"?`, { ok: 'Delete', title: 'Delete' }))) return; try { await db(sb.from('v2_office_records').delete().eq('id', r.id)); close(); toast('Deleted'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
     });
   }
 
+  /* an announcement goes draft, then to the Mayor; only the Mayor approves it, so the PIO is never offered approved or published for one */
+  function statusOpts(k, type, cur) {
+    const K = KIND[k], lock = k === 'post' && type === 'announcement' && role === 'pio', list = lock ? [['draft', 'Draft'], ['review', 'Send to the Mayor for approval'], ...K.st.filter(s => s[0] === cur && !['draft', 'review'].includes(s[0]))] : K.st;
+    return list.map(s => `<option value="${s[0]}"${(cur || K.st[0][0]) === s[0] ? ' selected' : ''}>${s[1]}</option>`).join('');
+  }
   function form(kinds, r, types) {
     const k0 = r ? r.kind : kinds[0], editing = !!r, t0 = r ? ptype(r) : (types ? types[0] : 'publication');
     const html = k => { const K = KIND[k], v = r || {}, plan = k === 'plan';
@@ -262,14 +281,14 @@ export async function mountOffice(el, ctx) {
         ${K.level ? `<label>How serious</label><select name="level"><option value="low"${v.level === 'low' ? ' selected' : ''}>Low</option><option value="medium"${!v.level || v.level === 'medium' ? ' selected' : ''}>Medium</option><option value="high"${v.level === 'high' ? ' selected' : ''}>High</option></select>` : ''}
         ${k === 'post' ? `<label>What is it</label><select name="ptype" id="pt">${Object.entries(PTYPE).map(([x, l]) => `<option value="${x}"${x === t0 ? ' selected' : ''}>${l[0]}</option>`).join('')}</select>
           <div style="margin:10px 0 2px"><b>Checks before it can be approved or posted</b></div>${postChecks('media').map(([c, l]) => `<label class="ck"${c === 'consent' ? ' id="consrow"' : ''}${c === 'consent' && !['documentation', 'media'].includes(t0) ? ' style="display:none"' : ''}><input type="checkbox" name="fl_${c}"${(v.flags || {})[c] ? ' checked' : ''}><span>${esc(l)}</span></label>`).join('')}` : ''}
-        <label>Status</label><select name="status">${K.st.map(s => `<option value="${s[0]}"${(v.status || K.st[0][0]) === s[0] ? ' selected' : ''}>${s[1]}</option>`).join('')}</select>
+        <label>Status</label><select name="status" id="stt">${statusOpts(k, t0, v.status)}</select>
         ${K.conf ? `<label class="ck" style="margin-top:10px"><input type="checkbox" name="confidential"${v.confidential ? ' checked' : ''}><span>Looks confidential (keeps it hidden from other officers until the Auditor classifies it)</span></label>` : ''}`; };
     modal(`<h3>${editing ? 'Edit' : 'Add'} ${kinds.length > 1 && !editing ? 'letter' : KIND[k0].l.toLowerCase()}</h3><form id="f"><div id="fb">${html(k0)}</div>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const bindKk = () => m.querySelector('#kk')?.addEventListener('change', e => { m.querySelector('#fb').innerHTML = html(e.target.value); bindKk(); });
       bindKk();
-      m.querySelector('#fb').addEventListener('change', e => { if (e.target.id === 'pt') { const c = m.querySelector('#consrow'); if (c) c.style.display = ['documentation', 'media'].includes(e.target.value) ? '' : 'none'; } });
+      m.querySelector('#fb').addEventListener('change', e => { if (e.target.id === 'pt') { const sx = m.querySelector('#stt'); if (sx) sx.innerHTML = statusOpts('post', e.target.value, sx.value); const c = m.querySelector('#consrow'); if (c) c.style.display = ['documentation', 'media'].includes(e.target.value) ? '' : 'none'; } });
       m.querySelector('#f').onsubmit = async e => {
         e.preventDefault(); const f = new FormData(e.target), kind = f.get('kind') || k0, K = KIND[kind], n = s => String(f.get(s) ?? '').trim() || null;
         const p = { title: n('title'), on_date: f.get('on_date'), party: n('party'), body: n('body'), status: f.get('status') };

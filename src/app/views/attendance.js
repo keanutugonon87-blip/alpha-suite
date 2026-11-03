@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, fmtDate, toast, modal, uuid, todayISO, confirmDialog, skeleton } from '../core.js';
+import { sb, db, watch, esc, fmtDate, fmtDateTime, toast, modal, uuid, todayISO, confirmDialog, skeleton, ROLE_LABEL } from '../core.js';
 import { scanLoop } from '../qr.js';
 
 /* Attendance: log in and log out by QR card.
@@ -26,21 +26,38 @@ export async function mountAttendance(el, ctx) {
 }
 
 async function draw(host, ctx, members, standards, redraw) {
-  const manage = ctx.can('mayor', 'vice_mayor'), canScan = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails'), canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
+  const manage = ctx.can('mayor', 'vice_mayor'), scanRoles = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails'), isMayor = ctx.can('mayor'), uid = ctx.profile.user_id, canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
   const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor'), collects = ctx.can('mayor', 'treasurer');
   const act = members.filter(x => x.status === 'active'), mname = id => members.find(m => m.id === id)?.full_name || '?';
-  let events, scans, viol = [], paid = new Set();
+  let events, scans, viol = [], paid = new Set(), posts = [];
   try {
     [events, scans] = await Promise.all([
       db(sb.from('v2_events').select('*').order('event_date', { ascending: false }).order('created_at', { ascending: false })),
-      db(sb.from('v2_event_scans').select('event_id,member_id,kind')),
+      db(sb.from('v2_event_scans').select('event_id,member_id,kind,scanned_by_name')),
     ]);
   } catch (e) { host.innerHTML = `<div class="card pad"><p class="empty">${esc(needV2(e))}</p></div>`; return; }
   if (sees) {
     viol = await db(sb.from('v2_violations').select('id,member_id,standard_id,event_id,status,excuse_status').not('event_id', 'is', null)).catch(() => []);
     paid = new Set(await db(sb.from('v2_entries').select('violation_id').not('violation_id', 'is', null).neq('status', 'voided')).then(r => r.map(x => x.violation_id)).catch(() => []));
   }
+  if (sees) posts = await db(sb.from('v2_office_records').select('id,title,status,flags,event_id').eq('kind', 'post').not('event_id', 'is', null)).catch(() => []);
+  /* Line of authority: the Mayor orders the event and names who scans (v35). Before v35 is installed the old rule applies. */
+  const ordersOn = events.some(e => 'ordered_at' in e), waiting = e => ordersOn && !e.ordered_at && !e.legacy_open;
+  const assigned = e => !ordersOn ? scanRoles : e.ordered_at ? (e.scanner_ids || []).includes(uid) : !!(e.legacy_open && scanRoles);
   const std = id => standards.find(s => s.id === id);
+  const chain = e => { const ps = posts.filter(p => p.event_id === e.id), fl = p => p.flags || {}, ann = ps.filter(p => fl(p).type === 'announcement'), doc = ps.filter(p => ['documentation', 'media'].includes(fl(p).type));
+    const c = cnt(e.id), who = [...new Set(scans.filter(x => x.event_id === e.id && x.scanned_by_name).map(x => x.scanned_by_name))], on = x => x ? fmtDateTime(x) : '';
+    const sent = ann.find(p => fl(p).notice), okd = ann.find(p => p.status === 'approved'), rev = ann.find(p => p.status === 'review');
+    return [
+      [e.ordered_at ? 'ok' : waiting(e) ? 'warn' : '', 'Ordered by the Mayor', e.ordered_at ? `${e.ordered_by_name || 'Mayor'} · ${on(e.ordered_at)}` : waiting(e) ? 'Waiting for the Mayor’s order' : 'Set before orders were required'],
+      [(e.scanner_names || []).length ? 'ok' : '', 'Scanners assigned', (e.scanner_names || []).join(', ') || (e.legacy_open ? 'Any scanning officer' : '—')],
+      [sent ? 'ok' : okd || rev ? 'warn' : '', 'Announced by the PIO', sent ? 'Sent as a notice' : okd ? `Approved by ${fl(okd).approved_by || 'the Mayor'}, ready to send` : rev ? 'Waiting for the Mayor’s approval' : ann.length ? 'Draft' : 'Not drafted yet'],
+      [c.in.size ? 'ok' : '', 'Attendance scanned', `In ${c.in.size} of ${act.length}${who.length ? ' · by ' + who.join(', ') : ''}`],
+      [e.finalized_at ? 'ok' : '', 'Compiled by the Secretary', e.finalized_at ? `${e.compiled_by_name || 'Secretary'} · ${on(e.finalized_at)}` : 'Not yet'],
+      [e.report_sent_at ? 'ok' : '', 'Fines report sent', e.report_sent_at ? `${e.report_by_name || 'Secretary'} · ${on(e.report_sent_at)}` : 'Not yet'],
+      [e.notified_at ? 'ok' : '', 'Students notified', e.notified_at ? `${e.notified_by_name || 'PIO'} · ${on(e.notified_at)}` : 'Not yet'],
+      [doc.some(p => ['approved', 'published'].includes(p.status)) ? 'ok' : doc.length ? 'warn' : '', 'Documented by the PIO', doc.some(p => ['approved', 'published'].includes(p.status)) ? 'Photos and media filed' : doc.length ? 'In draft' : 'Not yet'],
+    ]; };
   const cnt = id => { const o = { in: new Set(), out: new Set() }; scans.filter(s => s.event_id === id).forEach(s => o[s.kind].add(s.member_id)); return o; };
   const finesOf = id => viol.filter(v => v.event_id === id && !['rejected', 'awaiting_approval'].includes(v.status) && v.excuse_status !== 'accepted');
   const stage = e => e.notified_at ? ['Students notified', 'ok'] : e.report_sent_at ? ['Report sent', 'warn'] : e.finalized_at ? ['Compiled', 'warn'] : e.status === 'open' ? ['Open', 'ok'] : ['Closed', ''];
@@ -49,16 +66,19 @@ async function draw(host, ctx, members, standards, redraw) {
         <p class="muted" style="margin:4px 0">${fl.length} student${fl.length === 1 ? '' : 's'}, ${peso(tot)} in fines. ${collects ? 'Please collect them.' : 'Treasurer and Mayor collect.'}${e.report_note ? `<br>“${esc(e.report_note)}”` : ''}</p>
         <details${collects ? ' open' : ''}><summary>Show the list</summary>${fl.map(v => { const f = +std(v.standard_id)?.fine || 0; return `<div class="fr"><span>${esc(mname(v.member_id))}</span><b>${paid.has(v.id) ? 'paid' : peso(f)}</b>${collects && f && !paid.has(v.id) ? `<button class="btn gold sm" data-co="${v.id}">Collect</button>` : ''}</div>`; }).join('')}</details></div>` : '';
     return `<div class="row stk vw"><div class="m"><b>${esc(e.title)} <span class="tag ${cls}">${lbl}</span></b>
-      <small>${KINDS[e.kind] || e.kind} · ${fmtDate(e.event_date)}${e.created_by_name ? ` · set by ${esc(e.created_by_name)}` : ''}<br>In ${c.in.size} of ${act.length}${e.needs_out ? ` · Out ${c.out.size} of ${act.length}` : ''}</small>${report}</div>
-      <div class="acts">${open && canScan ? `<button class="btn gold sm" data-sc="${e.id}">📷 Scan attendance</button>` : ''}
+      <small>${KINDS[e.kind] || e.kind} · ${fmtDate(e.event_date)}${e.created_by_name ? ` · set by ${esc(e.created_by_name)}` : ''}<br>In ${c.in.size} of ${act.length}${e.needs_out ? ` · Out ${c.out.size} of ${act.length}` : ''}${waiting(e) ? '<br><b>Waiting for the Mayor’s order. Nobody can scan yet.</b>' : (e.scanner_names || []).length ? `<br>Scanners: ${esc(e.scanner_names.join(', '))}` : ''}</small>${report}
+      <details style="margin-top:8px"><summary>Chain of command</summary>${chain(e).map(([k, l, d]) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid var(--line)"><span>${k === 'ok' ? '✓' : k === 'warn' ? '…' : '○'} ${l}</span><small class="muted" style="text-align:right">${esc(d)}</small></div>`).join('')}</details></div>
+      <div class="acts">${open && assigned(e) ? `<button class="btn gold sm" data-sc="${e.id}">📷 Scan attendance</button>` : ''}
+      ${isMayor && open && ordersOn ? `<button class="btn ${e.ordered_at ? 'ghost' : 'gold'} sm" data-od="${e.id}">${e.ordered_at ? 'Change scanners' : 'Order scanners'}</button>` : ''}
       ${canCompile && !e.finalized_at ? `<button class="btn ${open ? 'ghost' : 'gold'} sm" data-rv="${e.id}">Compile attendance</button>` : ''}
       ${canCompile && e.finalized_at && !e.report_sent_at ? `<button class="btn gold sm" data-sr="${e.id}">Send fines report</button>` : ''}
       ${canNotify && e.report_sent_at && !e.notified_at ? `<button class="btn gold sm" data-nt="${e.id}">Send to students</button>` : ''}
       ${manage ? `<button class="btn ghost sm" data-cl="${e.id}">${open ? 'Close' : 'Reopen'}</button><button class="btn ghost sm" data-dl="${e.id}">Delete</button>` : ''}</div></div>`; };
-  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President or Vice Mayor sets the event. Marshals scan, the Secretary compiles, the PIO tells the students.</p>'}
+  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President sets the event and names the officers who scan. The Secretary compiles, the PIO tells the students.</p>'}
     <div class="card">${events.map(card).join('') || '<p class="empty">No events yet.</p>'}</div>`;
   const ev = id => events.find(e => e.id === id);
   host.querySelector('#ne')?.addEventListener('click', () => newEvent());
+  host.querySelectorAll('[data-od]').forEach(b => b.onclick = () => orderEvent(ev(b.dataset.od)));
   host.querySelectorAll('[data-sc]').forEach(b => b.onclick = () => scanEvent(ev(b.dataset.sc)));
   host.querySelectorAll('[data-rv]').forEach(b => b.onclick = () => compile(ev(b.dataset.rv)));
   host.querySelectorAll('[data-sr]').forEach(b => b.onclick = () => sendReport(ev(b.dataset.sr)));
@@ -87,7 +107,25 @@ async function draw(host, ctx, members, standards, redraw) {
       k.onchange = sync; sync(); m.querySelector('#cx').onclick = close;
       f.onsubmit = async e => { e.preventDefault(); const x = f.elements;
         try { await db(sb.from('v2_events').insert({ id: uuid(), title: x.t.value.trim(), kind: x.k.value, event_date: x.d.value, needs_out: x.k.value === 'event' && x.o.checked, standard_id: defStd(x.k.value, standards) || null }));
-          toast('Event is open. Officers can scan now.'); close(); redraw(); } catch (er) { m.querySelector('#er').textContent = needV2(er); } };
+          const row = await db(sb.from('v2_events').select('*').eq('title', x.t.value.trim()).eq('event_date', x.d.value).order('created_at', { ascending: false }).limit(1)).then(r => r[0], () => null);
+          close(); redraw();
+          if (row && 'ordered_at' in row) { if (isMayor) { toast('Event created. Now name the officers who scan.'); orderEvent(row); } else toast('Event created. It waits for the Mayor’s order before anyone can scan.'); } else toast('Event is open. Officers can scan now.'); } catch (er) { m.querySelector('#er').textContent = needV2(er); } };
+    });
+  }
+
+  /* The Mayor's order: who is assigned to scan this event */
+  async function orderEvent(e) {
+    if (!e) return;
+    const off = await db(sb.from('v2_profiles').select('user_id,full_name,role').in('role', ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'secretary', 'marshall', 'sails']).order('full_name')).catch(() => []), cur = new Set(e.scanner_ids || []);
+    modal(`<h3>Order: ${esc(e.title)}</h3><p class="muted" style="margin:0 0 8px">Only the officers you tick can scan this event. Nobody else can, not even you, unless you tick yourself.</p>
+      <div class="card" style="max-height:40vh;overflow:auto;padding:6px 10px">${off.map(o => `<label class="ck"><input type="checkbox" data-u="${o.user_id}"${cur.has(o.user_id) ? ' checked' : ''}><span>${esc(o.full_name)} · ${esc(ROLE_LABEL[o.role] || o.role)}</span></label>`).join('') || '<p class="empty">No officers found.</p>'}</div>
+      <label>Note for the officers (optional)</label><input id="on" maxlength="300" value="${esc(e.order_note || '')}" placeholder="Gate 1, 6:30 AM, bring your phones">
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="os" style="flex:1">${e.ordered_at ? 'Update the order' : 'Issue the order'}</button><button class="btn ghost" id="oc">Later</button></div><div class="err" id="er"></div>`, (m, close) => {
+      m.querySelector('#oc').onclick = close;
+      m.querySelector('#os').onclick = async () => { const ids = [...m.querySelectorAll('[data-u]:checked')].map(i => i.dataset.u);
+        if (!ids.length) { m.querySelector('#er').textContent = 'Tick at least one officer to scan.'; return; }
+        try { await db(sb.rpc('v2_event_order', { p_event: e.id, p_scanners: ids, p_note: m.querySelector('#on').value.trim() || null })); close(); toast('Order issued. The assigned officers can scan now.'); redraw(); }
+        catch (x) { m.querySelector('#er').textContent = /function|schema cache/i.test(x.message || '') ? 'Run the v35 SQL in Supabase first (supabase/v35_event_orders.sql).' : x.message; } };
     });
   }
 

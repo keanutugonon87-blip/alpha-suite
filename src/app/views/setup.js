@@ -19,6 +19,7 @@ export const STEPS = [
   { v: 'v32', file: 'v32_auditor_independence.sql', does: 'Auditor no longer approves spending', check: async () => null },
   { v: 'v33', file: 'v33_records_access.sql', does: 'Members request records from the Secretary (Archive tab)', check: table('v2_record_requests') },
   { v: 'v34', file: 'v34_pio_checks.sql', does: 'PIO posts need privacy, branding and communication checks before approval', check: null },
+  { v: 'v35', file: 'v35_event_orders.sql', does: 'The Mayor orders each event and approves official announcements', check: table('v2_events', 'ordered_at') },
   { v: 'v31', file: 'v31_treasurer_controls.sql', does: 'Treasurer: approval needed to disburse, acknowledgments for funds received', check: table('v2_entries', 'approval_ref') },
 ];
 export async function checkSetup() { return Promise.all(STEPS.map(async s => { let ok = null; if (s.check) { try { ok = await s.check(); } catch { ok = null; } } return { ...s, ok }; })); }

@@ -9,10 +9,10 @@ export async function deskItems(ctx) {
   const role = ctx.profile.role, can = ctx.can, me = role, out = [], add = (icon, text, sub, tab) => out.push([icon, text, sub, tab]);
   const isVp = ['vp_internal', 'vp_external'].includes(role), mayor = can('mayor');
   const want = (cond, query) => (cond ? q(query) : Promise.resolve([]));
-  const [fbr, liq, recs, meet, par, act, deleg, evs, finds, rreq] = await Promise.all([
+  const [fbr, liq, recs, meet, par, act, deleg, evs, finds, rreq, evo] = await Promise.all([
     want(can('mayor', 'treasurer', 'secretary'), sb.from('v2_budget_requests').select('id,status')),
     want(can('mayor', 'treasurer', 'secretary', 'auditor'), sb.from('v2_liquidations').select('id,status')),
-    want(can('mayor', 'vice_mayor', 'secretary', 'auditor', 'pio'), sb.from('v2_office_records').select('id,kind,flow,classification,status,on_date').limit(500)),
+    want(can('mayor', 'vice_mayor', 'secretary', 'auditor', 'pio'), sb.from('v2_office_records').select('id,kind,flow,classification,status,on_date,flags').limit(500)),
     want(can('mayor', 'vice_mayor'), sb.from('v2_vp_meetings').select('id,status')),
     want(can('mayor', 'vice_mayor'), sb.from('v2_vp_partners').select('id,status')),
     want(can('mayor', 'vice_mayor'), sb.from('v2_vp_activities').select('id,status')),
@@ -20,6 +20,7 @@ export async function deskItems(ctx) {
     want(can('secretary', 'pio'), sb.from('v2_events').select('id,status,report_sent_at,notified_at')),
     want(can('auditor'), sb.from('v2_office_records').select('id,status').eq('kind', 'finding')),
     want(can('secretary'), sb.from('v2_record_requests').select('id,status')),   // empty until v33 is run
+    want(can('mayor'), sb.from('v2_events').select('id,status,ordered_at,legacy_open')),   // empty until v35 is run
   ]);
   const SEC = r => ['minutes', 'resolution', 'letter_in', 'letter_out'].includes(r.kind);
   if (role === 'treasurer') {
@@ -27,6 +28,8 @@ export async function deskItems(ctx) {
     const l = n(fbr, r => ['approved', 'filed'].includes(r.status)) && n(liq, r => ['draft', 'returned'].includes(r.status)); if (l) add('📑', `${l} liquidation report${s(l)} to finish or fix`, 'Budget', 'requests');
   }
   if (mayor) {
+    const an = n(recs, r => r.kind === 'post' && (r.flags || {}).type === 'announcement' && r.status === 'review'); if (an) add('📣', `${an} announcement${s(an)} ${w(an)} for your approval`, 'PIO Approvals', 'office');
+    const eo = n(evo, e => e.status === 'open' && !e.ordered_at && !e.legacy_open); if (eo) add('🧭', `${eo} event${s(eo)} ${w(eo)} for your order (name the officers who scan)`, 'Attendance', 'attendance');
     const c = n(fbr, r => r.status === 'submitted'); if (c) add('📝', `${c} budget request${s(c)} ${w(c)} for your approval`, 'Budget', 'requests');
     const l = n(liq, r => r.status === 'submitted'); if (l) add('📑', `${l} liquidation report${s(l)} ${w(l)} for your approval`, 'Budget', 'requests');
   }

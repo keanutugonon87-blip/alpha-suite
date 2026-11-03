@@ -1,12 +1,12 @@
 import { sb, db, watch, esc, toast, modal, confirmDialog, fmtDate } from '../core.js';
 
 export async function mountNotices(el, ctx) {
-  const can = ctx.can('mayor', 'vice_mayor', 'secretary', 'pio');
+  const can = ctx.can('mayor', 'vice_mayor', 'secretary', 'pio'), canNew = ctx.can('mayor');   // only the President posts a notice directly; the PIO sends announcements the President approved
   async function draw() {
     const [rows, set] = await Promise.all([db(sb.from('v2_announcements').select('*').order('created_at', { ascending: false })), db(sb.from('v2_settings').select('*'))]);
     const subs = await sb.from('v2_push_subs').select('endpoint', { count: 'exact', head: true }).then(r => r, () => null);
     const names = (set.find(s => s.key === 'public_names') || {}).value || 'full';
-    el.innerHTML = `<div class="bar"><h2 style="flex:1;font-size:1.2rem">Notices</h2>${can ? '<button class="btn gold" id="add">+ New notice</button>' : ''}</div>
+    el.innerHTML = `<div class="bar"><h2 style="flex:1;font-size:1.2rem">Notices</h2>${canNew ? '<button class="btn gold" id="add">+ New notice</button>' : ''}</div>${!canNew && can ? '<p class="muted" style="margin:0 0 10px">Official announcements are drafted in the PIO Desk, approved by the Mayor, then sent from there as notices.</p>' : ''}
       <p class="muted" style="margin:0 0 10px">Shown at the top of the public page until they expire. Each new notice also sends a phone alert to everyone who turned alerts on${subs && typeof subs.count === 'number' ? ` (${subs.count} device${subs.count === 1 ? '' : 's'} now)` : ''}.</p>
       <div class="card">${rows.map(a => `<div class="row"><div class="m"><b>${a.pinned ? '📌 ' : ''}${esc(a.title)}</b><small>${esc(a.body || '')}${a.expires_on ? ` · until ${fmtDate(a.expires_on)}` : ''}</small></div>${can ? `<div class="acts"><button class="btn ghost sm" data-d="${a.id}">Delete</button></div>` : ''}</div>`).join('') || '<p class="empty">No notices yet.</p>'}</div>
       <h3 style="margin:18px 2px 8px">Privacy</h3>
