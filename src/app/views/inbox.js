@@ -9,7 +9,7 @@ export async function deskItems(ctx) {
   const role = ctx.profile.role, can = ctx.can, me = role, out = [], add = (icon, text, sub, tab) => out.push([icon, text, sub, tab]);
   const isVp = ['vp_internal', 'vp_external'].includes(role), mayor = can('mayor');
   const want = (cond, query) => (cond ? q(query) : Promise.resolve([]));
-  const [fbr, liq, recs, meet, par, act, deleg, evs, finds] = await Promise.all([
+  const [fbr, liq, recs, meet, par, act, deleg, evs, finds, rreq] = await Promise.all([
     want(can('mayor', 'treasurer', 'secretary'), sb.from('v2_budget_requests').select('id,status')),
     want(can('mayor', 'treasurer', 'secretary', 'auditor'), sb.from('v2_liquidations').select('id,status')),
     want(can('mayor', 'vice_mayor', 'secretary', 'auditor', 'pio'), sb.from('v2_office_records').select('id,kind,flow,classification,status,on_date').limit(500)),
@@ -19,6 +19,7 @@ export async function deskItems(ctx) {
     want(can('mayor', 'vice_mayor'), sb.from('v2_vp_delegations').select('id,status,to_role')),
     want(can('secretary', 'pio'), sb.from('v2_events').select('id,status,report_sent_at,notified_at')),
     want(can('auditor'), sb.from('v2_office_records').select('id,status').eq('kind', 'finding')),
+    want(can('secretary'), sb.from('v2_record_requests').select('id,status')),   // empty until v33 is run
   ]);
   const SEC = r => ['minutes', 'resolution', 'letter_in', 'letter_out'].includes(r.kind);
   if (role === 'treasurer') {
@@ -41,6 +42,7 @@ export async function deskItems(ctx) {
   }
   if (role === 'secretary') {
     const f = n(fbr, r => r.status === 'approved') + n(liq, r => r.status === 'audited'); if (f) add('🗄️', `${f} approved request${s(f)} or report${s(f)} to file`, 'Budget', 'requests');
+    const rq = n(rreq, r => r.status === 'open'); if (rq) add('📨', `${rq} record request${s(rq)} from members to answer`, 'Secretary Desk › Member requests', 'office');
     const rt = n(recs, r => SEC(r) && r.flow === 'returned'); if (rt) add('↩️', `${rt} record${s(rt)} returned for changes`, 'Secretary Desk', 'office');
     const dr = n(recs, r => SEC(r) && r.flow === 'draft'); if (dr) add('✍️', `${dr} record${s(dr)} not sent for approval yet`, 'Secretary Desk', 'office');
     const ce = n(evs, e => e.status === 'closed' && !e.report_sent_at); if (ce) add('📋', `${ce} closed event${s(ce)} not compiled yet`, 'Attendance', 'attendance');

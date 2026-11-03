@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, toast, modal, skeleton, confirmDialog, fmtDate, todayISO, printHTML, letterhead, peso } from '../core.js';
+import { sb, db, watch, esc, toast, modal, skeleton, confirmDialog, fmtDate, todayISO, printHTML, letterhead, peso, askText } from '../core.js';
 import { ymManila } from '../money.js';
 
 /* Office desks for the Secretary (Second Mate), Auditor (Third Mate), PIO (OIC) and Marshals (Bosun).
@@ -28,7 +28,7 @@ const KIND = {
 };
 const OFFICES = {
   secretary: { title: 'Secretary (Second Mate)', blurb: 'Maintain minutes, attendance records, resolutions, notices, membership records and official correspondence; safeguard records; give members reasonable access to non-confidential documents.',
-    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']]], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
+    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
   auditor: { title: 'Auditor (Third Mate)', blurb: 'Independently examine financial records, verify receipts and disbursements, report discrepancies to the Executive Board and adviser, and present findings to the General Assembly. The Auditor does not approve or carry out the transactions being audited.',
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
@@ -56,6 +56,7 @@ export async function mountOffice(el, ctx) {
     const events = await ANY(sb.from('v2_events').select('id,title,event_date,status,report_sent_at,notified_at').order('event_date', { ascending: false }).limit(60));
     x.events = events;
     if (role === 'secretary') {
+      x.rreq = await ANY(sb.from('v2_record_requests').select('*').order('created_at', { ascending: false }).limit(200));   // empty until v33 is run
       [x.fbr, x.liq, x.docs, x.meet] = await Promise.all([ANY(sb.from('v2_budget_requests').select('id,req_no,title,status').eq('status', 'approved')), ANY(sb.from('v2_liquidations').select('id,request_id,status').eq('status', 'audited')),
         ANY(sb.from('v2_documents').select('id,title,status,due_on').neq('status', 'submitted')), ANY(sb.from('v2_vp_meetings').select('id,title,held_on,status').in('status', ['approved', 'done']))]);
     }
@@ -81,6 +82,7 @@ export async function mountOffice(el, ctx) {
     const c = (a, label, p) => { if (a) add(`${a} ${label}`, p); };
     if (role === 'secretary') {
       c(X.events.filter(e => e.status === 'closed' && !e.report_sent_at).length, 'closed event(s) where the absences are not compiled and sent yet', 'go:attendance');
+      c((X.rreq || []).filter(r => r.status === 'open').length, 'record request(s) from members waiting for an answer', 'requests'); c((X.rreq || []).filter(r => r.status === 'open' && Date.now() - new Date(r.created_at) > 7 * dayMs).length, 'of them waiting more than 7 days', 'requests');
       c((X.fbr || []).length, 'approved budget request(s) to file', 'go:requests'); c((X.liq || []).length, 'audited liquidation report(s) to file', 'go:requests');
       c((X.docs || []).filter(d => d.due_on && d.due_on <= new Date(Date.now() + 3 * dayMs).toISOString().slice(0, 10)).length, 'document(s) due within 3 days or late', 'go:docs');
       const minuted = new Set(of('minutes').map(r => r.on_date)); c((X.meet || []).filter(m => m.held_on < today && m.status !== 'cancelled' && !minuted.has(m.held_on)).length, 'meeting(s) held with no minutes recorded', 'minutes');
@@ -154,15 +156,32 @@ export async function mountOffice(el, ctx) {
       <p style="margin-top:36px">______________________________<br>${esc(ctx.profile.full_name)}, Auditor (Third Mate)</p>`;
   }
 
+  /* Article XVI, Section 2: members ask for non-confidential records and the Secretary answers */
+  function reqPane() {
+    const list = X.rreq || [], late = r => r.status === 'open' && Date.now() - new Date(r.created_at) > 7 * dayMs;
+    if (!list.length) return '<p class="empty">No requests from members yet. They ask from the Archive tab on their own screen. If you expected some, run <b>v33_records_access.sql</b> in Supabase first.</p>';
+    return `<p class="muted" style="margin:0 2px 8px">Requests shall be answered within a reasonable time. A request open for more than 7 days is marked late. Only non-confidential records can be granted.</p>
+      <div class="card">${list.map(r => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(r.title)}</b><small>${esc(r.requester_name)} · ${fmtDate(r.created_at)}</small></div><span class="tag ${r.status === 'open' ? (late(r) ? 'bad' : 'warn') : r.status === 'granted' ? 'ok' : 'bad'}">${r.status === 'open' ? (late(r) ? 'late' : 'open') : r.status}</span></div>
+        ${r.note ? `<p style="margin:6px 0 0">${esc(r.note)}</p>` : ''}${r.answer_note ? `<p class="muted" style="margin:6px 0 0">Answer: ${esc(r.answer_note)}</p>` : ''}
+        ${r.status === 'open' ? `<div class="acts" style="margin-top:8px"><button class="btn gold sm" data-ra="${r.id}" data-ok="1">Grant</button><button class="btn ghost sm" data-ra="${r.id}" data-ok="0">Decline</button></div>` : ''}</div>`).join('')}</div>`;
+  }
+  async function answer(id, ok) {
+    const note = await askText(ok ? 'Grant the request' : 'Decline the request', ok ? 'Tell the member where to get the record (optional)' : 'Say why it is declined', { ok: ok ? 'Grant' : 'Decline' });
+    if (note === null) return;
+    if (!ok && !String(note).trim()) return toast('Say why the request is declined', true);
+    try { await db(sb.rpc('v2_record_answer', { p_id: id, p_ok: ok, p_note: String(note).trim() || null })); toast(ok ? 'Granted' : 'Declined'); await load(); } catch (e) { toast(e.message, true); }
+  }
+
   function draw() {
     if (missing && !['over', 'report'].includes(pane)) { el.innerHTML = '<div class="card pad"><b>One more step.</b><p class="muted">Run <b>v29_office_records.sql</b> in the Supabase SQL Editor, then reload this screen.</p></div>'; return; }
     const P = O.panes.find(p => p[0] === pane) || O.panes[0];
     el.innerHTML = `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
       <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
-      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2])}</div>`;
+      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
     if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
+    if (pane === 'requests') { el.querySelectorAll('[data-ra]').forEach(b => b.onclick = () => answer(b.dataset.ra, b.dataset.ok === '1')); return; }
     if (pane === 'report') { el.querySelector('#pr').onclick = () => printHTML('Audit report', reportHTML()); return; }
     el.querySelector('#add')?.addEventListener('click', () => form(P[2], null));
     el.querySelectorAll('[data-i]').forEach(r => r.onclick = () => view(recs.find(x => x.id === r.dataset.i)));
