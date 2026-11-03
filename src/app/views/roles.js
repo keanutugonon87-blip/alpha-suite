@@ -24,6 +24,7 @@ const SCREENS = [
   ['Post a non-confidential file to the members (PIO Desk)', ['pio']],
   ['Ask the Secretary for a record (Archive tab on the student screen)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
   ['Answer members’ record requests (Member requests)', ['secretary']],
+  ['Write announcements, publications and photo or media records (PIO Desk), with the privacy, branding and communication checks', ['pio']],
   ['Read posted documents (Documents tab on the student screen)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
   ['Read budget requests (Budget)', ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio']],
   ['Issue acknowledgments for funds received; give the approval reference for a disbursement', ['treasurer']],
