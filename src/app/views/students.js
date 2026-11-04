@@ -1,9 +1,9 @@
 import { sb, db, watch, esc, toast, modal, skeleton, uuid, confirmDialog, peso } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
-import { showMemberCards } from '../qr.js';
+import { showMemberCards, makeQRCodes } from '../qr.js';
 
 export async function mountStudents(el, ctx) {
-  const canEdit = ctx.can('mayor', 'vice_mayor', 'secretary'), canQR = ctx.can('mayor', 'treasurer');
+  const canEdit = ctx.can('mayor', 'vice_mayor', 'secretary'), canQR = ctx.can('mayor', 'treasurer'), canMake = ctx.can('mayor', 'treasurer', 'vice_mayor', 'secretary');
   const canCollect = ctx.can('mayor', 'treasurer');
   let q = '', rows = [], pins = new Map(), owes = new Map();
   el.innerHTML = skeleton(6);
@@ -12,12 +12,13 @@ export async function mountStudents(el, ctx) {
     const shown = rows.filter(r => !q || (r.full_name + r.student_no).toLowerCase().includes(q.toLowerCase()));
     const pend = rows.filter(r => r.status === 'pending' || /^PENDING/i.test(r.student_no)).length;
     el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>Active students</small><b>${rows.filter(r => r.status === 'active').length}</b></div><div class="stat"><small>Missing Student ID</small><b>${pend}</b></div><div class="stat"><small>PIN set</small><b>${rows.filter(r => r.status === 'active' && pins.has(r.id)).length}</b></div></div>
-      <div class="bar"><input id="q" class="grow" placeholder="Search name or ID…" value="${esc(q)}">${canEdit ? '<button class="btn gold" id="add">+ Add</button>' : ''}${canQR ? '<button class="btn" id="cards">QR cards</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
+      <div class="bar"><input id="q" class="grow" placeholder="Search name or ID…" value="${esc(q)}">${canEdit ? '<button class="btn gold" id="add">+ Add</button>' : ''}${canQR ? '<button class="btn" id="cards">QR cards</button>' : ''}${canMake ? '<button class="btn" id="mk">Make QR codes</button>' : ''}<button class="btn ghost" id="csv">Excel</button></div>
       <div class="card">${shown.map(r => `<div class="row"><div class="m"><b>${esc(r.full_name)} ${r.status !== 'active' ? `<span class="tag warn">${r.status}</span>` : ''}</b>
         <small>${/^PENDING/i.test(r.student_no) ? '<span style="color:var(--bad)">ID to follow up</span>' : esc(r.student_no)}${r.section ? ' · ' + esc(r.section) : ''}${pins.has(r.id) ? ` · <span class="tag ${pins.get(r.id).locked ? 'bad' : 'ok'}" title="Signs in with Student ID and PIN">${pins.get(r.id).locked ? 'PIN locked' : 'PIN ✓'}</span>` : ''}</small></div>
         <div style="display:flex;gap:4px">${owes.has(r.id) ? `<span class="tag bad" title="Total still owed">owes ${peso(owes.get(r.id).total)}</span>` : ''}${canCollect && owes.has(r.id) ? `<button class="btn gold sm" data-col="${r.id}">Collect</button>` : ''}${canEdit ? `<button class="btn ghost sm" data-e="${r.id}">Edit</button>` : ''}</div></div>`).join('') || '<p class="empty">No students found.</p>'}</div>`;
     const qi = el.querySelector('#q'); qi.oninput = () => { q = qi.value; const p = qi.selectionStart; paint(); const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(p, p); };
     el.querySelector('#add')?.addEventListener('click', () => form(null));
+    el.querySelector('#mk')?.addEventListener('click', () => makeQRCodes({ guard: !canQR }));
     el.querySelector('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
     el.querySelector('#csv').onclick = async () => {
       try { toast('Preparing Excel…'); await exportXLSX({ filename: 'Alpha-Student-Roster.xlsx', by: ctx.profile.full_name, sheets: [
