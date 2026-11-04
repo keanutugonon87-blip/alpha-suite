@@ -19,6 +19,7 @@ export const STEPS = [
   { v: 'v32', file: 'v32_auditor_independence.sql', does: 'Auditor no longer approves spending', check: async () => null },
   { v: 'v33', file: 'v33_records_access.sql', does: 'Members request records from the Secretary (Archive tab)', check: table('v2_record_requests') },
   { v: 'v34', file: 'v34_pio_checks.sql', does: 'PIO posts need privacy, branding and communication checks before approval', check: null },
+  { v: 'v37', file: 'v37_units_seats.sql', does: 'Department blueprint, phase 1: SAILS and class sections as units, seat types and seat holders (adds only; nothing changes on screen)', check: table('v2_units') },
   { v: 'v36', file: 'v36_directives.sql', does: 'Directives: the Mayor assigns tasks to officers, with instant phone alerts', check: table('v2_directives') },
   { v: 'v35', file: 'v35_event_orders.sql', does: 'The Mayor orders each event and approves official announcements', check: table('v2_events', 'ordered_at') },
   { v: 'v31', file: 'v31_treasurer_controls.sql', does: 'Treasurer: approval needed to disburse, acknowledgments for funds received', check: table('v2_entries', 'approval_ref') },
