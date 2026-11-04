@@ -9,7 +9,7 @@ export async function deskItems(ctx) {
   const role = ctx.profile.role, can = ctx.can, me = role, out = [], add = (icon, text, sub, tab) => out.push([icon, text, sub, tab]);
   const isVp = ['vp_internal', 'vp_external'].includes(role), mayor = can('mayor');
   const want = (cond, query) => (cond ? q(query) : Promise.resolve([]));
-  const [fbr, liq, recs, meet, par, act, deleg, evs, finds, rreq, evo] = await Promise.all([
+  const [fbr, liq, recs, meet, par, act, deleg, evs, finds, rreq, evo, dirs] = await Promise.all([
     want(can('mayor', 'treasurer', 'secretary'), sb.from('v2_budget_requests').select('id,status')),
     want(can('mayor', 'treasurer', 'secretary', 'auditor'), sb.from('v2_liquidations').select('id,status')),
     want(can('mayor', 'vice_mayor', 'secretary', 'auditor', 'pio'), sb.from('v2_office_records').select('id,kind,flow,classification,status,on_date,flags').limit(500)),
@@ -21,8 +21,13 @@ export async function deskItems(ctx) {
     want(can('auditor'), sb.from('v2_office_records').select('id,status').eq('kind', 'finding')),
     want(can('secretary'), sb.from('v2_record_requests').select('id,status')),   // empty until v33 is run
     want(can('mayor'), sb.from('v2_events').select('id,status,ordered_at,legacy_open')),   // empty until v35 is run
+    q(sb.from('v2_directives').select('id,status,assignee_id,due_on')),   // empty until v36 is run
   ]);
   const SEC = r => ['minutes', 'resolution', 'letter_in', 'letter_out'].includes(r.kind);
+  const uid = ctx.profile.user_id, today = todayISO();
+  const mine = dirs.filter(d => d.assignee_id === uid && ['sent', 'received', 'working'].includes(d.status));
+  if (mine.length) { const un = n(mine, d => d.status === 'sent'), od = n(mine, d => d.due_on && d.due_on < today); add('🧭', `${mine.length} directive${s(mine.length)} from the Mayor${un ? ` (${un} unopened)` : ''}${od ? `, ${od} overdue` : ''}`, 'Directives', 'directives'); }
+  if (mayor) { const dn = n(dirs, d => d.status === 'done'), rr = n(dirs, d => d.status === 'revoke_asked'); if (dn) add('✅', `${dn} directive${s(dn)} ${w(dn)} for your confirmation`, 'Directives', 'directives'); if (rr) add('🙋', `${rr} officer${s(rr)} asking to be released from a directive`, 'Directives', 'directives'); }
   if (role === 'treasurer') {
     const c = n(fbr, r => ['draft', 'returned'].includes(r.status)); if (c) add('📝', `${c} budget request${s(c)} to finish or fix`, 'Budget', 'requests');
     const l = n(fbr, r => ['approved', 'filed'].includes(r.status)) && n(liq, r => ['draft', 'returned'].includes(r.status)); if (l) add('📑', `${l} liquidation report${s(l)} to finish or fix`, 'Budget', 'requests');
