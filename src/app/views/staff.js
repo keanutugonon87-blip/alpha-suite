@@ -23,6 +23,7 @@ const ICON = {
   roles: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/>',
   system: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
 };
+ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
   { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
@@ -109,21 +110,29 @@ export async function renderStaff(root, tabId) {
   if (p.role === 'pending') return pendingScreen(root, p);
 
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor'));
-  const ctx = { profile: p, can: (...r) => has(r) };
+  const ctx = { profile: p, can: (...r) => has(r), section: null };
   const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk', mayor: 'President Desk' };
   let tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
   // The President has one desk: Directives, VP Desk and Approvals sit inside it. Old links to #/staff/directives or #/staff/vp still land there.
   if (p.role === 'mayor') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp') { ctx.section = tabId; tabId = 'office'; } }
   if (p.role === 'mayor') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'); tabs = [...rest.slice(0, 1), o, ...rest.slice(1)]; }   // Today, then the President Desk
+  // Related screens share one menu entry (Money, Class, Admin) with buttons to switch between them. Old links to a single screen still land in the right place.
+  const HUBS = [['money', 'Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['class', 'Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['admin', 'Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  for (const [hid, hlabel, ids] of HUBS) {
+    const members = tabs.filter(t => ids.includes(t.id)); if (members.length < 2) continue;
+    if (members.some(m => m.id === tabId)) { ctx.section = tabId; tabId = hid; }
+    const at = tabs.indexOf(members[0]);
+    tabs = tabs.filter(t => !members.includes(t)); tabs.splice(Math.min(at, tabs.length), 0, { id: hid, label: hlabel, roles: [], load: () => { members.forEach(t => t.load().catch(() => {})); return import('./hub.js').then(m => (e2, c2) => m.mountHub(e2, c2, hid, members.map(t => [t.id, tabLabel(t), t.load]))); } });
+  }
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
   // On a phone the bar holds 4 sections and a "More" button; on a wide screen the side menu lists them all.
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
   const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
   // The side menu (wide screens) is grouped, each group folds away, and the whole menu can shrink to icons. Both choices are remembered.
-  const GROUPS = [['Overview', ['home', 'directives', 'vp', 'office']], ['Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  const GROUPS = [['Overview', ['home', 'directives', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   const NK = 'alpha-nav-collapsed', GK = 'alpha-nav-groups', rd = k => { try { return localStorage.getItem(k); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   let navCollapsed = rd(NK) === '1', shut = new Set((() => { try { return JSON.parse(rd(GK) || '[]'); } catch { return []; } })());
-  const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' ? '<i class="badge" id="bdg" hidden></i>' : t0.id === 'home' ? '<i class="badge" id="bdh" hidden></i>' : ''}</button>`;
+  const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' || t0.id === 'money' ? '<i class="badge" id="bdg" hidden></i>' : t0.id === 'home' ? '<i class="badge" id="bdh" hidden></i>' : ''}</button>`;
   const grouped = new Set(GROUPS.flatMap(g => g[1])), rest = tabs.filter(t0 => !grouped.has(t0.id));
   const navHtml = GROUPS.concat(rest.length ? [['More', rest.map(t0 => t0.id)]] : []).map(([name, ids]) => { const items = tabs.filter(t0 => ids.includes(t0.id)); if (!items.length) return '';
     const open = !shut.has(name) || items.some(t0 => t0.id === cur.id);
