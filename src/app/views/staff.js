@@ -110,7 +110,7 @@ export async function renderStaff(root, tabId) {
 
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor'));
   const ctx = { profile: p, can: (...r) => has(r) };
-  const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk', mayor: 'PIO Approvals' };
+  const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk', mayor: 'President Desk' };
   let tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
   if (p.role === 'mayor') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'), i = rest.findIndex(t => t.id === 'desk'); tabs = [...rest.slice(0, i + 1), o, ...rest.slice(i + 1)]; }   // the Mayor's own desks stay first on the phone bar
   const cur = tabs.find(t => t.id === tabId) || tabs[0];

@@ -38,8 +38,8 @@ const OFFICES = {
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
     panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['pubs', 'Publications', ['post'], ['publication']], ['media', 'Photos and media', ['post'], ['documentation', 'media']], ['publish', 'Post files']], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
-  mayor: { title: 'President’s approvals', blurb: 'The President approves every official announcement before the PIO sends it, and orders each event by naming the officers who scan. You see the PIO’s work here; you do not write it.',
-    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']]], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
+  mayor: { title: 'President’s desk', blurb: 'The President approves every official announcement before the PIO sends it, and orders each event by naming the officers who scan. You see the PIO’s work here; you do not write it.',
+    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['faq', 'FAQ']], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
   marshall: { title: 'Marshal (Bosun)', blurb: 'Help keep order, logistics, attendance support and safety during authorized activities. Marshals report and assist. They do not use coercive or disciplinary powers.',
     panes: [['over', 'Overview'], ['plans', 'Activity plans', ['plan']], ['safety', 'Safety log', ['incident']]], go: [['attendance', 'Attendance'], ['watch', 'Watch']] },
 };
@@ -62,6 +62,8 @@ export async function mountOffice(el, ctx) {
     const today = todayISO(), x = {};
     const events = await ANY(sb.from('v2_events').select('id,title,event_date,status,report_sent_at,notified_at').order('event_date', { ascending: false }).limit(60));
     x.events = events;
+    if (role === 'mayor' || role === 'secretary') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
+    if (role === 'mayor') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
     if (role === 'secretary') {
       x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));   // empty until v39 is run
       x.rreq = await ANY(sb.from('v2_record_requests').select('*').order('created_at', { ascending: false }).limit(200));   // empty until v33 is run
