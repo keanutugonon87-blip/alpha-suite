@@ -403,3 +403,4 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 @media(max-width:899px){.tabs .grp,.tabs .gb{display:contents}.tabs{justify-content:space-around;align-items:stretch}.tabs button{flex:1 1 0;min-width:0}.tabs button span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}}
 
 .grp-v>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;list-style:none}.grp-v>summary::-webkit-details-marker{display:none}.grp-v>summary small{display:block;color:var(--muted)}.grp-v>summary:after{content:'▾';margin-left:6px;opacity:.6}.grp-v[open]>summary:after{content:'▴'}
+.grp-v input[type=checkbox]{width:24px;height:24px;min-height:0;padding:0;margin:0;flex:none;accent-color:var(--sea)}
