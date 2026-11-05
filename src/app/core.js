@@ -229,3 +229,20 @@ export async function share({ title, text, url }) {
 export const FUNDS = [{ k: 'class', label: 'Class Initiatives' }, { k: 'sails', label: 'SAILS Initiatives' }, { k: 'campus', label: 'Campus Wide Initiatives' }, { k: 'batch', label: 'Batch Project' }];
 export const fundLabel = k => FUNDS.find(f => f.k === k)?.label || 'Unassigned';
 export const fundOptions = (sel, blank = 'Unassigned') => `<option value="">${blank}</option>${FUNDS.map(f => `<option value="${f.k}"${f.k === sel ? ' selected' : ''}>${f.label}</option>`).join('')}`;
+
+/* Turn a student <select> into a search-and-pick: type a name or Student ID and the list narrows (one match picks itself). */
+export function studentSearch(sel, members) {
+  if (!sel || sel.dataset.ss) return; sel.dataset.ss = '1';
+  const label = m => m.full_name + (m.student_no && !/^PENDING/i.test(m.student_no) ? ' · ' + m.student_no : '');
+  const keep = sel.value;
+  const inp = document.createElement('input'); inp.type = 'search'; inp.placeholder = 'Type a name or Student ID…'; inp.autocomplete = 'off'; inp.setAttribute('aria-label', 'Search student by name or Student ID'); inp.style.marginBottom = '6px';
+  inp.addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
+  sel.parentNode.insertBefore(inp, sel);
+  const fill = () => {
+    const q = inp.value.trim().toLowerCase(), cur = sel.value, hits = members.filter(m => !q || (m.full_name + ' ' + (m.student_no || '')).toLowerCase().includes(q));
+    const only = q && hits.length === 1;
+    sel.innerHTML = (only ? '' : `<option value="">${hits.length ? 'Select… (' + hits.length + ')' : 'No match'}</option>`) + hits.slice(0, 200).map(m => `<option value="${m.id}">${esc(label(m))}</option>`).join('');
+    if (only) sel.value = hits[0].id; else if (hits.some(m => m.id === cur)) sel.value = cur;
+  };
+  fill(); if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+}

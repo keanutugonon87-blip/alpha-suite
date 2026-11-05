@@ -1,4 +1,4 @@
-import { fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, toastUndo, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, confirmDialog, initials, dayLabel } from '../core.js';
+import { studentSearch, fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, toastUndo, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, confirmDialog, initials, dayLabel } from '../core.js';
 import { ymManila, net as netOf, balanceAt, needsSecond, findDuplicate } from '../money.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
@@ -19,7 +19,7 @@ export async function mountTreasury(el, ctx) {
 
   async function draw() {
     const [mem, chg, periods, raw, flags, closes, lim] = await Promise.all([
-      db(sb.from('v2_members').select('id,full_name').order('full_name')),
+      db(sb.from('v2_members').select('id,full_name,student_no').order('full_name')),
       db(sb.from('v2_charges').select('*').order('created_at')),
       db(sb.from('v2_periods').select('*').order('opened_at', { ascending: false })),
       db(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,fund,recorded_by,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false })),
@@ -232,6 +232,7 @@ export async function mountTreasury(el, ctx) {
       <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
+      studentSearch(m.querySelector('[name=member]'), members);
       m.querySelector('[name=request]')?.addEventListener('change', e => { const o = e.target.selectedOptions[0], f = m.querySelector('#ef'); if (o?.dataset.fund) { f.elements.fund.value = o.dataset.fund; if (o.dataset.cat) f.elements.cat.value = o.dataset.cat; } });
       m.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => { const r = recentOut()[+b.dataset.rx], f = m.querySelector('#ef'); f.elements.payer.value = r.payer; f.elements.cat.value = r.cat; if (r.fund !== undefined) f.elements.fund.value = r.fund || ''; if (r.purpose) f.elements.purpose.value = r.purpose; f.elements.amt.focus(); });
       m.querySelectorAll('[name=method]').forEach(r => r.onchange = () => { m.querySelector('#gc').style.display = m.querySelector('[name=method]:checked')?.value === 'gcash' ? 'block' : 'none'; });
@@ -256,10 +257,10 @@ export async function mountTreasury(el, ctx) {
           const id = uuid(), file = f.get('img'), photo = file && file.size ? await resizeImage(file) : null;
           const res = await safeWrite('v2_entries', { id, period_id: cur.id, kind, category: f.get('cat'), member_id: f.get('member') || null, charge_id: f.get('charge') || null, ...(pre.violation ? { violation_id: pre.violation } : {}), ...(f.get('request') ? { request_id: f.get('request') } : {}), ...(kind === 'expense' && String(f.get('aref') || '').trim() ? { approval_ref: String(f.get('aref')).trim() } : {}), fund: f.get('charge') ? (charges.find(c => c.id === f.get('charge'))?.fund || null) : (f.get('fund') || null), payer_name: f.get('payer') || null,
             amount: +f.get('amt'), method: f.get('method') || 'cash', gcash_ref: f.get('gref') || null, purpose: f.get('purpose') || '', recorded_by_name: ctx.profile.full_name,
-            status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' }, photo);
+            status: isMayor || kind === 'collection' ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : kind === 'collection' ? 'No approval needed' : null, source: 'manual' }, photo);
           close();
           if (res.queued) toast('No signal — saved on this device, will send automatically');
-          else { toast(isMayor ? 'Saved' : 'Saved — waiting for Mayor approval'); if (kind === 'collection' && isMayor) showReceipt(id).catch(() => {}); }
+          else { toast(isMayor || kind === 'collection' ? 'Saved' : 'Saved — waiting for Mayor approval'); if (kind === 'collection') showReceipt(id).catch(() => {}); }
           draw().catch(() => {});
         } catch (e) { m.querySelector('#er').textContent = e.message; btn.disabled = false; btn.textContent = 'Save'; }
       };

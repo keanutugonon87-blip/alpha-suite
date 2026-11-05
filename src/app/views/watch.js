@@ -1,7 +1,7 @@
 import { t, getLang } from '../i18n.js';
-import { sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl } from '../core.js';
+import { studentSearch, sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
-import { scanLoop } from '../qr.js';
+import { scanLoop, showReceipt } from '../qr.js';
 
 const FINE = 25;
 const ordinal = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
@@ -16,13 +16,13 @@ export async function mountWatch(el, ctx) {
   const r = ctx.profile.role, name = ctx.profile.full_name;
   const canReport = ctx.can('mayor','vice_mayor','secretary','marshall','sails');
   const canApprove = ctx.can('mayor','vice_mayor');
-  const TK = 'alpha-f-watch-tab';
+  const TK = 'alpha-f-watch-tab', openSet = new Set();
   let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
   el.innerHTML = skeleton(5);
 
   async function draw() {
     const [members, standards, viol, paidRows] = await Promise.all([
-      db(sb.from('v2_members').select('id,full_name,section,status').order('full_name')),
+      db(sb.from('v2_members').select('id,full_name,student_no,section,status').order('full_name')),
       db(sb.from('v2_standards').select('*').eq('active', true).order('sort_order')),
       db(sb.from('v2_violations').select(VCOLS).order('created_at')).catch(() => db(sb.from('v2_violations').select('*').order('created_at'))),
       db(sb.from('v2_entries').select('violation_id').not('violation_id', 'is', null).neq('status', 'voided')).catch(() => []),   // not everyone can read payments, and v19 may not be installed yet
@@ -59,12 +59,54 @@ export async function mountWatch(el, ctx) {
       return a.join('');
     }
 
+    const canPay = ctx.can('mayor', 'treasurer');
+    const payable = v => isCounted(v) && std(v.standard_id)?.fine && !paid.has(v.id) && v.excuse_status !== 'accepted';
+    const fineOf = v => +std(v.standard_id).fine;
+    /* One collapsible block per student: their violations together, with tick-boxes to pay chosen fines or everything owed. */
+    function groupedLedger(list) {
+      const groups = new Map(); list.forEach(v => { if (!groups.has(v.member_id)) groups.set(v.member_id, []); groups.get(v.member_id).push(v); });
+      if (!groups.size) return '<div class="card"><p class="empty">No records.</p></div>';
+      const sorted = [...groups].sort((a, b) => b[1].filter(payable).length - a[1].filter(payable).length || mname(a[0]).localeCompare(mname(b[0])));
+      return sorted.map(([mid, vs]) => {
+        const pay = vs.filter(payable), due = pay.reduce((t, v) => t + fineOf(v), 0), m = members.find(x => x.id === mid);
+        const rows = vs.map(v => canPay && payable(v) ? `<div style="display:flex;align-items:center;gap:8px;padding-left:10px"><input type="checkbox" data-pv="${v.id}" data-m="${mid}" aria-label="Select this fine to pay"><div style="flex:1;min-width:0">${vrow(v)}</div></div>` : vrow(v)).join('');
+        return `<details class="card grp-v" data-m="${mid}"${openSet.has(mid) || q ? ' open' : ''} style="margin-bottom:10px"><summary><span><b>${esc(mname(mid))}</b><small>${m?.student_no && !/^PENDING/i.test(m.student_no) ? esc(m.student_no) + ' · ' : ''}${vs.length} violation${vs.length === 1 ? '' : 's'}</small></span>${due ? `<span class="tag bad">owes ${peso0(due)}</span>` : '<span class="tag ok">no fine due</span>'}</summary>
+          ${canPay && pay.length ? `<div class="bar" style="padding:8px 10px"><button class="btn gold sm" data-paysel="${mid}" disabled>Pay selected fines</button><button class="btn ghost sm" data-payall="${mid}">Pay all · ${peso0(due)}</button><small class="muted">Tick the fines to pay, or pay everything this student owes.</small></div>` : ''}${rows}</details>`;
+      }).join('');
+    }
+    async function payFines(mid, ids) {
+      const vs = ids.map(id => viol.find(x => x.id === id)).filter(v => v && payable(v));
+      if (!vs.length) return toast('Nothing to pay.', true);
+      const cur = (await db(sb.from('v2_periods').select('id').eq('status', 'open').limit(1)))[0];
+      if (!cur) return toast('No open period. Open one in Treasury first.', true);
+      const total = vs.reduce((t, v) => t + fineOf(v), 0);
+      modal(`<h3>${esc(mname(mid))} pays fines</h3>${vs.map(v => `<div style="display:flex;justify-content:space-between;margin:6px 0"><span>${esc(std(v.standard_id).title)} <small class="muted">${fmtDate(v.occurred_on)}</small></span><b>${peso0(fineOf(v))}</b></div>`).join('')}
+        <div style="display:flex;justify-content:space-between;margin:10px 0;font-size:1.05rem"><span>Total</span><b>${peso0(total)}</b></div>
+        <label>Payment method</label><div class="segpay" role="radiogroup"><label><input type="radio" name="method" value="cash" checked><span>💵 Cash</span></label><label><input type="radio" name="method" value="gcash"><span>📱 GCash</span></label></div>
+        <div id="gc" style="display:none"><label>GCash reference no.</label><input id="gr" maxlength="40"></div>
+        <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:2">Collect ${peso0(total)}</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
+        m.querySelector('#cx').onclick = close;
+        m.querySelectorAll('[name=method]').forEach(r => r.onchange = () => { m.querySelector('#gc').style.display = m.querySelector('[name=method]:checked').value === 'gcash' ? 'block' : 'none'; });
+        m.querySelector('#go').onclick = async () => {
+          const method = m.querySelector('[name=method]:checked').value, gref = method === 'gcash' ? m.querySelector('#gr').value.trim() : '', made = []; m.querySelector('#go').disabled = true;
+          try {
+            for (const v of vs) { const id = uuid();
+              await safeWrite('v2_entries', { id, period_id: cur.id, kind: 'collection', category: 'Fines', member_id: mid, violation_id: v.id, fund: 'sails', amount: fineOf(v), method, gcash_ref: gref || null,
+                purpose: `Fine: ${std(v.standard_id).title}`, recorded_by_name: name, status: 'approved', approved_by_name: 'No approval needed', source: 'manual' }); made.push(id); }
+            close(); toast(`${made.length} fine${made.length === 1 ? '' : 's'} paid · ${peso0(total)}`);
+            if (made.length === 1) showReceipt(made[0]).catch(() => {}); else toast('One receipt per fine is in Treasury.');
+            draw().catch(() => {});
+          } catch (x) { m.querySelector('#er').textContent = made.length ? `${made.length} saved before the error: ${x.message}` : x.message; m.querySelector('#go').disabled = false; if (made.length) draw().catch(() => {}); }
+        };
+      });
+    }
+
     let body;
     if (tab === 'ledger') {
       const isAtt = v => { const s0 = std(v.standard_id); return !!s0 && (!!s0.kind || ATT.test(s0.title)); };
-      const shown = viol.filter(v => (!q || mname(v.member_id).toLowerCase().includes(q.toLowerCase())) && !isAtt(v)).slice().reverse();
-      body = `<div class="bar"><input id="q" placeholder="Search student…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
-        ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}<div class="card">${shown.map(vrow).join('') || '<p class="empty">No records.</p>'}</div>`;
+      const shown = viol.filter(v => (!q || (mname(v.member_id) + ' ' + (members.find(m => m.id === v.member_id)?.student_no || '')).toLowerCase().includes(q.toLowerCase())) && !isAtt(v)).slice().reverse();
+      body = `<div class="bar"><input id="q" placeholder="Search name or Student ID…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
+        ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}${groupedLedger(shown)}`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
       // Attendance (PIT Handbook): every 3 tardies count as 1 absence.
@@ -96,6 +138,11 @@ export async function mountWatch(el, ctx) {
           columns: [{ label: 'Student', key: 'full_name', width: 30 }, { label: 'Section', key: 'section', width: 24 }, { label: 'Outstanding', get: m => byM[m.id]?.open || 0, type: 'int', total: true }, { label: 'All records', get: m => byM[m.id]?.total || 0, type: 'int', total: true }, { label: 'Standing', get: m => byM[m.id]?.open ? 'Outstanding' : 'Clear', type: 'status' }], rows: members.filter(m => m.status === 'active') }] }); toast('Excel ready'); }
       catch (e) { toast(e.message, true); } });
     el.querySelector('#addStd')?.addEventListener('click', () => newStandard());
+    el.querySelectorAll('details.grp-v').forEach(d => d.addEventListener('toggle', () => { d.open ? openSet.add(d.dataset.m) : openSet.delete(d.dataset.m); }));
+    const syncPay = d => { const on = [...d.querySelectorAll('[data-pv]:checked')], b = d.querySelector('[data-paysel]'); if (!b) return; b.disabled = !on.length; b.textContent = on.length ? `Pay selected · ${peso0(on.reduce((t, c) => t + fineOf(viol.find(x => x.id === c.dataset.pv)), 0))}` : 'Pay selected fines'; };
+    el.querySelectorAll('details.grp-v').forEach(d => { d.querySelectorAll('[data-pv]').forEach(c => c.onchange = () => syncPay(d));
+      d.querySelector('[data-paysel]')?.addEventListener('click', () => payFines(d.dataset.m, [...d.querySelectorAll('[data-pv]:checked')].map(c => c.dataset.pv)));
+      d.querySelector('[data-payall]')?.addEventListener('click', () => payFines(d.dataset.m, [...d.querySelectorAll('[data-pv]')].map(c => c.dataset.pv))); });
     el.querySelectorAll('[data-es]').forEach(b => b.onclick = () => editStandard(standards.find(x => x.id === b.dataset.es)));
     // swipe a row right to approve / resolve it (touch screens)
     el.querySelectorAll('.row').forEach(row => {
@@ -132,7 +179,7 @@ export async function mountWatch(el, ctx) {
       <div class="chips" id="rs">${recent().map(([k, l]) => `<button type="button" data-k="${k}">${esc(l)}</button>`).join('')}</div>
       <label>Date</label><input name="d" type="date" required value="${todayISO()}">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Submit</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
-      (m, close) => { m.querySelector('#cx').onclick = close;
+      (m, close) => { m.querySelector('#cx').onclick = close; studentSearch(m.querySelector('[name=m]'), members.filter(x => x.status === 'active'));
         m.querySelectorAll('#rs [data-k]').forEach(b => b.onclick = () => { const [mi, si] = b.dataset.k.split('|'); m.querySelector('[name=m]').value = mi; m.querySelector('[name=s]').value = si; });
         m.querySelector('#rf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
           try { remember(f.get('m'), f.get('s'), members, standards); const res = await safeWrite('v2_violations', { id: uuid(), member_id: f.get('m'), standard_id: f.get('s'), occurred_on: f.get('d'), reported_by: `${r} ${name}`, status: canApprove ? 'pending' : 'awaiting_approval' });

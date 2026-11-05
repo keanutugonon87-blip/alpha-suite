@@ -23,7 +23,7 @@ export async function mountDesk(el, ctx) {
 
   async function load() {
     const [members, charges, bal, periods, entries] = await Promise.all([
-      db(sb.from('v2_members').select('id,full_name,section,status').order('full_name')),
+      db(sb.from('v2_members').select('id,full_name,student_no,section,status').order('full_name')),
       db(sb.from('v2_charges').select('id,title,amount,fund,closed,due_on')),
       db(sb.rpc('v2_balances')),
       db(sb.from('v2_periods').select('id,status').eq('status', 'open')),
@@ -64,13 +64,13 @@ export async function mountDesk(el, ctx) {
     const rows = owedBy(), { entries } = data, wk = weekStart().getTime(), goal = readGoal();
     const got = entries.filter(e => e.kind === 'collection' && e.status !== 'rejected' && new Date(e.occurred_at).getTime() >= wk).reduce((t, e) => t + +e.amount, 0);
     const outstanding = rows.reduce((t, r) => t + r.total, 0), owing = rows.filter(r => r.total > 0);
-    const shown = rows.filter(r => (only === 'all' || r.total > 0) && (!q || r.m.full_name.toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.total - a.total || a.m.full_name.localeCompare(b.m.full_name));
+    const shown = rows.filter(r => (only === 'all' || r.total > 0) && (!q || (r.m.full_name + ' ' + (r.m.student_no || '')).toLowerCase().includes(q.toLowerCase()))).sort((a, b) => b.total - a.total || a.m.full_name.localeCompare(b.m.full_name));
     const today = todayISO(), prom = id => data.promises.filter(x => x.member_id === id), due = data.promises.filter(x => x.promised_on <= today);
     el.innerHTML = seg() + `<div class="grid"><div class="stat gold"><small>Still to collect</small><b>${peso(outstanding)}</b></div><div class="stat"><small>Students owing</small><b>${owing.length}</b></div><div class="stat"><small>Collected this week</small><b>${peso(got)}</b></div></div>
       <div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><b>Weekly goal</b><button class="btn ghost sm" id="gl">${goal ? 'Change' : 'Set a goal'}</button></div>
         ${goal ? `<div class="prog" style="margin-top:8px"><i style="width:${Math.min(100, got / goal * 100)}%"></i></div><small class="muted">${peso(got)} of ${peso(goal)}${got >= goal ? ' · goal reached' : ` · ${peso(goal - got)} to go`}</small>` : '<small class="muted">Pick an amount to collect each week. The bar fills as payments come in.</small>'}</div>
       ${due.length ? `<div class="card pad" style="margin-bottom:10px"><b>Promised to pay by now (${due.length})</b>${due.map(x => `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:6px"><span>${esc(data.members.find(m => m.id === x.member_id)?.full_name || '?')} · ${peso(x.amount)}<small class="muted" style="display:block">${x.promised_on < today ? 'was due ' : 'due '}${fmtDate(x.promised_on)}${x.note ? ' · ' + esc(x.note) : ''}</small></span><span style="display:flex;gap:4px"><button class="btn gold sm" data-pk="${x.id}">Collect</button><button class="btn ghost sm" data-pb="${x.id}">Broken</button></span></div>`).join('')}</div>` : ''}
-      <div class="bar"><input id="q" type="search" placeholder="Search student" value="${esc(q)}" style="flex:1 1 150px;min-width:0"><button class="btn gold" id="sc">📷 Scan card</button>
+      <div class="bar"><input id="q" type="search" placeholder="Search name or Student ID" value="${esc(q)}" style="flex:1 1 150px;min-width:0"><button class="btn gold" id="sc">📷 Scan card</button>
         <select id="fo" style="width:auto"><option value="owing">Owing</option><option value="all">Everyone</option></select></div>
       <div class="card">${shown.map(r => `<div class="row" data-m="${r.m.id}" style="cursor:pointer"><div class="lead"><span class="ini">${esc(initials(r.m.full_name))}</span><div class="m"><b>${esc(r.m.full_name)}</b>
         <small>${r.items.length ? r.items.map(i => esc(i.label)).slice(0, 3).join(', ') + (r.items.length > 3 ? ` +${r.items.length - 3} more` : '') : 'All paid'}</small></div></div>
@@ -127,12 +127,12 @@ export async function mountDesk(el, ctx) {
             const id = uuid(); ids.push(id);
             await safeWrite('v2_entries', { id, period_id: cur.id, kind: 'collection', category: i.kind === 'fine' ? 'Fines' : 'Class Dues', member_id: row.m.id, charge_id: i.charge || null,
               ...(i.violation ? { violation_id: i.violation, fund: 'sails' } : { fund: data.charges.find(c => c.id === i.charge)?.fund || null }), amount: amt, method, gcash_ref: gref || null,
-              purpose: i.label, recorded_by_name: ctx.profile.full_name, status: isMayor ? 'approved' : 'pending', approved_by_name: isMayor ? ctx.profile.full_name : null, source: 'manual' });
+              purpose: i.label, recorded_by_name: ctx.profile.full_name, status: 'approved', approved_by_name: isMayor ? ctx.profile.full_name : 'No approval needed', source: 'manual' });
             done++;
           }
           if (data.v23) db(sb.from('v2_promises').update({ status: 'kept' }).eq('member_id', row.m.id).eq('status', 'open')).catch(() => {});
-          close(); toast(`${done} payment${done === 1 ? '' : 's'} recorded${isMayor ? '' : '. Waiting for Mayor approval'}`);
-          if (isMayor && ids.length === 1) showReceipt(ids[0]).catch(() => {});
+          close(); toast(`${done} payment${done === 1 ? '' : 's'} recorded`);
+          if (ids.length === 1) showReceipt(ids[0]).catch(() => {});
           load().catch(() => {});
         } catch (x) { m.querySelector('#er').textContent = done ? `${done} saved before the error: ${x.message}` : x.message; m.querySelector('#go').disabled = false; if (done) load().catch(() => {}); }
       };

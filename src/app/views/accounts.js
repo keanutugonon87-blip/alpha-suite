@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, toast, modal, ROLE_LABEL, ROLES, fmtDateTime, fmtDate, confirmDialog, initials } from '../core.js';
+import { studentSearch, sb, db, watch, esc, toast, modal, ROLE_LABEL, ROLES, fmtDateTime, fmtDate, confirmDialog, initials } from '../core.js';
 import { pushState, enablePush, disablePush } from '../push.js';
 
 const ROLE_INFO = {
@@ -67,7 +67,7 @@ export async function mountAccounts(el, ctx) {
       <label for="lm">Student record</label><select id="lm">${ms.map(m => `<option value="${m.id}"${cur && cur.member_id === m.id ? ' selected' : ''}>${esc(m.full_name)}${m.student_no && !/^PENDING/i.test(m.student_no) ? ' · ' + esc(m.student_no) : ''}</option>`).join('')}</select>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="lg" style="flex:1">Link</button>${cur ? '<button class="btn danger" id="lu">Unlink</button>' : ''}<button class="btn ghost" id="lx">Cancel</button></div><div class="err" id="er"></div>`,
       (m, close) => {
-        m.querySelector('#lx').onclick = close;
+        m.querySelector('#lx').onclick = close; studentSearch(m.querySelector('#lm'), ms);
         m.querySelector('#lg').onclick = async () => { try { await db(sb.rpc('v2_link_officer', { p_user: p.user_id, p_member: m.querySelector('#lm').value })); toast('Linked'); close(); draw(); } catch (e) { m.querySelector('#er').textContent = /function|schema cache/i.test(e.message) ? 'Run the v7 SQL first.' : e.message; } };
         m.querySelector('#lu')?.addEventListener('click', async () => { try { await db(sb.rpc('v2_unlink_officer', { p_user: p.user_id })); toast('Unlinked'); close(); draw(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
       });

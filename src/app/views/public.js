@@ -10,7 +10,7 @@ import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
-const TABS = ['archive', 'privacy', 'me', 'officers', 'learn', 'docs', 'bulletin'];
+const TABS = ['archive', 'faq', 'privacy', 'me', 'officers', 'learn', 'docs', 'bulletin'];
 const GUEST_HIDE = ['me', 'docs'];
 const SCENE_OF = { archive: 'fund', privacy: 'standing' };   // the Harbor and the Lighthouse scenery, kept for the two Article XVI tabs
 const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -224,6 +224,13 @@ export async function renderPublic(root) {
       };
     });
   }
+  /* FAQ: questions the Secretary keeps up to date; tap one to open its answer */
+  function faqView() {
+    const items = data.faq || [];
+    if (!items.length) return `<div class="card"><p class="empty">${t('faqEmpty')}</p></div>`;
+    const topics = [...new Set(items.map(x => x.topic || ''))];
+    return `<p class="muted" style="margin:0 2px 8px">${t('faqNote')}</p>${topics.map(tp => `${tp ? `<p class="muted" style="margin:10px 4px 4px;font-weight:600">${esc(tp)}</p>` : ''}<div class="card">${items.filter(x => (x.topic || '') === tp).map(x => `<details class="faqi" style="padding:12px 14px;border-bottom:1px solid var(--line)"><summary style="cursor:pointer;font-weight:600">${esc(x.question)}</summary><p style="margin:8px 0 0;white-space:pre-wrap">${esc(x.answer)}</p></details>`).join('')}</div>`).join('')}`;
+  }
   function archiveView() {
     const dl = data.docs || [], cnt = k => dl.filter(x => x.kind === k).length, mine = data.mine || [], ask = canAsk();
     const row = ([name, kind], i) => { const n = kind ? cnt(kind) : 0;
@@ -272,6 +279,7 @@ export async function renderPublic(root) {
     const cur = tre.open ? (tre.entries || []).filter(e => e.period_id === tre.open.id) : [];
     const views = {
       archive: () => archiveView(),
+      faq: () => faqView(),
       privacy: () => privacyView(),
       officers: () => `<div class="officers">${officers.map((o, i) => `<button class="ocard" data-o="${i}" aria-label="View ${esc(o.name)}’s profile"><div class="ph">${o.photo ? `<img src="${o.photo}" alt="${esc(o.name)}" style="object-position:${o.x}% ${o.y}%">` : esc(initials(o.name))}</div><div class="tx"><b>${esc(o.name)}</b><small>${esc(o.position)}</small></div></button>`).join('')}</div><p class="muted" style="text-align:center;font-size:.85rem">Tap an officer to see their leadership profile.</p>`,
       me: () => '',
@@ -287,7 +295,7 @@ export async function renderPublic(root) {
         <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
           <p>${esc(tre.open?.name || '')}</p>${fundChips()}</div>
         ${hs.html}</div>
-      <div class="seg" role="tablist">${[['archive', t('archive')], ['privacy', t('privacy')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['docs', t('pubDocs')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
+      <div class="seg" role="tablist">${[['archive', t('archive')], ['faq', t('faq')], ['privacy', t('privacy')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['docs', t('pubDocs')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
     {
       /* the compass answers the tap: swing to this tab's bearing, fade the scenery, ease the sky colour */
@@ -316,8 +324,8 @@ export async function renderPublic(root) {
   async function load() {
     try {
       const opt = p => db(p).catch(() => []);
-      const [o, tr, ann, docs, mine] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() }))]);   // docs stay empty until the v30 SQL is run
-      const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
+      const [o, tr, ann, docs, mine, faq] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() })), opt(sb.rpc('v2_public_faq'))]);   // docs stay empty until the v30 SQL is run
+      const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [], faq: Array.isArray(faq) ? faq : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
     } catch (e) {
       if (!data) {   // no connection: still show the student's own saved status, if this phone has one
         m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div><div id="offme"></div>`;

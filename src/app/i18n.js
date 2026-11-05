@@ -4,6 +4,9 @@ export const getLang = () => { try { return localStorage.getItem(KEY) === 'ceb' 
 export const setLang = l => { try { localStorage.setItem(KEY, l); } catch { /* ignore */ } };
 const D = {
   archive: ['Archive', 'Arkibo'],
+  faq: ['FAQ', 'Mga Pangutana'],
+  faqNote: ['Quick answers to common questions. Tap a question to open it.', 'Dali nga tubag sa kasagarang pangutana. I-tap ang pangutana aron makita ang tubag.'],
+  faqEmpty: ['No questions yet. Ask the Secretary.', 'Wala pa’y pangutana. Pangutana sa Secretary.'],
   privacy: ['Privacy', 'Pribasiya'],
   archiveNote: ['The official class archive. You can ask the Secretary for any record that is not confidential, and the Secretary answers within a reasonable time.', 'Ang opisyal nga arkibo sa klase. Mahimo kang mangayo sa Sekretaryo og bisan unsang rekord nga dili confidential, ug motubag siya sulod sa makatarunganong panahon.'],
   cat0: ['CBL and amendments', 'CBL ug mga amyenda'],

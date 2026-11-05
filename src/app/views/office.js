@@ -33,7 +33,7 @@ const KIND = {
 };
 const OFFICES = {
   secretary: { title: 'Secretary (Second Mate)', blurb: 'Maintain minutes, attendance records, resolutions, notices, membership records and official correspondence; safeguard records; give members reasonable access to non-confidential documents.',
-    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
+    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests'], ['faq', 'FAQ']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
   auditor: { title: 'Auditor (Third Mate)', blurb: 'Independently examine financial records, verify receipts and disbursements, report discrepancies to the Executive Board and adviser, and present findings to the General Assembly. The Auditor does not approve or carry out the transactions being audited.',
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
@@ -63,6 +63,7 @@ export async function mountOffice(el, ctx) {
     const events = await ANY(sb.from('v2_events').select('id,title,event_date,status,report_sent_at,notified_at').order('event_date', { ascending: false }).limit(60));
     x.events = events;
     if (role === 'secretary') {
+      x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));   // empty until v39 is run
       x.rreq = await ANY(sb.from('v2_record_requests').select('*').order('created_at', { ascending: false }).limit(200));   // empty until v33 is run
       [x.fbr, x.liq, x.docs, x.meet] = await Promise.all([ANY(sb.from('v2_budget_requests').select('id,req_no,title,status').eq('status', 'approved')), ANY(sb.from('v2_liquidations').select('id,request_id,status').eq('status', 'audited')),
         ANY(sb.from('v2_documents').select('id,title,status,due_on').neq('status', 'submitted')), ANY(sb.from('v2_vp_meetings').select('id,title,held_on,status').in('status', ['approved', 'done']))]);
@@ -205,6 +206,25 @@ export async function mountOffice(el, ctx) {
         ${r.note ? `<p style="margin:6px 0 0">${esc(r.note)}</p>` : ''}${r.answer_note ? `<p class="muted" style="margin:6px 0 0">Answer: ${esc(r.answer_note)}</p>` : ''}
         ${r.status === 'open' ? `<div class="acts" style="margin-top:8px"><button class="btn gold sm" data-ra="${r.id}" data-ok="1">Grant</button><button class="btn ghost sm" data-ra="${r.id}" data-ok="0">Decline</button></div>` : ''}</div>`).join('')}</div>`;
   }
+  /* FAQ shown on the student screen */
+  function faqPane() {
+    const list = X.faq || [];
+    return `<p class="muted" style="margin:0 2px 8px">Students read this on their own screen, signed in or not. Keep answers short and plain. If nothing shows here, run <b>v39_faq.sql</b> in Supabase first.</p>
+      <div class="bar"><button class="btn gold" id="fa">+ Add question</button></div>
+      <div class="card">${list.map(f => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(f.question)}</b><small>${esc(f.topic || 'General')}${f.published ? '' : ' · hidden'}</small></div><div style="display:flex;gap:4px"><button class="btn ghost sm" data-fe="${f.id}">Edit</button><button class="btn ghost sm" data-fd="${f.id}">Delete</button></div></div><p style="margin:6px 0 0;white-space:pre-wrap">${esc(f.answer)}</p></div>`).join('') || '<p class="empty">No questions yet.</p>'}</div>`;
+  }
+  function faqForm(f) {
+    modal(`<h3>${f ? 'Edit' : 'Add'} question</h3><form id="ff"><label>Question</label><input name="q" required maxlength="200" value="${esc(f?.question)}"><label>Answer</label><textarea name="a" rows="5" required maxlength="2000">${esc(f?.answer)}</textarea>
+      <label>Topic (optional, groups questions)</label><input name="t" maxlength="40" value="${esc(f?.topic)}" placeholder="Payments, Account, Records…">
+      <label class="ck"><input type="checkbox" name="p"${f && !f.published ? '' : ' checked'}><span>Show to students</span></label>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#ff').onsubmit = async e => { e.preventDefault(); const d = new FormData(e.target);
+        const row = { question: d.get('q').trim(), answer: d.get('a').trim(), topic: d.get('t').trim() || null, published: d.get('p') === 'on', updated_by_name: ctx.profile.full_name, updated_at: new Date().toISOString() };
+        try { await db(f ? sb.from('v2_faq').update(row).eq('id', f.id) : sb.from('v2_faq').insert({ ...row, sort: ((X.faq || []).reduce((t, x) => Math.max(t, x.sort || 0), 0)) + 1 })); toast('Saved'); close(); await load(); }
+        catch (x) { m.querySelector('#er').textContent = x.message; } };
+    });
+  }
   async function answer(id, ok) {
     const note = await askText(ok ? 'Grant the request' : 'Decline the request', ok ? 'Tell the member where to get the record (optional)' : 'Say why it is declined', { ok: ok ? 'Grant' : 'Decline' });
     if (note === null) return;
@@ -217,10 +237,13 @@ export async function mountOffice(el, ctx) {
     const P = O.panes.find(p => p[0] === pane) || O.panes[0];
     el.innerHTML = `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
       <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
-      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
+      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
     if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
+    if (pane === 'faq') { el.querySelector('#fa').onclick = () => faqForm(null);
+      el.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => faqForm((X.faq || []).find(f => f.id === b.dataset.fe)));
+      el.querySelectorAll('[data-fd]').forEach(b => b.onclick = async () => { if (!await confirmDialog('Students will no longer see it.', { ok: 'Delete', danger: true, title: 'Delete this question?' })) return; try { await db(sb.from('v2_faq').delete().eq('id', b.dataset.fd)); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }
     if (pane === 'requests') { el.querySelectorAll('[data-ra]').forEach(b => b.onclick = () => answer(b.dataset.ra, b.dataset.ok === '1')); return; }
     if (pane === 'report') { el.querySelector('#pr').onclick = () => printHTML('Audit report', reportHTML()); return; }
     el.querySelector('#add')?.addEventListener('click', () => form(P[2], null, P[3]));
