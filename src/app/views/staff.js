@@ -112,7 +112,9 @@ export async function renderStaff(root, tabId) {
   const ctx = { profile: p, can: (...r) => has(r) };
   const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk', mayor: 'President Desk' };
   let tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
-  if (p.role === 'mayor') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'), i = rest.findIndex(t => t.id === 'desk'); tabs = [...rest.slice(0, i + 1), o, ...rest.slice(i + 1)]; }   // the Mayor's own desks stay first on the phone bar
+  // The President has one desk: Directives, VP Desk and Approvals sit inside it. Old links to #/staff/directives or #/staff/vp still land there.
+  if (p.role === 'mayor') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp') { ctx.section = tabId; tabId = 'office'; } }
+  if (p.role === 'mayor') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'); tabs = [...rest.slice(0, 1), o, ...rest.slice(1)]; }   // Today, then the President Desk
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
   // On a phone the bar holds 4 sections and a "More" button; on a wide screen the side menu lists them all.
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
