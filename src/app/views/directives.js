@@ -6,14 +6,14 @@ import { ROLE_LABEL } from '../core.js';
    Flow: sent → received → working → done → confirmed. An officer who cannot do it asks to be released; the Mayor decides. */
 const STATUS = { sent: ['Sent', 'warn'], received: ['Received', ''], working: ['Working', ''], done: ['Done · to confirm', 'warn'], confirmed: ['Confirmed', 'ok'], revoke_asked: ['Release asked', 'bad'], revoked: ['Closed', ''] };
 const PRI = { urgent: ['Urgent', 'bad'], normal: ['Normal', ''], low: ['Low', ''] };
-const CHAIN = { mayor: ['vice_mayor', 'vp_internal', 'vp_external', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'], vp_internal: ['secretary', 'marshall', 'pio'], vp_external: ['pio'] };
+const CHAIN = { mayor: ['vice_mayor', 'vp_internal', 'vp_external', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio', 'general_marshal'], vp_internal: ['secretary', 'marshall', 'pio'], vp_external: ['pio'], general_marshal: ['dept_marshal'] };
 const OPEN = ['sent', 'received', 'working', 'done', 'revoke_asked'];
 
 export async function mountDirectives(el, ctx) {
   const role = ctx.profile.role, issuer = !!CHAIN[role], me = ctx.profile.user_id || ctx.user?.id;
   const mayor = issuer;   // issuers see the board and the officer names
   const canDecide = d => ctx.can('mayor') || d.issued_by === me;
-  let rows = [], tab = 'open', officers = [];
+  let rows = [], tab = 'open', officers = [], mreq = [];
   el.innerHTML = skeleton(4);
 
   const overdue = d => d.due_on && OPEN.includes(d.status) && !['done', 'revoke_asked'].includes(d.status) && d.due_on < todayISO();
@@ -55,10 +55,16 @@ export async function mountDirectives(el, ctx) {
       board = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>Open</small><b>${open.length}</b></div><div class="stat"><small>To confirm</small><b>${c(d => d.status === 'done')}</b></div><div class="stat"><small>Release asked</small><b>${c(d => d.status === 'revoke_asked')}</b></div><div class="stat"><small>Overdue</small><b>${c(overdue)}</b></div></div>
         ${by.size ? `<div class="card" style="margin-bottom:12px">${[...by].map(([n, o]) => `<div class="row"><div class="m"><b>${esc(n)}</b></div><div style="display:flex;gap:4px"><span class="tag">${o.n} open</span>${o.unseen ? `<span class="tag warn">${o.unseen} unopened</span>` : ''}${o.od ? `<span class="tag bad">${o.od} overdue</span>` : ''}</div></div>`).join('')}</div>` : ''}`;
     }
-    el.innerHTML = `${board}<div class="bar"><button class="btn ${tab === 'open' ? 'gold' : 'ghost'} sm" data-t="open">Open (${open.length})</button><button class="btn ${tab === 'closed' ? 'gold' : 'ghost'} sm" data-t="closed">Closed</button><span class="grow"></span>${issuer ? '<button class="btn gold" id="new">+ New directive</button>' : ''}</div>
+    const reqBox = mreq.length ? `<div class="card" style="margin-bottom:12px;border-left:3px solid var(--gold,#c9a227)"><h3 style="margin:0 0 6px">Requests from the Department</h3><p class="muted" style="margin:0 0 8px">A Department Marshal asks your class for help. Accept sends a directive to your class Marshals. Decline needs a short reason.</p>${mreq.map(r => `<div class="row" style="display:block" data-mr="${r.id}"><b>${esc(r.title)}</b><small class="muted" style="display:block">From ${esc(r.from_name || 'Department Marshal')}${r.needed_on ? ' · needed ' + fmtDate(r.needed_on + 'T00:00:00+08:00') : ''}</small>${r.details ? `<p style="margin:4px 0">${esc(r.details)}</p>` : ''}<div class="acts"><button class="btn gold sm" data-ma="1">Accept</button><button class="btn ghost sm" data-ma="0">Decline</button></div></div>`).join('')}</div>` : '';
+    el.innerHTML = `${reqBox}${board}<div class="bar"><button class="btn ${tab === 'open' ? 'gold' : 'ghost'} sm" data-t="open">Open (${open.length})</button><button class="btn ${tab === 'closed' ? 'gold' : 'ghost'} sm" data-t="closed">Closed</button><span class="grow"></span>${issuer ? '<button class="btn gold" id="new">+ New directive</button>' : ''}</div>
       <div class="card">${shown.map(card).join('') || `<p class="empty">${issuer ? 'No directives here. Tap “+ New directive” to assign a task to an officer.' : 'Nothing has been assigned to you.'}</p>`}</div>`;
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     el.querySelector('#new')?.addEventListener('click', form);
+    el.querySelectorAll('[data-ma]').forEach(b => b.onclick = () => {
+      const id = b.closest('[data-mr]').dataset.mr, yes = b.dataset.ma === '1', fail = e => toast(e.message, true);
+      const go = n => db(sb.rpc('v2_marshal_answer', { p_id: id, p_accept: yes, p_note: n || null })).then(n2 => { toast(yes ? 'Accepted. Your class Marshals were notified.' : 'Declined'); return load(); });
+      if (yes) go('').catch(fail); else note('Decline the request', 'Reason (required)', n => { if (!n || n.trim().length < 3) throw new Error('Please give a short reason'); return go(n); }, 'Decline');
+    });
     el.querySelectorAll('[data-a]').forEach(b => b.onclick = () => {
       const id = b.closest('[data-id]').dataset.id, a = b.dataset.a, fail = e => toast(e.message, true);
       if (a === 'rc') act(id, 'receive').catch(fail);
@@ -83,7 +89,7 @@ export async function mountDirectives(el, ctx) {
       <label>Due date (optional)</label><input name="u" type="date" min="${todayISO()}">
       <label>Priority</label><select name="p"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="low">Low</option></select>
       <label>Related to (optional)</label><input name="l" placeholder="Event, budget request or document">
-      <p class="muted" style="font-size:.85em;margin:8px 0 0">${role === 'mayor' ? 'You direct every officer.' : role === 'vp_internal' ? 'You direct the Secretary, Marshals and PIOs.' : 'You direct the PIOs.'} Each officer gets their own copy, a phone alert right away if their device is linked, and answers it themselves.</p>
+      <p class="muted" style="font-size:.85em;margin:8px 0 0">${role === 'mayor' ? 'You direct every officer.' : role === 'vp_internal' ? 'You direct the Secretary, Marshals and PIOs.' : role === 'general_marshal' ? 'You direct the Department Marshals.' : 'You direct the PIOs.'} Each officer gets their own copy, a phone alert right away if their device is linked, and answers it themselves.</p>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Send directive</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const boxes = [...m.querySelectorAll('input[name=a]')], count = () => { m.querySelector('#cnt').textContent = boxes.filter(b => b.checked).length + ' chosen'; };
@@ -106,6 +112,7 @@ export async function mountDirectives(el, ctx) {
       const unitOf = new Map(sec.filter(x => x.v2_units && x.v2_units.kind === 'section').map(x => [x.user_id, x.v2_units.name]));
       officers.forEach(o => { o.unit = unitOf.get(o.user_id) || ''; });
     }
+    if (role === 'mayor') mreq = await sb.from('v2_marshal_requests').select('*').eq('to_mayor_id', me).eq('status', 'open').order('created_at').then(r => r.data || [], () => []);
     paint();
   }
   await load();

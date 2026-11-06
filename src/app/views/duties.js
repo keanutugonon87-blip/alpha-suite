@@ -65,7 +65,7 @@ export async function mountDuties(el, ctx) {
   function form(t) {
     const days = new Set(t && t.days || [1, 2, 3, 4, 5]);
     modal(`<h3>${t ? 'Edit duty' : 'Add a duty'}</h3><form id="df">
-      <label>Officer post</label><select name="role">${ROLES.map(r => `<option value="${r}"${t && t.role === r ? ' selected' : ''}>${esc(ROLE_LABEL[r])}</option>`).join('')}</select>
+      <label>Officer post</label><select name="role">${ROLES.filter(r => !['general_marshal', 'dept_marshal'].includes(r)).map(r => `<option value="${r}"${t && t.role === r ? ' selected' : ''}>${esc(ROLE_LABEL[r])}</option>`).join('')}</select>
       <label>Duty</label><input name="title" required maxlength="80" value="${esc(t ? t.title : '')}" placeholder="For example: Do the daily inspection">
       <label>Details (optional)</label><input name="detail" maxlength="200" value="${esc(t && t.detail || '')}">
       <label>How often</label><select name="repeat"><option value="daily">Every day</option><option value="weekly">On certain weekdays</option><option value="monthly">Once a month</option><option value="once">One-off task with a deadline</option></select>

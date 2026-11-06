@@ -20,6 +20,7 @@ export const STEPS = [
   { v: 'v33', file: 'v33_records_access.sql', does: 'Members request records from the Secretary (Archive tab)', check: table('v2_record_requests') },
   { v: 'v34', file: 'v34_pio_checks.sql', does: 'PIO posts need privacy, branding and communication checks before approval', check: null },
   { v: 'v44', file: 'v44_chain_of_command.sql', does: 'Chain of command for directives (VPs direct their line), directives to many officers, waiting alerts, decision history, routine meetings, Monday summary', check: fn('v2_directive_issue_many', { p_assignees: [], p_title: '', p_details: null, p_due: null, p_priority: 'normal', p_link: null }) },
+  { v: 'v45', file: 'v45_marshal_line.sql', does: 'Marshal line: General Marshal and four Department Marshals with their own desk, blocks by section letter, incident reports, requests to Class Mayors', check: fn('v2_marshal_overview', {}) },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },

@@ -26,7 +26,8 @@ const ICON = {
 ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
-  { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
+  { id: 'marshal', label: 'Marshal Desk', load: () => import('./marshal.js').then(m => m.mountMarshal), roles: ['general_marshal', 'dept_marshal'] },
+  { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio', 'general_marshal', 'dept_marshal'] },
   { id: 'vp', label: 'VP Desk', load: () => import('./vp.js').then(m => m.mountVp), roles: ['vp_internal', 'vp_external', 'vice_mayor'] },
   { id: 'office', label: 'Desk', load: () => import('./office.js').then(m => m.mountOffice), roles: ['secretary', 'auditor', 'pio', 'marshall', 'mayor'] },
   { id: 'treasury', label: 'Treasury', load: () => import('./treasury.js').then(m => m.mountTreasury), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
@@ -129,7 +130,7 @@ export async function renderStaff(root, tabId) {
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
   const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
   // The side menu (wide screens) is grouped, each group folds away, and the whole menu can shrink to icons. Both choices are remembered.
-  const GROUPS = [['Overview', ['home', 'directives', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  const GROUPS = [['Overview', ['home', 'marshal', 'directives', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   const NK = 'alpha-nav-collapsed', GK = 'alpha-nav-groups', rd = k => { try { return localStorage.getItem(k); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   let navCollapsed = rd(NK) === '1', shut = new Set((() => { try { return JSON.parse(rd(GK) || '[]'); } catch { return []; } })());
   const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' || t0.id === 'money' ? '<i class="badge" id="bdg" hidden></i>' : t0.id === 'home' ? '<i class="badge" id="bdh" hidden></i>' : ''}</button>`;
