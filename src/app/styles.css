@@ -413,3 +413,4 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .cal-c.sel .dot{box-shadow:0 0 0 1.5px #fff}
 .cal-item{border:1px solid var(--line);border-left:4px solid var(--sea);border-radius:12px;background:var(--card);padding:10px 12px;margin-bottom:8px}.cal-item.cat-meeting{border-left-color:#7c5cc4}.cal-item.cat-deadline{border-left-color:#d9534f}.cal-item.cat-holiday{border-left-color:#2e9e6b}.cal-item.cat-program{border-left-color:#e0a020}
 .cal-item.gone{opacity:.65;border-left-color:#9aa5b1}.cal-item.gone b{text-decoration:line-through}.cal-item-h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.cal-item small{display:block;color:var(--muted);margin-top:2px}.cal-item p{margin:6px 0 0}
+.tag{white-space:nowrap}
