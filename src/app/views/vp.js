@@ -207,7 +207,7 @@ export async function mountVp(el, ctx) {
       if (f.type === 'partner') return `<select name="${f.k}"><option value="">No partner yet</option>${d.par.filter(p => p.status !== 'proposed' || true).map(p => `<option value="${p.id}"${r?.[f.k] === p.id ? ' selected' : ''}>${esc(p.name)}</option>`).join('')}</select>`;
       return `<input name="${f.k}" type="${f.type === 'date' ? 'date' : 'text'}" value="${esc(v ?? '')}" maxlength="120" placeholder="${esc(f.ph || '')}"${f.req ? ' required' : ''}>`; };
     modal(`<h3>${editing ? 'Edit' : 'Add'} ${c.name}</h3><form id="f">${c.fields.map(f => f.type === 'check' ? inp(f) : `<label>${esc(f.l)}</label>${inp(f)}`).join('')}
-      ${c.approval && !isMayor ? '<p class="muted" style="margin:10px 0 0">After you save, this goes to the Mayor for approval.</p>' : ''}
+      ${c.approval && !isMayor ? `<p class="muted" style="margin:10px 0 0">${k === 'meet' ? 'A plain meeting is routine and needs no approval. A program goes to the President for approval.' : 'After you save, this goes to the President for approval.'}</p>` : ''}
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       m.querySelector('#f').onsubmit = async e => {
@@ -216,7 +216,7 @@ export async function mountVp(el, ctx) {
         if (c.before) p = c.before(p, r);
         if (!editing && c.approval && isMayor) p.status = c.approval;
         if (!editing && k === 'del') p.status = 'open';
-        try { await db(editing ? sb.from(c.t).update(p).eq('id', r.id) : sb.from(c.t).insert(p)); close(); toast(editing ? 'Saved' : c.approval && !isMayor ? 'Saved. Waiting for the Mayor.' : 'Added'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; }
+        try { await db(editing ? sb.from(c.t).update(p).eq('id', r.id) : sb.from(c.t).insert(p)); close(); toast(editing ? 'Saved' : c.approval && !isMayor && !(k === 'meet' && p.kind === 'meeting') ? 'Saved. Waiting for the President.' : 'Added'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; }
       };
     });
   }
