@@ -38,8 +38,8 @@ const OFFICES = {
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
     panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['pubs', 'Publications', ['post'], ['publication']], ['media', 'Photos and media', ['post'], ['documentation', 'media']], ['publish', 'Post files']], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
-  mayor: { title: 'President’s desk', blurb: 'The President approves every official announcement before the PIO sends it, and orders each event by naming the officers who scan. You see the PIO’s work here; you do not write it.',
-    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
+  mayor: { title: 'President’s desk', blurb: 'The President approves what is sent up the line: the Vice Presidents’ proposals, the Secretary’s records and the PIO’s announcements. You decide here. You do not work inside the officers’ own desks.',
+    panes: [['over', 'Overview'], ['vpa', 'VP approvals'], ['announce', 'Announcements', ['post'], ['announcement']], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
   marshall: { title: 'Marshal (Bosun)', blurb: 'Help keep order, logistics, attendance support and safety during authorized activities. Marshals report and assist. They do not use coercive or disciplinary powers.',
     panes: [['over', 'Overview'], ['plans', 'Activity plans', ['plan']], ['safety', 'Safety log', ['incident']]], go: [['attendance', 'Attendance'], ['watch', 'Watch']] },
 };
@@ -48,7 +48,7 @@ const ANY = async (p, dflt = []) => { try { return await db(p); } catch { return
 export async function mountOffice(el, ctx) {
   const role = ctx.profile.role, O = OFFICES[role];
   if (!O) { el.innerHTML = '<p class="empty">This desk is for the Secretary, Auditor, PIO and Marshals.</p>'; return () => {}; }
-  let pane = 'over', recs = [], X = {}, missing = false;
+  let pane = ctx.pane && (OFFICES[role]?.panes || []).some(p => p[0] === ctx.pane) ? ctx.pane : 'over', recs = [], X = {}, missing = false;
 
   async function load() {
     try { recs = await db(sb.from('v2_office_records').select('*').order('on_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000)); missing = false; }
@@ -63,6 +63,7 @@ export async function mountOffice(el, ctx) {
     const events = await ANY(sb.from('v2_events').select('id,title,event_date,status,report_sent_at,notified_at').order('event_date', { ascending: false }).limit(60));
     x.events = events;
     if (role === 'mayor' || role === 'secretary') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
+    if (role === 'mayor') { const [a, b, c] = await Promise.all([ANY(sb.from('v2_vp_meetings').select('*').order('created_at', { ascending: false }).limit(100)), ANY(sb.from('v2_vp_partners').select('*').order('created_at', { ascending: false }).limit(100)), ANY(sb.from('v2_vp_activities').select('*').order('created_at', { ascending: false }).limit(100))]); x.vpa = { meet: a, par: b, act: c }; }
     if (role === 'mayor' || role === 'secretary') x.coa = await ANY(sb.from('v2_coa').select('*').order('starts_on'));   // empty until v42 is run
     if (role === 'mayor' || role === 'secretary') x.trash = await ANY(sb.from('v2_trash').select('*').order('removed_at', { ascending: false }));   // empty until v41 is run
     if (role === 'mayor') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
@@ -229,6 +230,38 @@ export async function mountOffice(el, ctx) {
         catch (x) { m.querySelector('#er').textContent = x.message; } };
     });
   }
+  /* Line of authority: the Vice Presidents propose, the Secretary sends records, and the President decides. The President does not work inside their desks. */
+  function vpItems() {
+    const v = X.vpa || { meet: [], par: [], act: [] }, day = d => fmtDate(d + 'T00:00:00+08:00'), out = [];
+    v.meet.forEach(r => out.push({ key: 'meet:' + r.id, who: 'VP Internal', kind: r.kind === 'program' ? 'Program' : 'Meeting', title: r.title, sub: [day(r.held_on), r.held_at, r.venue].filter(Boolean).join(' · '), body: r.agenda, by: r.created_by_name, st: r.status, note: r.mayor_note }));
+    v.par.forEach(r => out.push({ key: 'par:' + r.id, who: 'VP External', kind: 'Partner', title: r.name, sub: [r.kind, r.contact_name].filter(Boolean).join(' · '), body: r.notes, by: r.created_by_name, st: r.status, note: r.mayor_note, adv: r.adviser_status }));
+    v.act.forEach(r => out.push({ key: 'act:' + r.id, who: 'VP External', kind: 'Joint activity', title: r.title, sub: [(v.par.find(p => p.id === r.partner_id) || {}).name || 'No partner', r.planned_on ? day(r.planned_on) : ''].filter(Boolean).join(' · '), body: r.details, by: r.created_by_name, st: r.status, note: r.mayor_note, adv: r.adviser_status, auth: r.authority_ok }));
+    recs.filter(r => r.flow === 'reviewed').forEach(r => out.push({ key: 'doc:' + r.id, who: 'Secretary', kind: 'Record', title: r.title, sub: [r.ref_no, fmtDate(r.on_date)].filter(Boolean).join(' · '), body: r.body, by: r.reviewed_by_name, st: 'proposed' }));
+    return out;
+  }
+  function vpaPane() {
+    const all = vpItems(), wait = all.filter(i => i.st === 'proposed'), back = all.filter(i => i.st === 'returned'), done = all.filter(i => ['approved', 'active'].includes(i.st)).slice(0, 6);
+    const row = (i, act) => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="m"><b>${esc(i.title)}</b><small>${esc(i.kind)} · from ${esc(i.who)}${i.by ? ' (' + esc(i.by) + ')' : ''}</small>${i.sub ? `<small>${esc(i.sub)}</small>` : ''}</div>
+      <span class="tag ${i.st === 'returned' ? 'bad' : i.st === 'proposed' ? 'warn' : 'ok'}">${i.st === 'proposed' ? 'waiting for you' : i.st === 'returned' ? 'returned' : 'approved'}</span></div>
+      ${i.body ? `<p style="margin:6px 0 0;white-space:pre-wrap">${esc(String(i.body).slice(0, 400))}</p>` : ''}${i.adv ? `<small class="muted">Adviser: ${esc(i.adv.replace('_', ' '))}${i.auth === false ? ' · SAILS authority wording not checked' : ''}</small>` : ''}${i.note ? `<p class="muted" style="margin:6px 0 0">Your note: ${esc(i.note)}</p>` : ''}
+      ${act ? `<div class="acts" style="margin-top:8px"><button class="btn gold sm" data-vo="${i.key}">Approve</button><button class="btn ghost sm" data-vr="${i.key}">Return with a note</button></div>` : ''}</div>`;
+    return `<p class="muted" style="margin:0 2px 8px">The line of authority: the Vice Presidents propose, the Secretary sends records, and you decide. To give an officer a task, use Directives. You do not open or edit the Vice Presidents’ own desks.</p>
+      <p class="muted" style="margin:10px 4px 4px;font-weight:600">Waiting for your decision</p>${wait.length ? `<div class="card">${wait.map(i => row(i, true)).join('')}</div>` : '<p class="empty">Nothing is waiting for you.</p>'}
+      ${back.length ? `<p class="muted" style="margin:12px 4px 4px;font-weight:600">Returned, with the officer</p><div class="card">${back.map(i => row(i, false)).join('')}</div>` : ''}
+      ${done.length ? `<p class="muted" style="margin:12px 4px 4px;font-weight:600">Recently approved</p><div class="card">${done.map(i => row(i, false)).join('')}</div>` : ''}`;
+  }
+  async function vpDecide(key, ok) {
+    const [src, id] = key.split(':'), item = vpItems().find(i => i.key === key); if (!item) return;
+    let note = null;
+    if (!ok) { note = await askText('Return it', 'What should be changed?', { ok: 'Return' }); if (note === null) return; if (!String(note).trim()) return toast('Say what needs to change', true); note = String(note).trim().slice(0, 300); }
+    else if (src === 'act' && (item.adv !== 'endorsed' || !item.auth) && !(await confirmDialog(`${item.adv !== 'endorsed' ? 'The adviser has not endorsed this yet. ' : ''}${!item.auth ? 'The SAILS authority wording has not been checked. ' : ''}Approve anyway?`, { ok: 'Approve anyway', title: 'Not ready' }))) return;
+    try {
+      if (src === 'doc') await db(sb.rpc('v2_doc_approve', { p_id: id, p_ok: ok, p_note: note }));
+      else await db(sb.from({ meet: 'v2_vp_meetings', par: 'v2_vp_partners', act: 'v2_vp_activities' }[src]).update(ok ? { status: src === 'par' ? 'active' : 'approved' } : { status: 'returned', mayor_note: note }).eq('id', id));
+      toast(ok ? 'Approved' : 'Returned'); await load();
+    } catch (e) { toast(e.message, true); }
+  }
+
   /* Calendar of Activities (COA): the Secretary drafts from the council minutes, the SAILS President approves */
   const COA_CAT = { activity: 'Activity', program: 'Program', meeting: 'Meeting', deadline: 'Deadline', holiday: 'Holiday' };
   const COA_ST = { proposed: ['waiting for the President', 'warn'], returned: ['returned', 'bad'], draft: ['draft', ''], approved: ['approved', 'ok'], cancelled: ['cancelled', 'bad'] };
@@ -300,7 +333,7 @@ export async function mountOffice(el, ctx) {
     const P = O.panes.find(p => p[0] === pane) || O.panes[0];
     el.innerHTML = `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
       <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
-      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'trash' ? trashPane() : pane === 'coa' ? coaPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
+      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'trash' ? trashPane() : pane === 'coa' ? coaPane() : pane === 'vpa' ? vpaPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
     if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
@@ -308,6 +341,7 @@ export async function mountOffice(el, ctx) {
       el.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => faqForm((X.faq || []).find(f => f.id === b.dataset.fe)));
       el.querySelectorAll('[data-fd]').forEach(b => b.onclick = async () => { if (!await confirmDialog('Students will no longer see it.', { ok: 'Delete', danger: true, title: 'Delete this question?' })) return; try { await db(sb.from('v2_faq').delete().eq('id', b.dataset.fd)); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }
     if (pane === 'requests') { el.querySelectorAll('[data-ra]').forEach(b => b.onclick = () => answer(b.dataset.ra, b.dataset.ok === '1')); el.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => removeItem('record_request', b.dataset.rx, (X.rreq || []).find(r => r.id === b.dataset.rx)?.title)); return; }
+    if (pane === 'vpa') { el.querySelectorAll('[data-vo]').forEach(b => b.onclick = () => vpDecide(b.dataset.vo, true)); el.querySelectorAll('[data-vr]').forEach(b => b.onclick = () => vpDecide(b.dataset.vr, false)); return; }
     if (pane === 'coa') { el.querySelector('#ca')?.addEventListener('click', () => coaForm(null));
       const find = id => (X.coa || []).find(c => c.id === id);
       el.querySelectorAll('[data-ae]').forEach(b => b.onclick = () => coaForm(find(b.dataset.ae)));

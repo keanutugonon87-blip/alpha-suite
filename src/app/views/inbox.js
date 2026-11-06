@@ -39,11 +39,10 @@ export async function deskItems(ctx) {
     const l = n(liq, r => r.status === 'submitted'); if (l) add('📑', `${l} liquidation report${s(l)} ${w(l)} for your approval`, 'Budget', 'requests');
   }
   if (mayor || isVp || role === 'vice_mayor') {
-    const d = n(recs, r => r.flow === 'reviewed'); if (d && (mayor || role !== 'vp_external')) add('🗂️', `${d} record${s(d)} from the Secretary ${w(d)} for approval`, 'VP Desk › Records', 'vp');
+    const d = n(recs, r => r.flow === 'reviewed'); if (d && (mayor || role !== 'vp_external')) add('🗂️', `${d} record${s(d)} from the Secretary ${w(d)} for approval`, mayor ? 'President Desk › VP approvals' : 'VP Desk › Records', 'vp');
   }
   if (mayor) {
-    const p = n(meet, r => r.status === 'proposed') + n(par, r => r.status === 'proposed') + n(act, r => r.status === 'proposed'); if (p) add('🧭', `${p} VP proposal${s(p)} ${w(p)} for your decision`, 'VP Desk', 'vp');
-    const o = n(deleg, r => r.status === 'open'); if (o) add('📌', `${o} task${s(o)} you gave the VPs not done yet`, 'VP Desk', 'vp');
+    const p = n(meet, r => r.status === 'proposed') + n(par, r => r.status === 'proposed') + n(act, r => r.status === 'proposed'); if (p) add('🧭', `${p} VP proposal${s(p)} ${w(p)} for your decision`, 'President Desk › VP approvals', 'vp');
   } else if (isVp || role === 'vice_mayor') {
     const o = n(deleg, r => r.status === 'open' && (role === 'vice_mayor' || r.to_role === 'both' || r.to_role === role)); if (o) add('📌', `${o} task${s(o)} from the Mayor for you`, 'VP Desk › From Mayor', 'vp');
     const r1 = n(meet, r => r.status === 'returned') + n(par, r => r.status === 'returned') + n(act, r => r.status === 'returned'); if (r1) add('↩️', `${r1} proposal${s(r1)} returned by the Mayor`, 'VP Desk', 'vp');

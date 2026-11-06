@@ -27,7 +27,7 @@ ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
   { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
-  { id: 'vp', label: 'VP Desk', load: () => import('./vp.js').then(m => m.mountVp), roles: ['vp_internal', 'vp_external', 'vice_mayor', 'mayor'] },
+  { id: 'vp', label: 'VP Desk', load: () => import('./vp.js').then(m => m.mountVp), roles: ['vp_internal', 'vp_external', 'vice_mayor'] },
   { id: 'office', label: 'Desk', load: () => import('./office.js').then(m => m.mountOffice), roles: ['secretary', 'auditor', 'pio', 'marshall', 'mayor'] },
   { id: 'treasury', label: 'Treasury', load: () => import('./treasury.js').then(m => m.mountTreasury), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
   { id: 'desk', label: 'Desk', load: () => import('./desk.js').then(m => m.mountDesk), roles: ['mayor', 'treasurer'] },

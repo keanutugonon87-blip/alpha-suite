@@ -2,14 +2,15 @@ import { esc } from '../core.js';
 
 /* The President's one desk: Directives, VP Desk and Approvals (announcements and FAQ) under a single menu entry. */
 const SK = 'alpha-president-section';
+/* The President does not work inside the Vice Presidents' desks. Their proposals arrive under Approvals. */
 const SECTIONS = [
   ['directives', 'Directives', () => import('./directives.js').then(m => m.mountDirectives)],
-  ['vp', 'VP Desk', () => import('./vp.js').then(m => m.mountVp)],
-  ['approvals', 'Approvals and FAQ', () => import('./office.js').then(m => m.mountOffice)],
+  ['approvals', 'Approvals and calendar', () => import('./office.js').then(m => m.mountOffice)],
 ];
 
 export async function mountPresident(el, ctx) {
-  const want = ctx.section === 'office' ? 'approvals' : ctx.section;
+  if (ctx.section === 'vp') ctx.pane = 'vpa';
+  const want = ctx.section === 'office' || ctx.section === 'vp' ? 'approvals' : ctx.section;
   let cur = SECTIONS.some(s => s[0] === want) ? want : (() => { try { const s = localStorage.getItem(SK); return SECTIONS.some(x => x[0] === s) ? s : 'directives'; } catch { return 'directives'; } })();
   let stop = null, token = 0;
   el.innerHTML = `<div class="bar" id="pds" role="tablist" aria-label="President Desk" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div><div id="pdb"></div>`;
