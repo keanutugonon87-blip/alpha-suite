@@ -33,13 +33,13 @@ const KIND = {
 };
 const OFFICES = {
   secretary: { title: 'Secretary (Second Mate)', blurb: 'Maintain minutes, attendance records, resolutions, notices, membership records and official correspondence; safeguard records; give members reasonable access to non-confidential documents.',
-    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
+    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests'], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
   auditor: { title: 'Auditor (Third Mate)', blurb: 'Independently examine financial records, verify receipts and disbursements, report discrepancies to the Executive Board and adviser, and present findings to the General Assembly. The Auditor does not approve or carry out the transactions being audited.',
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
     panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['pubs', 'Publications', ['post'], ['publication']], ['media', 'Photos and media', ['post'], ['documentation', 'media']], ['publish', 'Post files']], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
   mayor: { title: 'President’s desk', blurb: 'The President approves every official announcement before the PIO sends it, and orders each event by naming the officers who scan. You see the PIO’s work here; you do not write it.',
-    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
+    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
   marshall: { title: 'Marshal (Bosun)', blurb: 'Help keep order, logistics, attendance support and safety during authorized activities. Marshals report and assist. They do not use coercive or disciplinary powers.',
     panes: [['over', 'Overview'], ['plans', 'Activity plans', ['plan']], ['safety', 'Safety log', ['incident']]], go: [['attendance', 'Attendance'], ['watch', 'Watch']] },
 };
@@ -63,6 +63,7 @@ export async function mountOffice(el, ctx) {
     const events = await ANY(sb.from('v2_events').select('id,title,event_date,status,report_sent_at,notified_at').order('event_date', { ascending: false }).limit(60));
     x.events = events;
     if (role === 'mayor' || role === 'secretary') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
+    if (role === 'mayor' || role === 'secretary') x.coa = await ANY(sb.from('v2_coa').select('*').order('starts_on'));   // empty until v42 is run
     if (role === 'mayor' || role === 'secretary') x.trash = await ANY(sb.from('v2_trash').select('*').order('removed_at', { ascending: false }));   // empty until v41 is run
     if (role === 'mayor') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
     if (role === 'secretary') {
@@ -228,11 +229,59 @@ export async function mountOffice(el, ctx) {
         catch (x) { m.querySelector('#er').textContent = x.message; } };
     });
   }
+  /* Calendar of Activities (COA): the Secretary drafts from the council minutes, the SAILS President approves */
+  const COA_CAT = { activity: 'Activity', program: 'Program', meeting: 'Meeting', deadline: 'Deadline', holiday: 'Holiday' };
+  const COA_ST = { proposed: ['waiting for the President', 'warn'], returned: ['returned', 'bad'], draft: ['draft', ''], approved: ['approved', 'ok'], cancelled: ['cancelled', 'bad'] };
+  function coaPane() {
+    const list = X.coa || [], mayor = role === 'mayor';
+    const order = ['proposed', 'returned', 'draft', 'approved', 'cancelled'], day = d => fmtDate(d + 'T00:00:00+08:00');
+    const acts = c => {
+      const a = [];
+      if (mayor) {
+        if (c.status === 'proposed') a.push(`<button class="btn gold sm" data-ad="${c.id}" data-act="approve">Approve</button><button class="btn ghost sm" data-ad="${c.id}" data-act="return">Return</button>`);
+        if (c.status === 'approved') a.push(`<button class="btn ghost sm" data-ad="${c.id}" data-act="cancel">Cancel activity</button>`);
+        if (c.status === 'cancelled') a.push(`<button class="btn ghost sm" data-ad="${c.id}" data-act="reinstate">Bring back</button>`);
+        a.push(`<button class="btn ghost sm" data-ae="${c.id}">Edit</button><button class="btn ghost sm" data-ax="${c.id}">Remove</button>`);
+      } else if (['draft', 'returned'].includes(c.status)) a.push(`<button class="btn gold sm" data-ad="${c.id}" data-act="submit">Send to the President</button><button class="btn ghost sm" data-ae="${c.id}">Edit</button><button class="btn ghost sm" data-ax="${c.id}">Remove</button>`);
+      return a.join('');
+    };
+    const row = c => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(c.title)}</b><small>${esc(COA_CAT[c.category] || 'Activity')} · ${day(c.starts_on)}${c.ends_on && c.ends_on !== c.starts_on ? ' – ' + day(c.ends_on) : ''}${c.time_note ? ' · ' + esc(c.time_note) : ''}${c.venue ? ' · ' + esc(c.venue) : ''}</small>
+      <small>${c.minutes_title ? 'From the minutes: ' + esc(c.minutes_title) : 'No minutes linked yet'}${c.approved_by_name && c.status === 'approved' ? ' · approved by ' + esc(c.approved_by_name) : ''}</small></div><span class="tag ${COA_ST[c.status][1]}">${COA_ST[c.status][0]}</span></div>
+      ${c.details ? `<p style="margin:6px 0 0">${esc(c.details)}</p>` : ''}${c.return_note ? `<p class="muted" style="margin:6px 0 0">${c.status === 'cancelled' ? 'Reason' : 'President’s note'}: ${esc(c.return_note)}</p>` : ''}
+      ${acts(c) ? `<div class="acts" style="margin-top:8px">${acts(c)}</div>` : ''}</div>`;
+    const groups = order.map(st => [st, list.filter(c => c.status === st)]).filter(g => g[1].length);
+    return `<p class="muted" style="margin:0 2px 8px">${mayor ? 'You approve the final Calendar of Activities. Approve or return what the Secretary sends from the council minutes. You can edit, cancel or remove any activity, and what you add yourself is approved at once.' : 'Write each activity from the council minutes, link those minutes, then send it to the SAILS President. Only approved activities show on the students’ Calendar. After you send one, only the President can change it.'} If nothing works here, run <b>v42_coa.sql</b> in Supabase first.</p>
+      <div class="bar"><button class="btn gold" id="ca">+ Add activity</button></div>
+      ${groups.length ? groups.map(([st, l]) => `<p class="muted" style="margin:12px 4px 4px;font-weight:600;text-transform:capitalize">${st === 'proposed' ? 'Waiting for approval' : st}</p><div class="card">${l.map(row).join('')}</div>`).join('') : '<p class="empty">No activities yet.</p>'}`;
+  }
+  function coaForm(c) {
+    const mins = recs.filter(r => r.kind === 'minutes'), mayor = role === 'mayor';
+    modal(`<h3>${c ? 'Edit' : 'Add'} activity</h3><form id="cf"><label>Activity</label><input name="t" required maxlength="120" value="${esc(c?.title)}">
+      <label>Type</label><select name="c">${Object.entries(COA_CAT).map(([k, l]) => `<option value="${k}"${(c?.category || 'activity') === k ? ' selected' : ''}>${l}</option>`).join('')}</select>
+      <label>Starts</label><input name="s" type="date" required value="${esc(c?.starts_on || '')}"><label>Ends (optional, for several days)</label><input name="e" type="date" value="${esc(c?.ends_on || '')}">
+      <label>Time (optional)</label><input name="tm" maxlength="60" placeholder="8:00 AM – 5:00 PM" value="${esc(c?.time_note)}"><label>Place (optional)</label><input name="v" maxlength="100" value="${esc(c?.venue)}">
+      <label>Details (optional)</label><textarea name="d" rows="3" maxlength="1000">${esc(c?.details)}</textarea>
+      <label>Council minutes where this was decided${mayor ? ' (optional for the President)' : ''}</label><select name="m"><option value="">${mins.length ? 'Pick the minutes' : 'No minutes yet. Add them in the Minutes tab first'}</option>${mins.map(r => `<option value="${r.id}"${c?.minutes_id === r.id ? ' selected' : ''}>${esc(r.title)} · ${fmtDate(r.on_date)}</option>`).join('')}</select>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#cf').onsubmit = async e => { e.preventDefault(); const d = new FormData(e.target);
+        try { await db(sb.rpc('v2_coa_save', { p_id: c?.id || null, p_title: d.get('t').trim(), p_details: d.get('d').trim() || null, p_category: d.get('c'), p_starts: d.get('s'), p_ends: d.get('e') || null, p_time: d.get('tm').trim() || null, p_venue: d.get('v').trim() || null, p_minutes: d.get('m') || null }));
+          toast('Saved'); close(); await load(); } catch (x) { m.querySelector('#er').textContent = /function|schema cache|could not find/i.test(x.message) ? 'Run the v42 SQL in Supabase first (supabase/v42_coa.sql).' : x.message; } };
+    });
+  }
+  async function coaAct(id, act) {
+    let note = null;
+    if (act === 'return') { note = await askText('Return the activity', 'What should the Secretary fix?', { ok: 'Return' }); if (note === null) return; if (!String(note).trim()) return toast('Say what to fix', true); }
+    if (act === 'cancel') { note = await askText('Cancel the activity', 'Reason (optional, students can see the activity is cancelled)', { ok: 'Cancel activity' }); if (note === null) return; }
+    try { await db(act === 'submit' ? sb.rpc('v2_coa_submit', { p_id: id }) : sb.rpc('v2_coa_decide', { p_id: id, p_action: act, p_note: note ? String(note).trim() : null }));
+      toast({ submit: 'Sent to the President', approve: 'Approved. It is on the Calendar now.', return: 'Returned to the Secretary', cancel: 'Cancelled', reinstate: 'Back on the Calendar' }[act]); await load(); } catch (e) { toast(e.message, true); }
+  }
+
   /* Trash: removed items wait here for 7 days, then are deleted for good */
   function trashPane() {
     const list = X.trash || [], left = t => Math.max(0, Math.ceil((new Date(t.expires_at) - Date.now()) / dayMs));
     return `<p class="muted" style="margin:0 2px 8px">Removed requests and records stay here for 7 days. Restore one to put it back exactly as it was. After 7 days it is deleted for good. If nothing works here, run <b>v41_trash.sql</b> in Supabase first.</p>
-      ${list.length ? `<div class="card">${list.map(t => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(t.title)}</b><small>${t.source === 'record_request' ? 'Member request' : 'Record'} · ${esc(t.subtitle || '')}</small><small>Removed ${fmtDate(t.removed_at)}${t.removed_by_name ? ' by ' + esc(t.removed_by_name) : ''}</small></div><span class="tag ${left(t) <= 1 ? 'bad' : 'warn'}">${left(t) <= 1 ? 'deleted soon' : left(t) + ' days left'}</span></div>
+      ${list.length ? `<div class="card">${list.map(t => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(t.title)}</b><small>${t.source === 'record_request' ? 'Member request' : t.source === 'coa' ? 'Calendar activity' : 'Record'} · ${esc(t.subtitle || '')}</small><small>Removed ${fmtDate(t.removed_at)}${t.removed_by_name ? ' by ' + esc(t.removed_by_name) : ''}</small></div><span class="tag ${left(t) <= 1 ? 'bad' : 'warn'}">${left(t) <= 1 ? 'deleted soon' : left(t) + ' days left'}</span></div>
         <div class="acts" style="margin-top:8px"><button class="btn gold sm" data-tr="${t.id}">Restore</button><button class="btn ghost sm" data-td="${t.id}">Delete forever</button></div></div>`).join('')}</div>` : '<p class="empty">The trash is empty.</p>'}`;
   }
   async function removeItem(source, id, title) {
@@ -251,7 +300,7 @@ export async function mountOffice(el, ctx) {
     const P = O.panes.find(p => p[0] === pane) || O.panes[0];
     el.innerHTML = `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
       <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
-      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'trash' ? trashPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
+      <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'trash' ? trashPane() : pane === 'coa' ? coaPane() : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
     if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
@@ -259,6 +308,12 @@ export async function mountOffice(el, ctx) {
       el.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => faqForm((X.faq || []).find(f => f.id === b.dataset.fe)));
       el.querySelectorAll('[data-fd]').forEach(b => b.onclick = async () => { if (!await confirmDialog('Students will no longer see it.', { ok: 'Delete', danger: true, title: 'Delete this question?' })) return; try { await db(sb.from('v2_faq').delete().eq('id', b.dataset.fd)); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }
     if (pane === 'requests') { el.querySelectorAll('[data-ra]').forEach(b => b.onclick = () => answer(b.dataset.ra, b.dataset.ok === '1')); el.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => removeItem('record_request', b.dataset.rx, (X.rreq || []).find(r => r.id === b.dataset.rx)?.title)); return; }
+    if (pane === 'coa') { el.querySelector('#ca')?.addEventListener('click', () => coaForm(null));
+      const find = id => (X.coa || []).find(c => c.id === id);
+      el.querySelectorAll('[data-ae]').forEach(b => b.onclick = () => coaForm(find(b.dataset.ae)));
+      el.querySelectorAll('[data-ax]').forEach(b => b.onclick = () => removeItem('coa', b.dataset.ax, find(b.dataset.ax)?.title));
+      el.querySelectorAll('[data-ad]').forEach(b => b.onclick = () => coaAct(b.dataset.ad, b.dataset.act));
+      return; }
     if (pane === 'trash') { el.querySelectorAll('[data-tr]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_trash_restore', { p_id: b.dataset.tr })); toast('Restored'); await load(); } catch (e) { toast(e.message, true); } });
       el.querySelectorAll('[data-td]').forEach(b => b.onclick = async () => { if (!await confirmDialog('It will be deleted for good and cannot be brought back.', { ok: 'Delete forever', danger: true, title: 'Delete forever?' })) return; try { await db(sb.rpc('v2_trash_delete', { p_id: b.dataset.td })); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }
     if (pane === 'report') { el.querySelector('#pr').onclick = () => printHTML('Audit report', reportHTML()); return; }
@@ -345,7 +400,7 @@ export async function mountOffice(el, ctx) {
     });
   }
 
-  const off = watch(['v2_office_records', 'v2_events', 'v2_entries', 'v2_budget_requests', 'v2_liquidations', 'v2_documents'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
+  const off = watch(['v2_office_records', 'v2_events', 'v2_entries', 'v2_budget_requests', 'v2_liquidations', 'v2_documents', 'v2_coa'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   el.innerHTML = skeleton(4);
   await load();
   return off;

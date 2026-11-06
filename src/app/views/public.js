@@ -4,10 +4,10 @@ import { getTheme, setTheme, getTextSize, setTextSize } from '../display.js';
 import { showOfficerProfile } from '../profile.js';
 import { heroScene, warmScenes, sceneMode, setSceneMode } from '../scenes.js';
 import { percentPaid } from '../money.js';
+import { calendarHTML, wireCalendar, newCalState } from '../coa.js';
 import { auth, loadAuth, callAuth, enter, signOutViewer } from '../auth.js';
 import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
-const FB = 'https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Fprofile.php%3Fid%3D61593577524416&tabs=timeline&width=500&height=600&small_header=false&adapt_container_width=true&hide_cover=false&show_facepile=false';
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
   <polygon points="0,-96 11,-11 96,0 11,11 0,96 -11,11 -96,0 -11,-11" fill="#d9a63c" fill-opacity=".38"/><polygon points="0,-62 7,-7 62,0 7,7 0,62 -7,7 -62,0 -7,-7" transform="rotate(45)" fill="#2a7fb0" fill-opacity=".3"/></svg>`; })();
 const TABS = ['archive', 'faq', 'privacy', 'me', 'officers', 'learn', 'docs', 'bulletin'];
@@ -181,7 +181,7 @@ export async function renderPublic(root) {
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
-  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'archive', data = null, animated = false, pdOpen = null;
+  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'archive', cal = newCalState(), data = null, animated = false, pdOpen = null;
   const ord = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
@@ -287,7 +287,7 @@ export async function renderPublic(root) {
       docs: () => { const dl = data.docs || [], open = pdOpen;
         return `<p class="muted" style="margin:0 2px 8px">${t('pubDocsNote')}</p><div class="card">${dl.map(x => `<div class="row" data-dc="${x.id}" style="cursor:pointer;display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(x.title)}</b><small>${esc([x.ref_no, fmtDate(x.on_date)].filter(Boolean).join(' · '))}</small></div><span class="muted">${open === x.id ? '▾' : '›'}</span></div>
           ${open === x.id ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body || '')}</div>${x.link ? `<p style="margin:8px 0 0"><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${t('pubDocsOpen')}</a></p>` : ''}` : ''}</div>`).join('') || `<div class="empty"><b>${t('pubDocsNone')}</b></div>`}</div>`; },
-      bulletin: () => `<iframe class="fb" src="${FB}" width="500" height="600" scrolling="yes" loading="lazy" title="Class Facebook page" allow="encrypted-media"></iframe>`,
+      bulletin: () => `${calendarHTML(data.coa || [], cal)}<p style="margin:10px 2px"><a href="https://www.facebook.com/profile.php?id=61593577524416" target="_blank" rel="noopener">${t('fbLink')}</a></p>`,
     };
     const hs = heroScene(SCENE_OF[tab] || tab);
     m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}<div class="hero ${hs.dark ? 'dk' : ''}" style="background:${hs.top}">
@@ -314,6 +314,7 @@ export async function renderPublic(root) {
     if (tab === 'me') renderMe(m.querySelector('#sec'));
     m.querySelector('#pon')?.addEventListener('click', async e => { e.target.disabled = true; try { await enablePush(); toast('Alerts are on'); } catch (x) { toast(x.message, true); } pstate = await pushState(); paint(); });
     m.querySelector('#poff')?.addEventListener('click', async () => { try { await disablePush(); } catch { /* ignore */ } pstate = await pushState(); paint(); });
+    if (tab === 'bulletin') wireCalendar(m.querySelector('#sec'), cal, paint);
     m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     m.querySelectorAll('[data-dc]').forEach(b => b.onclick = e => { if (e.target.closest('a')) return; pdOpen = pdOpen === b.dataset.dc ? null : b.dataset.dc; paint(); });
     m.querySelectorAll('[data-rq]').forEach(b => b.onclick = () => askRecord(b.dataset.rq));
@@ -324,8 +325,8 @@ export async function renderPublic(root) {
   async function load() {
     try {
       const opt = p => db(p).catch(() => []);
-      const [o, tr, ann, docs, mine, faq] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() })), opt(sb.rpc('v2_public_faq'))]);   // docs stay empty until the v30 SQL is run
-      const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [], faq: Array.isArray(faq) ? faq : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
+      const [o, tr, ann, docs, mine, faq, coa] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() })), opt(sb.rpc('v2_public_faq')), opt(sb.rpc('v2_public_coa'))]);   // docs stay empty until the v30 SQL is run
+      const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [], faq: Array.isArray(faq) ? faq : [], coa: Array.isArray(coa) ? coa : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
     } catch (e) {
       if (!data) {   // no connection: still show the student's own saved status, if this phone has one
         m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div><div id="offme"></div>`;

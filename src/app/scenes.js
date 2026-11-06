@@ -51,7 +51,7 @@ const SCENES = {
     <g class="shipbob" fill="#050f33"><path d="M60 100 h60 l-8 12 H68z"/><rect x="76" y="86" width="22" height="14"/><rect x="84" y="74" width="4" height="12"/></g>
     ${wave(108, '#17398a', 'a', .9)}${wave(124, '#0c2f78', 'b')}${wave(142, '#06194a', 'c')}${sides.night}`],
   /* Bulletin — sunrise over the horizon */
-  bulletin: ['Sunrise', 'Fresh word from the officers', `${sky('#ffcf8a', '#fff1d6')}
+  bulletin: ['Sunrise', 'What is coming up', `${sky('#ffcf8a', '#fff1d6')}
     <g class="rays" transform="translate(200 104)" stroke="#fff" stroke-width="2" opacity=".55"><path d="M0 0 L-180 -90 M0 0 L-120 -100 M0 0 L-50 -104 M0 0 L50 -104 M0 0 L120 -100 M0 0 L180 -90"/></g>
     <circle class="sun" cx="200" cy="106" r="38" fill="#ffd36b"/><circle cx="200" cy="106" r="52" fill="#ffd36b" opacity=".3"/>
     ${cloud(60, 40, 1, .85)}${cloud(330, 56, .9, .8)}${gull(264, 40)}${gull(284, 32, .7)}

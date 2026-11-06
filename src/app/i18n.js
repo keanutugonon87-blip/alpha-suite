@@ -51,7 +51,7 @@ const D = {
   prvFixTitle: ['Correct my information', 'Itul-id ang akong impormasyon'],
   signin: ['Officer sign in', 'Pag-sign in sa opisyal'],
   pubDocs: ['Documents', 'Mga Dokumento'], pubDocsNote: ['Official class documents the officers have approved and posted for everyone.', 'Opisyal nga mga dokumento sa klase nga giaprobahan ug gi-post sa mga opisyal alang sa tanan.'], pubDocsNone: ['No documents posted yet.', 'Wala pay na-post nga dokumento.'], pubDocsOpen: ['Open the file', 'Ablihi ang file'],
-  fund: ['Fund', 'Pondo'], viol: ['Violations', 'Paglapas'], me: ['My Status', 'Akong Status'], officers: ['Officers', 'Mga Opisyal'], learn: ['Deck Watch', 'Deck Watch'], bulletin: ['Bulletin', 'Balita'],
+  fund: ['Fund', 'Pondo'], viol: ['Violations', 'Paglapas'], me: ['My Status', 'Akong Status'], officers: ['Officers', 'Mga Opisyal'], learn: ['Deck Watch', 'Deck Watch'], bulletin: ['Calendar', 'Kalendaryo'], fbLink: ['Class Facebook page', 'Facebook page sa klase'],
   balance: ['Total balance, all funds', 'Kinatibuk-ang balanse, tanang pondo'],
   good: ['everyone in good standing', 'tanan maayo ang kahimtang'],
   openv: ['with open violations', 'adunay wala pa masulbad nga paglapas'],

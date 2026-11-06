@@ -404,3 +404,12 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 
 .grp-v>summary{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;list-style:none}.grp-v>summary::-webkit-details-marker{display:none}.grp-v>summary small{display:block;color:var(--muted)}.grp-v>summary:after{content:'▾';margin-left:6px;opacity:.6}.grp-v[open]>summary:after{content:'▴'}
 .grp-v input[type=checkbox]{width:24px;height:24px;min-height:0;padding:0;margin:0;flex:none;accent-color:var(--sea)}
+/* Calendar of Activities */
+.cal{padding:2px 0 8px}.cal-h{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}.cal-h b{flex:1;text-align:center;font-size:1.05rem}
+.cal-w,.cal-g{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal-w span{text-align:center;font-size:.75rem;color:var(--muted);padding:2px 0}
+.cal-c{min-height:48px;border:1px solid var(--line);border-radius:10px;background:var(--card);padding:4px 2px;display:flex;flex-direction:column;align-items:center;justify-content:space-between;cursor:pointer;font:inherit;color:inherit}
+.cal-c.off{border:0;background:none;cursor:default}.cal-c.today{border-color:var(--sea);font-weight:700}.cal-c.sel{background:var(--sea);color:#fff}.cal-c i{display:flex;gap:3px;min-height:7px}
+.cal .dot{width:7px;height:7px;border-radius:50%;background:var(--sea);display:block}.cal .dot.cat-meeting{background:#7c5cc4}.cal .dot.cat-deadline{background:#d9534f}.cal .dot.cat-holiday{background:#2e9e6b}.cal .dot.cat-program{background:#e0a020}.cal .dot.gone{background:#9aa5b1}
+.cal-c.sel .dot{box-shadow:0 0 0 1.5px #fff}
+.cal-item{border:1px solid var(--line);border-left:4px solid var(--sea);border-radius:12px;background:var(--card);padding:10px 12px;margin-bottom:8px}.cal-item.cat-meeting{border-left-color:#7c5cc4}.cal-item.cat-deadline{border-left-color:#d9534f}.cal-item.cat-holiday{border-left-color:#2e9e6b}.cal-item.cat-program{border-left-color:#e0a020}
+.cal-item.gone{opacity:.65;border-left-color:#9aa5b1}.cal-item.gone b{text-decoration:line-through}.cal-item-h{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}.cal-item small{display:block;color:var(--muted);margin-top:2px}.cal-item p{margin:6px 0 0}
