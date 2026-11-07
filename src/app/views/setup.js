@@ -23,6 +23,7 @@ export const STEPS = [
   { v: 'v45', file: 'v45_marshal_line.sql', does: 'Marshal line: General Marshal and four Department Marshals with their own desk, blocks by section letter, incident reports, requests to Class Mayors', check: fn('v2_marshal_overview', {}) },
   { v: 'v46', file: 'v46_class_mayor_line.sql', does: 'Class Mayor line: separate SAILS President role, class officers get an inbox only, weekly report and requests up to the VP Internal', check: fn('v2_class_report_build', {}) },
   { v: 'v47', file: 'v47_president_referrals.sql', does: 'The President acknowledges, sends back or closes incident reports the General Marshal referred', check: fn('v2_incident_president', { p_id: '00000000-0000-0000-0000-000000000000', p_action: '', p_note: null }) },
+  { v: 'v48', file: 'v48_line_of_authority_access.sql', does: 'SAILS-level access belongs to the SAILS President: a Class Mayor manages only his class officers and sees only his own section', check: fn('v2_president_overview', {}) },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },

@@ -28,6 +28,7 @@ function describe(a) {
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
 
 export async function mountAccounts(el, ctx) {
+  const ALLOWED = ctx.mode === 'class' ? ['vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'pio', 'sails'] : ROLES.filter(r => r !== 'sails_president');   // a Class Mayor manages only his class officers
   const isMayor = ctx.can('mayor'), canAlert = ctx.can('mayor', 'vice_mayor');
   let tab = 'people', pstate = 'unsupported', af = { who: '', table: '', from: '', to: '', page: 0 };
   if (canAlert) pstate = await pushState();
@@ -44,7 +45,7 @@ export async function mountAccounts(el, ctx) {
     modal(`<h3>Review access request</h3>
       <div class="rq"><span class="ini">${esc(initials(p.full_name))}</span><div><b>${esc(p.full_name)}</b><div class="em">${esc(p.email)}</div><small class="muted">Requested ${fmtDateTime(p.created_at)} (${ago(p.created_at)})</small></div></div>
       <label>Assign a role</label>
-      <div class="roles">${ROLES.map(r => `<label class="rl"><input type="radio" name="r" value="${r}"><span><b>${ROLE_LABEL[r]}</b><small>${esc(ROLE_INFO[r] || '')}</small></span></label>`).join('')}</div>
+      <div class="roles">${ALLOWED.map(r => `<label class="rl"><input type="radio" name="r" value="${r}"><span><b>${ROLE_LABEL[r]}</b><small>${esc(ROLE_INFO[r] || '')}</small></span></label>`).join('')}</div>
       <label class="ck"><input type="checkbox" id="ok"><span>I confirmed that <b>${esc(p.email)}</b> belongs to <b>${esc(p.full_name)}</b> and the role is right.</span></label>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:1" disabled>Approve</button><button class="btn danger" id="rj">Reject</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`,
       (m, close) => {
@@ -111,8 +112,8 @@ export async function mountAccounts(el, ctx) {
       <div class="card">${active.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small>
           <small>Joined ${fmtDate(p.created_at)}${changed(p) ? ` · role changed ${fmtDate(p.updated_at)}` : ''}</small>
           ${canAlert ? `<small>${links.get(p.user_id) ? `Student: ${esc(links.get(p.user_id).member_name)} · ${links.get(p.user_id).has_pin ? 'PIN set' : 'no PIN yet'}` : 'Not linked to a student record'}${isMayor ? ` · <a href="#" data-ln="${p.user_id}">${links.get(p.user_id) ? 'change' : 'link'}</a>` : ''}</small>` : ''}</div></div>
-        <div class="acts">${isMayor && p.user_id !== ctx.profile.user_id
-          ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ROLES.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select><button class="btn danger sm" data-del="${p.user_id}">Remove</button>`
+        <div class="acts">${isMayor && p.user_id !== ctx.profile.user_id && ALLOWED.includes(p.role)
+          ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ALLOWED.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select><button class="btn danger sm" data-del="${p.user_id}">Remove</button>`
           : `<span class="tag ok">${ROLE_LABEL[p.role]}${p.user_id === ctx.profile.user_id ? ' (you)' : ''}</span>`}</div></div>`).join('')}</div>`
       : tab === 'backups' ? `${(() => {
           const stamp = n => { const m = n && n.match(/(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})/); return m ? new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+08:00`) : null; };
