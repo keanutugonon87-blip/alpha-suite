@@ -53,7 +53,7 @@ $$;
 grant execute on function public.v2_real_role() to authenticated;
 
 -- 4 · the Class Mayor does the jobs the Treasurer, Secretary and PIO did
-do $$ declare f record; p record; src text; q text; w text;
+do $$ declare f record; pl record; src text; q text; w text;
 begin
   for f in select p.oid, p.proname from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and p.prokind = 'f' and (p.prosrc like '%v2_has_role(''treasurer'')%' or p.prosrc like '%v2_has_role(''secretary'')%') loop
@@ -62,12 +62,12 @@ begin
     src := replace(src, 'public.v2_has_role(''secretary'')', 'public.v2_has_role(''secretary'', ''mayor'')');
     execute src;
   end loop;
-  for p in select schemaname, tablename, policyname, cmd, roles, qual, with_check from pg_policies
-           where schemaname = 'public' and (coalesce(qual, '') || coalesce(with_check, '')) like '%v2_has_role(''treasurer'')%' loop
-    q := replace(p.qual, 'v2_has_role(''treasurer'')', 'v2_has_role(''treasurer'', ''mayor'')');
-    w := replace(p.with_check, 'v2_has_role(''treasurer'')', 'v2_has_role(''treasurer'', ''mayor'')');
-    execute format('drop policy %I on %I.%I', p.policyname, p.schemaname, p.tablename);
-    execute format('create policy %I on %I.%I as permissive for %s to authenticated %s %s', p.policyname, p.schemaname, p.tablename, p.cmd,
+  for pl in select schemaname, tablename, policyname, cmd, roles, qual, with_check from pg_policies
+           where schemaname = 'public' and (coalesce(qual, '') || coalesce(with_check, '')) like '%ARRAY[''treasurer''::text]%' loop
+    q := replace(pl.qual, 'ARRAY[''treasurer''::text]', 'ARRAY[''treasurer''::text, ''mayor''::text]');
+    w := replace(pl.with_check, 'ARRAY[''treasurer''::text]', 'ARRAY[''treasurer''::text, ''mayor''::text]');
+    execute format('drop policy %I on %I.%I', pl.policyname, pl.schemaname, pl.tablename);
+    execute format('create policy %I on %I.%I as permissive for %s to authenticated %s %s', pl.policyname, pl.schemaname, pl.tablename, pl.cmd,
       case when q is not null then 'using (' || q || ')' else '' end, case when w is not null then 'with check (' || w || ')' else '' end);
   end loop;
 end $$;
@@ -89,7 +89,7 @@ do $$ declare src text; begin
 end $$;
 
 -- 5 · the President's own powers: the President account, or the Mayor while no President account exists
-do $$ declare f record; src text; p record; q text; w text;
+do $$ declare f record; src text; pl record;
 begin
   for f in select p.oid from pg_proc p join pg_namespace n on n.oid = p.pronamespace
            where n.nspname = 'public' and p.prokind = 'f'
@@ -103,9 +103,9 @@ begin
     src := replace(src, 'public.v2_role() = ''mayor'' or d.issued_by', 'public.v2_is_president() or d.issued_by');
     execute src;
   end loop;
-  for p in select policyname, tablename, qual, with_check from pg_policies where schemaname = 'public' and tablename in ('v2_vp_meetings', 'v2_vp_partners', 'v2_vp_activities') and policyname like '%president_decides' loop
-    execute format('drop policy %I on public.%I', p.policyname, p.tablename);
-    execute format('create policy %I on public.%I for update to authenticated using (public.v2_is_president()) with check (public.v2_is_president())', p.policyname, p.tablename);
+  for pl in select policyname, tablename, qual, with_check from pg_policies where schemaname = 'public' and tablename in ('v2_vp_meetings', 'v2_vp_partners', 'v2_vp_activities') and policyname like '%president_decides' loop
+    execute format('drop policy %I on public.%I', pl.policyname, pl.tablename);
+    execute format('create policy %I on public.%I for update to authenticated using (public.v2_is_president()) with check (public.v2_is_president())', pl.policyname, pl.tablename);
   end loop;
 end $$;
 drop policy if exists decisions_read on public.v2_decisions;
