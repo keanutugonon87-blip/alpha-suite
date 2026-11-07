@@ -46,9 +46,9 @@ const OFFICES = {
 const ANY = async (p, dflt = []) => { try { return await db(p); } catch { return dflt; } };
 
 export async function mountOffice(el, ctx) {
-  const role = ctx.profile.role, O = OFFICES[role];
+  const role = ctx.profile.role, O = ctx.only && OFFICES[role] ? { ...OFFICES[role], panes: OFFICES[role].panes.filter(p => ctx.only.includes(p[0])) } : OFFICES[role];
   if (!O) { el.innerHTML = '<p class="empty">This desk is for the Secretary, Auditor, PIO and Marshals.</p>'; return () => {}; }
-  let pane = ctx.pane && (OFFICES[role]?.panes || []).some(p => p[0] === ctx.pane) ? ctx.pane : 'over', recs = [], X = {}, missing = false;
+  let pane = ctx.pane && (O.panes || []).some(p => p[0] === ctx.pane) ? ctx.pane : 'over', recs = [], X = {}, missing = false;
 
   async function load() {
     try { recs = await db(sb.from('v2_office_records').select('*').order('on_date', { ascending: false }).order('created_at', { ascending: false }).limit(1000)); missing = false; }
@@ -258,7 +258,7 @@ export async function mountOffice(el, ctx) {
       <span class="tag ${i.st === 'returned' ? 'bad' : i.st === 'proposed' ? (late(i) ? 'bad' : 'warn') : 'ok'}">${i.st === 'proposed' ? (late(i) ? waited(i) + ' days waiting' : 'waiting for you') : i.st === 'returned' ? 'returned' : 'approved'}</span></div>
       ${i.body ? `<p style="margin:6px 0 0;white-space:pre-wrap">${esc(String(i.body).slice(0, 400))}</p>` : ''}${i.adv ? `<small class="muted">Adviser: ${esc(i.adv.replace('_', ' '))}${i.auth === false ? ' · SAILS authority wording not checked' : ''}</small>` : ''}${i.note ? `<p class="muted" style="margin:6px 0 0">Your note: ${esc(i.note)}</p>` : ''}
       ${act ? `<div class="acts" style="margin-top:8px"><button class="btn gold sm" data-vo="${i.key}">Approve</button><button class="btn ghost sm" data-vr="${i.key}">Return with a note</button></div>` : ''}</div>`;
-    return `<p class="muted" style="margin:0 2px 8px">The line of authority: the Vice Presidents propose, the Secretary sends records, and you decide. Anything waiting more than 3 days is flagged, and you and the officer get a phone alert. To give an officer a task, use Directives. A plain VP Internal meeting needs no approval, so it does not appear here.</p>
+    return `<details style="margin:0 2px 8px"><summary class="muted" style="cursor:pointer;font-size:.85rem">How this works</summary><p class="muted" style="margin:6px 0 0">The line of authority: the Vice Presidents propose, the Secretary sends records, and you decide. Anything waiting more than 3 days is flagged, and you and the officer get a phone alert. To give an officer a task, use Directives. A plain VP Internal meeting needs no approval, so it does not appear here.</p></details>
       <p class="muted" style="margin:10px 4px 4px;font-weight:600">Waiting for your decision</p>${wait.length ? `<div class="card">${wait.map(i => row(i, true)).join('')}</div>` : '<p class="empty">Nothing is waiting for you.</p>'}
       ${back.length ? `<p class="muted" style="margin:12px 4px 4px;font-weight:600">Returned, with the officer</p><div class="card">${back.map(i => row(i, false)).join('')}</div>` : ''}
       ${done.length ? `<p class="muted" style="margin:12px 4px 4px;font-weight:600">Recently approved</p><div class="card">${done.map(i => row(i, false)).join('')}</div>` : ''}`;
@@ -382,12 +382,12 @@ export async function mountOffice(el, ctx) {
   function draw() {
     if (missing && !['over', 'report'].includes(pane)) { el.innerHTML = '<div class="card pad"><b>One more step.</b><p class="muted">Run <b>v29_office_records.sql</b> in the Supabase SQL Editor, then reload this screen.</p></div>'; return; }
     const P = O.panes.find(p => p[0] === pane) || O.panes[0];
-    el.innerHTML = `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
-      <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>
+    el.innerHTML = `${ctx.bare ? '' : `<div style="margin:0 2px 8px"><b>${O.title}</b></div>
+      <div style="display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px">${O.panes.map(([id, l]) => `<button class="btn ${id === pane ? 'gold' : 'ghost'} sm" data-pane="${id}" style="white-space:nowrap">${l}</button>`).join('')}</div>`}
       <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'trash' ? trashPane() : pane === 'coa' ? coaPane() : pane === 'vpa' ? vpaPane() : pane === 'hist' ? histPane() : pane === 'marsh' ? marshPane() : pane === 'secs' ? secsPane() : (pane === 'score' || pane === 'funds' || pane === 'rec') ? '<div id="svb"></div>' : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
-    if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
+    if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (ctx.go && ctx.go(p.startsWith('go:') ? p.slice(3) : p)) return; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
     if (pane === 'faq') { el.querySelector('#fa').onclick = () => faqForm(null);
       el.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => faqForm((X.faq || []).find(f => f.id === b.dataset.fe)));
       el.querySelectorAll('[data-fd]').forEach(b => b.onclick = async () => { if (!await confirmDialog('Students will no longer see it.', { ok: 'Delete', danger: true, title: 'Delete this question?' })) return; try { await db(sb.from('v2_faq').delete().eq('id', b.dataset.fd)); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }

@@ -126,11 +126,11 @@ export async function renderStaff(root, tabId) {
   const LOCKED = ['vice_mayor', 'secretary', 'treasurer', 'pio', 'marshall'];
   if (LOCKED.includes(p.role)) tabs = TABS.filter(t => t.id === 'directives');   // class officers: inbox only; the Class Mayor delegates to them
   if (mode === 'class') tabs = tabs.filter(t => t.id !== 'vp').map(t => t.id === 'office' ? { ...t, label: 'Mayor Desk', load: () => import('./office.js').then(m => (e2, c2) => m.mountOffice(e2, { ...c2, profile: { ...c2.profile, role: 'secretary' } })) } : t);
-  if (mode === 'pres') tabs = [...tabs.filter(t => t.id === 'office' || t.id === 'directives' || t.id === 'vp'), TABS.find(t => t.id === 'classup')];
+  if (mode === 'pres') tabs = tabs.filter(t => t.id === 'office' || t.id === 'directives' || t.id === 'vp');
   if (mode !== 'pres' && mode !== 'acting') tabs = tabs.filter(t => t.id !== 'report' || mode === 'class');
   if (mode === 'acting') tabs = tabs.filter(t => t.id !== 'classup');
   // The President has one desk: Directives, VP Desk and Approvals sit inside it. Old links to #/staff/directives or #/staff/vp still land there.
-  if (p.role === 'mayor' && mode !== 'class') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp') { ctx.section = tabId; tabId = 'office'; } }
+  if (p.role === 'mayor' && mode !== 'class') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp' || tabId === 'classup') { ctx.section = tabId; tabId = 'office'; } }
   if (p.role === 'mayor' && mode !== 'class') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'); tabs = [...rest.slice(0, 1), o, ...rest.slice(1)]; }   // Today, then the President Desk
   // Related screens share one menu entry (Money, Class, Admin) with buttons to switch between them. Old links to a single screen still land in the right place.
   const HUBS = [['money', 'Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['class', 'Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['admin', 'Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
