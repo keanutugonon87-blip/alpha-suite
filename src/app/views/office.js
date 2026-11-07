@@ -128,7 +128,6 @@ export async function mountOffice(el, ctx) {
       c(wt.length, 'VP or Secretary proposal(s) waiting for you' + (wt.some(i => day3(i.since)) ? ' (' + wt.filter(i => day3(i.since)).length + ' waiting more than 3 days)' : ''), 'vpa', wt.some(i => day3(i.since)));
       c((X.coa || []).filter(r => r.status === 'proposed').length, 'calendar activit' + ((X.coa || []).filter(r => r.status === 'proposed').length === 1 ? 'y' : 'ies') + ' waiting for your approval', 'coa');
       c((X.marsh || []).filter(i => i.status === 'referred' && i.referred_to === 'president' && !i.president_action).length, 'incident report(s) referred to you', 'marsh', true);
-      c(X.pendAcc || 0, 'account request(s) waiting for your approval', 'go:accounts');
       c((X.creps || []).filter(r => day3(r.submitted_at)).length, 'weekly report(s) the VP Internal has not read for over 3 days', 'go:classup', true);
       c((X.casks || []).filter(r => day3(r.created_at)).length, 'Class Mayor request(s) the VP Internal has not answered for over 3 days', 'go:classup', true);
       c((X.clash || []).length, 'calendar clash(es): two activities on the same dates', 'coa');
@@ -291,7 +290,7 @@ export async function mountOffice(el, ctx) {
   /* every approval, return and cancellation, kept as a log the President can filter and print */
   let histF = 'all', histQ = '';
   function secsPane() {
-    const d = x.secs; if (!d) return '<div class="card"><p class="empty">Run the v48 SQL in Supabase to turn this on.</p></div>';
+    const d = X.secs; if (!d) return '<div class="card"><p class="empty">Run the v48 SQL in Supabase to turn this on.</p></div>';
     const O = d.officers || {}, n = k => O[k] || 0, wk = w => w ? fmtDate(w + 'T00:00:00+08:00') : 'none yet';
     return `<p class="muted" style="margin:0 2px 8px">Every section, its Class Mayor and how they are doing. Class Mayors report to the VP Internal; you see it all here.</p>
       <div class="grid" style="margin-bottom:12px"><div class="stat"><small>Class Mayors</small><b>${n('mayor')}</b></div><div class="stat"><small>VPs</small><b>${n('vp_internal') + n('vp_external')}</b></div><div class="stat"><small>Marshals</small><b>${n('general_marshal') + n('dept_marshal')}</b></div><div class="stat"><small>Waiting for approval</small><b>${n('pending')}</b></div></div>
