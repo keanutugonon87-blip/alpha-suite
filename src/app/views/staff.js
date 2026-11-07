@@ -117,6 +117,8 @@ export async function renderStaff(root, tabId) {
   // Mode: 'pres' (President account), 'class' (Class Mayor while a President account exists), 'acting' (Mayor acting as President until one exists)
   const mode = realPres ? 'pres' : p.role === 'mayor' ? await sb.rpc('v2_is_president').then(r => (r.error || r.data === true ? 'acting' : 'class'), () => 'acting') : null;
 
+  // A Vice President or the General Marshal named as the President's deputy gets the President Desk while the deputy period is active.
+  const deputy = ['vp_internal', 'vp_external', 'general_marshal'].includes(p.role) ? await sb.rpc('v2_deputy_status').then(r => !!(r.data && r.data.me && r.data.active_now), () => false) : false;
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor'));
   const ctx = { profile: p, mode, can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['treasurer', 'secretary', 'pio'].includes(x))), section: null };
   const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk', mayor: 'President Desk' };
@@ -138,6 +140,7 @@ export async function renderStaff(root, tabId) {
     const at = tabs.indexOf(members[0]);
     tabs = tabs.filter(t => !members.includes(t)); tabs.splice(Math.min(at, tabs.length), 0, { id: hid, label: hlabel, roles: [], load: () => { members.forEach(t => t.load().catch(() => {})); return import('./hub.js').then(m => (e2, c2) => m.mountHub(e2, c2, hid, members.map(t => [t.id, tabLabel(t), t.load]))); } });
   }
+  if (deputy) tabs.splice(1, 0, { id: 'office', label: 'President Desk', roles: [], load: () => import('./president.js').then(m => (e2, c2) => m.mountPresident(e2, { ...c2, mode: 'pres', profile: { ...c2.profile, role: 'mayor' } })) });
   const cur = tabs.find(t => t.id === tabId) || tabs[0];
   // On a phone the bar holds 4 sections and a "More" button; on a wide screen the side menu lists them all.
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
