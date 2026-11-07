@@ -64,6 +64,7 @@ export async function mountOffice(el, ctx) {
     x.events = events;
     if (role === 'mayor' || role === 'secretary') x.faq = await ANY(sb.from('v2_faq').select('*').order('sort').order('created_at'));
     if (role === 'mayor') x.decisions = await ANY(sb.from('v2_decisions').select('*').order('decided_at', { ascending: false }).limit(300));   // empty until v44 is run
+    if (role === 'mayor') x.pendAcc = await sb.from('v2_profiles').select('user_id', { count: 'exact', head: true }).eq('role', 'pending').then(r => (r.error ? 0 : r.count || 0), () => 0);
     if (role === 'mayor') { x.creps = await ANY(sb.from('v2_class_reports').select('*').is('reviewed_at', null)); x.casks = await ANY(sb.from('v2_class_asks').select('*').eq('status', 'open')); x.clash = await sb.rpc('v2_coa_conflicts').then(r => r.error ? [] : r.data || [], () => []); }
     if (role === 'mayor') x.q = await ANY(sb.from('v2_approval_questions').select('*').order('created_at'));
     if (role === 'mayor') x.secs = await sb.rpc('v2_president_overview').then(r => r.error ? null : r.data, () => null);
@@ -116,6 +117,7 @@ export async function mountOffice(el, ctx) {
       c(of('finding').filter(r => r.status === 'open').length, 'open finding(s) not reported yet', 'findings'); c(of('finding').filter(r => r.status === 'reported' && !(r.flags || {}).assembly).length, 'reported finding(s) not yet presented to the General Assembly', 'findings');
     } else if (role === 'mayor') {
       const rv = of('post').filter(r => ptype(r) === 'announcement' && r.status === 'review'); c(rv.length, 'announcement(s) waiting for your approval', 'announce');
+      c(X.pendAcc || 0, 'account request(s) waiting for your approval', 'go:accounts');
       const day3 = t => Date.now() - new Date(t || Date.now()) > 3 * dayMs, wt = vpItems().filter(i => i.st === 'proposed');
       c(wt.length, 'VP or Secretary proposal(s) waiting for you' + (wt.some(i => day3(i.since)) ? ' (' + wt.filter(i => day3(i.since)).length + ' waiting more than 3 days)' : ''), 'vpa');
       c((X.coa || []).filter(r => r.status === 'proposed').length, 'calendar activit' + ((X.coa || []).filter(r => r.status === 'proposed').length === 1 ? 'y' : 'ies') + ' waiting for your approval', 'coa');

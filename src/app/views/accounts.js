@@ -105,9 +105,9 @@ export async function mountAccounts(el, ctx) {
     el.innerHTML = `<div class="bar"><button class="btn ${tab === 'people' ? '' : 'ghost'}" data-k="people">Accounts${pend.length ? ` <span class="badge">${pend.length}</span>` : ''}</button>
       ${canAudit ? `<button class="btn ${tab === 'audit' ? '' : 'ghost'}" data-k="audit">Audit log</button>` : ''}${canAlert ? `<button class="btn ${tab === 'backups' ? '' : 'ghost'}" data-k="backups">Backups</button>` : ''}</div>
       ${tab === 'people' ? `${bar()}
-      <h3 class="sec">Waiting for approval ${pend.length ? `<span class="badge">${pend.length}</span>` : ''}</h3>
+      ${ctx.mode === 'class' ? '<p class="muted" style="margin:8px 2px">New accounts are reviewed and approved by the SAILS President.</p>' : `<h3 class="sec">Waiting for approval ${pend.length ? `<span class="badge">${pend.length}</span>` : ''}</h3>
       <div class="card pendbox">${pend.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small><small>Requested ${ago(p.created_at)}</small></div></div>
-          ${isMayor ? `<div class="acts"><button class="btn gold sm" data-rv="${p.user_id}">Review</button><button class="btn ghost sm" data-rj="${p.user_id}">Reject</button></div>` : '<span class="tag warn">Pending</span>'}</div>`).join('') || '<p class="empty">No one is waiting. New sign-ups appear here.</p>'}</div>
+          ${isMayor ? `<div class="acts"><button class="btn gold sm" data-rv="${p.user_id}">Review</button><button class="btn ghost sm" data-rj="${p.user_id}">Reject</button></div>` : '<span class="tag warn">Pending</span>'}</div>`).join('') || '<p class="empty">No one is waiting. New sign-ups appear here.</p>'}</div>`}
       <h3 class="sec">Officers (${active.length})</h3>
       <div class="card">${active.map(p => `<div class="row stk"><div class="lead"><span class="ini">${esc(initials(p.full_name))}</span><div class="m"><b>${esc(p.full_name)}</b><small>${esc(p.email)}</small>
           <small>Joined ${fmtDate(p.created_at)}${changed(p) ? ` · role changed ${fmtDate(p.updated_at)}` : ''}</small>

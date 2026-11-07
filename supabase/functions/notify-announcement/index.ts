@@ -50,7 +50,9 @@ Deno.serve(async (req) => {
   const signup = note.kind === 'signup';
   let subs: Sub[] = [];
   if (signup) {
-    const { data: staff } = await db.from('v2_profiles').select('user_id').in('role', ['mayor', 'vice_mayor']);
+    // New account requests go to the SAILS President. Until a President account exists, the Mayor gets them.
+    let { data: staff } = await db.from('v2_profiles').select('user_id').eq('role', 'sails_president');
+    if (!staff || !staff.length) ({ data: staff } = await db.from('v2_profiles').select('user_id').eq('role', 'mayor'));
     const ids = (staff ?? []).map((s) => s.user_id);
     if (ids.length) { const { data } = await db.from('v2_push_subs').select('endpoint,p256dh,auth').in('user_id', ids); subs = data ?? []; }
   } else {
