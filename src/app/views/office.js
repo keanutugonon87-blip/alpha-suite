@@ -256,8 +256,20 @@ export async function mountOffice(el, ctx) {
   /* every approval, return and cancellation, kept as a log the President can filter and print */
   let histF = 'all', histQ = '';
   function marshPane() {
-    const l = (x.marsh || []).filter(i => i.status === 'referred' && i.referred_to === 'president');
-    return `<p class="muted" style="margin:0 2px 8px">Incident reports the General Marshal referred to the President. Read only. Decide through a directive to the General Marshal.</p>${l.length ? `<div class="card">${l.map(i => `<div class="row" style="display:block"><b>${esc(i.event || 'Department duty')}</b><small class="muted" style="display:block">${fmtDate(i.occurred_on + 'T00:00:00+08:00')}${i.section ? ' · ' + esc(i.section) : ''} · filed by ${esc(i.reporter_name || '')}</small><p style="margin:6px 0 0;white-space:pre-wrap">${esc(i.summary)}</p>${i.gm_note ? `<p class="muted" style="margin:6px 0 0">General Marshal: ${esc(i.gm_note)}</p>` : ''}</div>`).join('')}</div>` : '<p class="empty">Nothing referred to you.</p>'}`;
+    const all = x.marsh || [], pend = all.filter(i => i.status === 'referred' && i.referred_to === 'president'), done = all.filter(i => i.president_action && !pend.includes(i));
+    const PA = { acknowledged: 'Acknowledged', sent_back: 'Sent back', closed: 'Closed' };
+    const card = (i, open) => `<button type="button" class="row" data-mi="${i.id}" style="display:block;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line,#e3e8ee);cursor:pointer"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="m"><b>${esc(i.event || 'Department duty')}</b><small>${fmtDate(i.occurred_on + 'T00:00:00+08:00')}${i.section ? ' · ' + esc(i.section) : ''} · filed by ${esc(i.reporter_name || '')}</small></div><span class="tag ${open ? (i.president_action ? 'ok' : 'warn') : ''}">${i.president_action ? PA[i.president_action] : 'Needs you'}</span></div></button>`;
+    return `<p class="muted" style="margin:0 2px 8px">Incident reports the General Marshal referred to the President. Tap one to read it and decide.</p>${pend.length ? `<div class="card">${pend.map(i => card(i, true)).join('')}</div>` : '<p class="empty">Nothing is waiting for you.</p>'}${done.length ? `<h4 style="margin:14px 2px 6px">Already handled</h4><div class="card">${done.map(i => card(i, false)).join('')}</div>` : ''}`;
+  }
+  function marshOpen(id) {
+    const i = (x.marsh || []).find(r => r.id === id); if (!i) return;
+    const live = i.status === 'referred' && i.referred_to === 'president';
+    modal(`<h3>${esc(i.event || 'Department duty')}</h3><p class="muted" style="margin:0 0 8px">${fmtDate(i.occurred_on + 'T00:00:00+08:00')}${i.section ? ' · ' + esc(i.section) : ''} · filed by ${esc(i.reporter_name || '')}</p>
+      <p style="white-space:pre-wrap;margin:0 0 8px">${esc(i.summary)}</p>${i.action_taken ? `<p class="muted" style="margin:0 0 8px">Action taken: ${esc(i.action_taken)}</p>` : ''}${i.gm_note ? `<p style="margin:0 0 8px"><b>General Marshal:</b> ${esc(i.gm_note)}</p>` : ''}${i.president_note ? `<p style="margin:0 0 8px"><b>You:</b> ${esc(i.president_note)}</p>` : ''}
+      ${live ? `<label>Your note or instruction</label><textarea id="pn" rows="3" maxlength="500"></textarea><div class="acts" style="margin-top:10px"><button class="btn ghost sm" data-pa="acknowledge">Acknowledge</button><button class="btn gold sm" data-pa="send_back">Send back</button><button class="btn ghost sm" data-pa="close">Close</button></div><small class="muted" style="display:block;margin-top:6px">Send back and Close need a note. Send back returns it to the General Marshal with your instruction.</small>` : '<div class="acts" style="margin-top:10px"></div>'}<div class="err" id="er"></div><div style="margin-top:12px"><button type="button" class="btn ghost" id="cx">Close window</button></div>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelectorAll('[data-pa]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_incident_president', { p_id: id, p_action: b.dataset.pa, p_note: m.querySelector('#pn').value })); toast('Saved'); close(); await load(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
+    });
   }
   function histPane() {
     const all = X.decisions || [], q = histQ.trim().toLowerCase(), SRC = { vp_meeting: 'Meeting or program', vp_partner: 'Partner', vp_activity: 'Joint activity', record: 'Record', coa: 'Calendar activity' };
@@ -362,6 +374,7 @@ export async function mountOffice(el, ctx) {
       el.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => faqForm((X.faq || []).find(f => f.id === b.dataset.fe)));
       el.querySelectorAll('[data-fd]').forEach(b => b.onclick = async () => { if (!await confirmDialog('Students will no longer see it.', { ok: 'Delete', danger: true, title: 'Delete this question?' })) return; try { await db(sb.from('v2_faq').delete().eq('id', b.dataset.fd)); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }
     if (pane === 'requests') { el.querySelectorAll('[data-ra]').forEach(b => b.onclick = () => answer(b.dataset.ra, b.dataset.ok === '1')); el.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => removeItem('record_request', b.dataset.rx, (X.rreq || []).find(r => r.id === b.dataset.rx)?.title)); return; }
+    if (pane === 'marsh') el.querySelectorAll('[data-mi]').forEach(b => b.onclick = () => marshOpen(b.dataset.mi));
     if (pane === 'hist') { el.querySelectorAll('[data-hf]').forEach(b => b.onclick = () => { histF = b.dataset.hf; draw(); });
       el.querySelector('#hq').oninput = e => { histQ = e.target.value; const pos = e.target.selectionStart; draw(); const n = el.querySelector('#hq'); n.focus(); n.setSelectionRange(pos, pos); };
       el.querySelector('#hp').onclick = () => histPrint((X.decisions || []).filter(d => (histF === 'all' || d.decision === histF) && (!histQ.trim() || (d.title + ' ' + (d.note || '') + ' ' + (d.proposer_name || '')).toLowerCase().includes(histQ.trim().toLowerCase())))); return; }
