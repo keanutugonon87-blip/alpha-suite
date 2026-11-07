@@ -24,7 +24,7 @@ function sigPad(box) {
 }
 
 export async function mountRequests(el, ctx) {
-  const isTre = ctx.can('treasurer'), isMayor = ctx.can('mayor'), canFile = ctx.can('secretary', 'mayor');
+  const isTre = ctx.can('treasurer'), isMayor = ctx.can('mayor') || ctx.profile.role === 'vp_internal', canFile = ctx.can('secretary', 'mayor');
   let reqs = [], liqs = [], balances = {}, only = 'all';
 
   async function load() {

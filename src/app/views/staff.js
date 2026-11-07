@@ -23,11 +23,13 @@ const ICON = {
   roles: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/>',
   system: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
 };
-ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
+ICON.report = ICON.docs || ICON.notices || ICON.home; ICON.classup = ICON.officers || ICON.home; ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
   { id: 'marshal', label: 'Marshal Desk', load: () => import('./marshal.js').then(m => m.mountMarshal), roles: ['general_marshal', 'dept_marshal'] },
   { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio', 'general_marshal', 'dept_marshal'] },
+  { id: 'report', label: 'Report up', load: () => import('./classreport.js').then(m => m.mountClassReport), roles: ['mayor'] },
+  { id: 'classup', label: 'Class Mayors', load: () => import('./classup.js').then(m => m.mountClassUp), roles: ['vp_internal'] },
   { id: 'vp', label: 'VP Desk', load: () => import('./vp.js').then(m => m.mountVp), roles: ['vp_internal', 'vp_external', 'vice_mayor'] },
   { id: 'office', label: 'Desk', load: () => import('./office.js').then(m => m.mountOffice), roles: ['secretary', 'auditor', 'pio', 'marshall', 'mayor'] },
   { id: 'treasury', label: 'Treasury', load: () => import('./treasury.js').then(m => m.mountTreasury), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
@@ -35,7 +37,7 @@ const TABS = [
   { id: 'balances', label: 'Balances', load: () => import('./balances.js').then(m => m.mountBalances), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
   { id: 'watch', label: 'Watch', load: () => import('./watch.js').then(m => m.mountWatch), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
   { id: 'attendance', label: 'Attendance', load: () => import('./attendance.js').then(m => m.mountAttendance), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
-  { id: 'requests', label: 'Budget', load: () => import('./requests.js').then(m => m.mountRequests), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'] },
+  { id: 'requests', label: 'Budget', load: () => import('./requests.js').then(m => m.mountRequests), roles: ['mayor', 'vp_internal', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'] },
   { id: 'students', label: 'Students', load: () => import('./students.js').then(m => m.mountStudents), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },
   { id: 'officers', label: 'Officers', load: () => import('./officers.js').then(m => m.mountOfficers), roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
   { id: 'notices', label: 'Notices', load: () => import('./notices.js').then(m => m.mountNotices), roles: ['mayor', 'vice_mayor', 'secretary', 'pio'] },
@@ -109,14 +111,25 @@ export async function renderStaff(root, tabId) {
   catch (e) { root.innerHTML = `<div class="auth"><div class="card"><b>Couldn't reach the database.</b><p class="muted">${esc(e.message)}</p><button class="btn" id="r">Retry</button></div></div>`; root.querySelector('#r').onclick = () => location.reload(); return; }
   if (!p) return void authScreen(root);
   if (p.role === 'pending') return pendingScreen(root, p);
+  // The SAILS President account runs the President Desk. The server knows the real role; the screens reuse the Mayor's President Desk.
+  const realPres = p.role === 'sails_president';
+  if (realPres) p = { ...p, role: 'mayor' };
+  // Mode: 'pres' (President account), 'class' (Class Mayor while a President account exists), 'acting' (Mayor acting as President until one exists)
+  const mode = realPres ? 'pres' : p.role === 'mayor' ? await sb.rpc('v2_is_president').then(r => (r.error || r.data === true ? 'acting' : 'class'), () => 'acting') : null;
 
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor'));
-  const ctx = { profile: p, can: (...r) => has(r), section: null };
+  const ctx = { profile: p, mode, can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['treasurer', 'secretary', 'pio'].includes(x))), section: null };
   const OFFICE = { secretary: 'Secretary Desk', auditor: 'Audit Desk', pio: 'PIO Desk', marshall: 'Marshal Desk', mayor: 'President Desk' };
   let tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
+  const LOCKED = ['vice_mayor', 'secretary', 'treasurer', 'pio', 'marshall'];
+  if (LOCKED.includes(p.role)) tabs = TABS.filter(t => t.id === 'directives');   // class officers: inbox only; the Class Mayor delegates to them
+  if (mode === 'class') tabs = tabs.filter(t => t.id !== 'vp').map(t => t.id === 'office' ? { ...t, label: 'Mayor Desk', load: () => import('./office.js').then(m => (e2, c2) => m.mountOffice(e2, { ...c2, profile: { ...c2.profile, role: 'secretary' } })) } : t);
+  if (mode === 'pres') tabs = tabs.filter(t => t.id === 'office' || t.id === 'directives' || t.id === 'vp');
+  if (mode !== 'pres' && mode !== 'acting') tabs = tabs.filter(t => t.id !== 'report' || mode === 'class');
+  if (mode === 'acting') tabs = tabs.filter(t => t.id !== 'classup');
   // The President has one desk: Directives, VP Desk and Approvals sit inside it. Old links to #/staff/directives or #/staff/vp still land there.
-  if (p.role === 'mayor') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp') { ctx.section = tabId; tabId = 'office'; } }
-  if (p.role === 'mayor') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'); tabs = [...rest.slice(0, 1), o, ...rest.slice(1)]; }   // Today, then the President Desk
+  if (p.role === 'mayor' && mode !== 'class') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp') { ctx.section = tabId; tabId = 'office'; } }
+  if (p.role === 'mayor' && mode !== 'class') { const o = tabs.find(t => t.id === 'office'), rest = tabs.filter(t => t.id !== 'office'); tabs = [...rest.slice(0, 1), o, ...rest.slice(1)]; }   // Today, then the President Desk
   // Related screens share one menu entry (Money, Class, Admin) with buttons to switch between them. Old links to a single screen still land in the right place.
   const HUBS = [['money', 'Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['class', 'Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['admin', 'Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   for (const [hid, hlabel, ids] of HUBS) {
@@ -130,7 +143,7 @@ export async function renderStaff(root, tabId) {
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
   const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
   // The side menu (wide screens) is grouped, each group folds away, and the whole menu can shrink to icons. Both choices are remembered.
-  const GROUPS = [['Overview', ['home', 'marshal', 'directives', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  const GROUPS = [['Overview', ['home', 'marshal', 'directives', 'report', 'classup', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   const NK = 'alpha-nav-collapsed', GK = 'alpha-nav-groups', rd = k => { try { return localStorage.getItem(k); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   let navCollapsed = rd(NK) === '1', shut = new Set((() => { try { return JSON.parse(rd(GK) || '[]'); } catch { return []; } })());
   const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' || t0.id === 'money' ? '<i class="badge" id="bdg" hidden></i>' : t0.id === 'home' ? '<i class="badge" id="bdh" hidden></i>' : ''}</button>`;

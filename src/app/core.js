@@ -8,7 +8,7 @@ export const sb = createClient(SB_URL, SB_KEY, {
 });
 
 export const ROLE_LABEL = { pending: 'Pending', mayor: 'Mayor', vice_mayor: 'Vice Mayor', vp_internal: 'VP Internal', vp_external: 'VP External', secretary: 'Secretary', treasurer: 'Treasurer',
-  auditor: 'Auditor', marshall: 'Marshall', sails: 'SAILS Officer', pio: 'PIO', general_marshal: 'General Marshal', dept_marshal: 'Department Marshal' };
+  auditor: 'Auditor', marshall: 'Marshall', sails: 'SAILS Officer', pio: 'PIO', general_marshal: 'General Marshal', sails_president: 'SAILS President', dept_marshal: 'Department Marshal' };
 export const ROLES = Object.keys(ROLE_LABEL).filter(r => r !== 'pending');
 
 /* ---- formatting ---- */

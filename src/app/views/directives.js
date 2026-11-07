@@ -6,13 +6,16 @@ import { ROLE_LABEL } from '../core.js';
    Flow: sent → received → working → done → confirmed. An officer who cannot do it asks to be released; the Mayor decides. */
 const STATUS = { sent: ['Sent', 'warn'], received: ['Received', ''], working: ['Working', ''], done: ['Done · to confirm', 'warn'], confirmed: ['Confirmed', 'ok'], revoke_asked: ['Release asked', 'bad'], revoked: ['Closed', ''] };
 const PRI = { urgent: ['Urgent', 'bad'], normal: ['Normal', ''], low: ['Low', ''] };
-const CHAIN = { mayor: ['vice_mayor', 'vp_internal', 'vp_external', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio', 'general_marshal'], vp_internal: ['secretary', 'marshall', 'pio'], vp_external: ['pio'], general_marshal: ['dept_marshal'] };
+const CLASS_OFFICERS = ['vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'];
+const chainFor = ctx => ({
+  mayor: ctx.mode === 'pres' ? ['vp_internal', 'vp_external', 'general_marshal'] : ctx.mode === 'acting' ? [...CLASS_OFFICERS, 'vp_internal', 'vp_external', 'general_marshal'] : CLASS_OFFICERS,
+  vp_internal: ['mayor'], vp_external: ['mayor'], general_marshal: ['dept_marshal'] });
 const OPEN = ['sent', 'received', 'working', 'done', 'revoke_asked'];
 
 export async function mountDirectives(el, ctx) {
-  const role = ctx.profile.role, issuer = !!CHAIN[role], me = ctx.profile.user_id || ctx.user?.id;
+  const CHAIN = chainFor(ctx), role = ctx.profile.role, issuer = !!CHAIN[role], me = ctx.profile.user_id || ctx.user?.id;
   const mayor = issuer;   // issuers see the board and the officer names
-  const canDecide = d => ctx.can('mayor') || d.issued_by === me;
+  const canDecide = d => d.issued_by === me || (ctx.mode !== 'class' && ctx.can('mayor'));
   let rows = [], tab = 'open', officers = [], mreq = [];
   el.innerHTML = skeleton(4);
 
@@ -89,7 +92,7 @@ export async function mountDirectives(el, ctx) {
       <label>Due date (optional)</label><input name="u" type="date" min="${todayISO()}">
       <label>Priority</label><select name="p"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="low">Low</option></select>
       <label>Related to (optional)</label><input name="l" placeholder="Event, budget request or document">
-      <p class="muted" style="font-size:.85em;margin:8px 0 0">${role === 'mayor' ? 'You direct every officer.' : role === 'vp_internal' ? 'You direct the Secretary, Marshals and PIOs.' : role === 'general_marshal' ? 'You direct the Department Marshals.' : 'You direct the PIOs.'} Each officer gets their own copy, a phone alert right away if their device is linked, and answers it themselves.</p>
+      <p class="muted" style="font-size:.85em;margin:8px 0 0">${role === 'mayor' ? (ctx.mode === 'pres' ? 'You direct the Vice Presidents and the General Marshal.' : ctx.mode === 'class' ? 'You delegate to your class officers. They report to you.' : 'You direct every officer.') : role === 'vp_internal' ? 'You direct the Secretary, Marshals and PIOs.' : role === 'general_marshal' ? 'You direct the Department Marshals.' : 'You direct the PIOs.'} Each officer gets their own copy, a phone alert right away if their device is linked, and answers it themselves.</p>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Send directive</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const boxes = [...m.querySelectorAll('input[name=a]')], count = () => { m.querySelector('#cnt').textContent = boxes.filter(b => b.checked).length + ' chosen'; };
@@ -112,7 +115,7 @@ export async function mountDirectives(el, ctx) {
       const unitOf = new Map(sec.filter(x => x.v2_units && x.v2_units.kind === 'section').map(x => [x.user_id, x.v2_units.name]));
       officers.forEach(o => { o.unit = unitOf.get(o.user_id) || ''; });
     }
-    if (role === 'mayor') mreq = await sb.from('v2_marshal_requests').select('*').eq('to_mayor_id', me).eq('status', 'open').order('created_at').then(r => r.data || [], () => []);
+    if (role === 'mayor' && ctx.mode !== 'pres') mreq = await sb.from('v2_marshal_requests').select('*').eq('to_mayor_id', me).eq('status', 'open').order('created_at').then(r => r.data || [], () => []);
     paint();
   }
   await load();
