@@ -5,7 +5,7 @@ import { esc, sb } from '../core.js';
 const SK = 'alpha-president-section', PK = 'alpha-president-part';
 const office = id => () => import('./office.js').then(m => (e, c) => m.mountOffice(e, { ...c, pane: id, only: [id], bare: true }));
 const GROUPS = [
-  ['today', 'Today', [['over', 'Needs you', office('over')]]],
+  ['today', 'Today', [['over', 'Needs you', office('over')], ['council', 'Council', () => import('./council.js').then(m => m.mountCouncil)], ['memos', 'Memos', () => import('./memos.js').then(m => m.mountMemos)]]],
   ['approvals', 'Approvals', [['vpa', 'VP and records', office('vpa')], ['coa', 'Calendar', office('coa')], ['marsh', 'Incident referrals', office('marsh')], ['hist', 'Decided', office('hist')]]],
   ['people', 'People', [['secs', 'Sections', office('secs')], ['score', 'Scorecards', office('score')], ['directives', 'Directives', () => import('./directives.js').then(m => m.mountDirectives)], ['classup', 'Class Mayors', () => import('./classup.js').then(m => m.mountClassUp)]]],
   ['more', 'More', [['funds', 'Funds', office('funds')], ['rec', 'Records', office('rec')], ['announce', 'Announcements', office('announce')], ['faq', 'FAQ', office('faq')], ['trash', 'Trash', office('trash')]]],

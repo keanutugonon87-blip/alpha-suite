@@ -16,7 +16,7 @@ export async function mountDirectives(el, ctx) {
   const CHAIN = chainFor(ctx), role = ctx.profile.role, issuer = !!CHAIN[role], me = ctx.profile.user_id || ctx.user?.id;
   const mayor = issuer;   // issuers see the board and the officer names
   const canDecide = d => d.issued_by === me || (ctx.mode !== 'class' && ctx.can('mayor'));
-  let rows = [], tab = 'open', officers = [], mreq = [];
+  let rows = [], tab = 'open', officers = [], mreq = [], memos = [], acked = new Set(), qs = [];
   el.innerHTML = skeleton(4);
 
   const overdue = d => d.due_on && OPEN.includes(d.status) && !['done', 'revoke_asked'].includes(d.status) && d.due_on < todayISO();
@@ -59,10 +59,16 @@ export async function mountDirectives(el, ctx) {
         ${by.size ? `<div class="card" style="margin-bottom:12px">${[...by].map(([n, o]) => `<div class="row"><div class="m"><b>${esc(n)}</b></div><div style="display:flex;gap:4px"><span class="tag">${o.n} open</span>${o.unseen ? `<span class="tag warn">${o.unseen} unopened</span>` : ''}${o.od ? `<span class="tag bad">${o.od} overdue</span>` : ''}</div></div>`).join('')}</div>` : ''}`;
     }
     const reqBox = mreq.length ? `<div class="card" style="margin-bottom:12px;border-left:3px solid var(--gold,#c9a227)"><h3 style="margin:0 0 6px">Requests from the Department</h3><p class="muted" style="margin:0 0 8px">A Department Marshal asks your class for help. Accept sends a directive to your class Marshals. Decline needs a short reason.</p>${mreq.map(r => `<div class="row" style="display:block" data-mr="${r.id}"><b>${esc(r.title)}</b><small class="muted" style="display:block">From ${esc(r.from_name || 'Department Marshal')}${r.needed_on ? ' · needed ' + fmtDate(r.needed_on + 'T00:00:00+08:00') : ''}</small>${r.details ? `<p style="margin:4px 0">${esc(r.details)}</p>` : ''}<div class="acts"><button class="btn gold sm" data-ma="1">Accept</button><button class="btn ghost sm" data-ma="0">Decline</button></div></div>`).join('')}</div>` : '';
-    el.innerHTML = `${reqBox}${board}<div class="bar"><button class="btn ${tab === 'open' ? 'gold' : 'ghost'} sm" data-t="open">Open (${open.length})</button><button class="btn ${tab === 'closed' ? 'gold' : 'ghost'} sm" data-t="closed">Closed</button><span class="grow"></span>${issuer ? '<button class="btn gold" id="new">+ New directive</button>' : ''}</div>
+    const pend = memos.filter(m => !acked.has(m.id));
+    const memoBox = pend.length ? `<div class="card" style="margin-bottom:12px;border-left:3px solid var(--gold,#c9a227)"><h3 style="margin:0 0 6px">Memo${pend.length === 1 ? '' : 's'} from the SAILS President</h3>${pend.map(m => `<div class="row" style="display:block"><b>${m.urgent ? '🔴 ' : ''}${esc(m.title)}</b><small class="muted" style="display:block">${fmtDateTime(m.created_at)}</small>${m.body ? `<p style="margin:6px 0;white-space:pre-wrap">${esc(m.body)}</p>` : ''}<div class="acts"><button class="btn gold sm" data-ak="${m.id}">Acknowledge</button></div></div>`).join('')}</div>` : '';
+    const qBox = qs.length ? `<div class="card" style="margin-bottom:12px;border-left:3px solid var(--gold,#c9a227)"><h3 style="margin:0 0 6px">A question from the President</h3>${qs.map(q => `<div class="row" style="display:block"><b>${esc(q.item_title || 'Your item')}</b><p style="margin:4px 0">${esc(q.question)}</p><div class="acts"><button class="btn gold sm" data-qa="${q.id}">Answer</button></div></div>`).join('')}</div>` : '';
+    el.innerHTML = `${memoBox}${qBox}${reqBox}${board}<div class="bar"><button class="btn ${tab === 'open' ? 'gold' : 'ghost'} sm" data-t="open">Open (${open.length})</button><button class="btn ${tab === 'closed' ? 'gold' : 'ghost'} sm" data-t="closed">Closed</button><span class="grow"></span>${issuer ? '<button class="btn ghost" id="tpl">Templates</button><button class="btn gold" id="new">+ New directive</button>' : ''}</div>
       <div class="card">${shown.map(card).join('') || `<p class="empty">${issuer ? 'No directives here. Tap “+ New directive” to assign a task to an officer.' : 'Nothing has been assigned to you.'}</p>`}</div>`;
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     el.querySelector('#new')?.addEventListener('click', form);
+    el.querySelector('#tpl')?.addEventListener('click', templates);
+    el.querySelectorAll('[data-ak]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_memo_ack', { p_id: b.dataset.ak })); toast('Acknowledged'); await load(); } catch (e) { toast(e.message, true); } });
+    el.querySelectorAll('[data-qa]').forEach(b => b.onclick = () => note('Answer the question', 'Your answer', n => db(sb.rpc('v2_question_answer', { p_id: b.dataset.qa, p_answer: n })).then(() => { toast('Answer sent'); return load(); }), 'Send answer'));
     el.querySelectorAll('[data-ma]').forEach(b => b.onclick = () => {
       const id = b.closest('[data-mr]').dataset.mr, yes = b.dataset.ma === '1', fail = e => toast(e.message, true);
       const go = n => db(sb.rpc('v2_marshal_answer', { p_id: id, p_accept: yes, p_note: n || null })).then(n2 => { toast(yes ? 'Accepted. Your class Marshals were notified.' : 'Declined'); return load(); });
@@ -106,6 +112,39 @@ export async function mountDirectives(el, ctx) {
     });
   }
 
+  const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+  async function templates() {
+    const list = await sb.from('v2_directive_templates').select('*').order('created_at').then(r => (r.error ? null : r.data || []), () => null);
+    if (list === null) return toast('Run the v50 SQL in Supabase first', true);
+    const when = t => t.kind === 'weekly' ? 'Every ' + DAYS[t.weekday - 1] : t.kind === 'monthly' ? 'Monthly on day ' + t.month_day : 'Send when I tap';
+    modal(`<h3>Templates and recurring tasks</h3><p class="muted" style="margin:0 0 8px">A task you give often. Send it with one tap, or set it to go out by itself.</p>
+      <div class="card">${list.map(t => `<div class="row" style="display:block"><b>${esc(t.title)}</b><small class="muted" style="display:block">To every ${esc(ROLE_LABEL[t.to_role] || t.to_role)} · ${when(t)} · due in ${t.due_in} day${t.due_in === 1 ? '' : 's'}${t.active ? '' : ' · paused'}</small><div class="acts" style="margin-top:6px"><button class="btn gold sm" data-ts="${t.id}">Send now</button><button class="btn ghost sm" data-te="${t.id}">Edit</button><button class="btn ghost sm" data-td="${t.id}">Delete</button></div></div>`).join('') || '<p class="empty">No templates yet.</p>'}</div>
+      <div class="acts" style="margin-top:10px"><button class="btn gold" id="tn">+ New template</button><button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#tn').onclick = () => { close(); tform(null); };
+      m.querySelectorAll('[data-ts]').forEach(b => b.onclick = async () => { try { const n = await db(sb.rpc('v2_template_send_now', { p_id: b.dataset.ts })); toast(`Sent to ${n} officer${n === 1 ? '' : 's'}`); close(); load(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
+      m.querySelectorAll('[data-te]').forEach(b => b.onclick = () => { close(); tform(list.find(t => t.id === b.dataset.te)); });
+      m.querySelectorAll('[data-td]').forEach(b => b.onclick = async () => { try { await db(sb.rpc('v2_template_delete', { p_id: b.dataset.td })); toast('Deleted'); close(); templates(); } catch (e) { m.querySelector('#er').textContent = e.message; } });
+    });
+  }
+  function tform(t) {
+    const roles = CHAIN[role] || [];
+    modal(`<h3>${t ? 'Edit template' : 'New template'}</h3><form id="f"><label>Task</label><input name="t" required minlength="3" maxlength="140" value="${esc(t?.title || '')}" placeholder="e.g. Send your weekly attendance summary">
+      <label>Details (optional)</label><textarea name="d" rows="3" maxlength="800">${esc(t?.details || '')}</textarea>
+      <label>To every</label><select name="r">${roles.map(r => `<option value="${r}"${t?.to_role === r ? ' selected' : ''}>${esc(ROLE_LABEL[r] || r)}</option>`).join('')}</select>
+      <label>When</label><select name="k"><option value="manual"${t?.kind === 'manual' ? ' selected' : ''}>Only when I tap Send now</option><option value="weekly"${t?.kind === 'weekly' ? ' selected' : ''}>Every week</option><option value="monthly"${t?.kind === 'monthly' ? ' selected' : ''}>Every month</option></select>
+      <label>Weekday (weekly)</label><select name="w">${DAYS.map((d, i) => `<option value="${i + 1}"${(t?.weekday || 5) === i + 1 ? ' selected' : ''}>${d}</option>`).join('')}</select>
+      <label>Day of the month, 1 to 28 (monthly)</label><input name="m" type="number" min="1" max="28" value="${t?.month_day || 1}">
+      <label>Due after how many days</label><input name="u" type="number" min="0" max="30" value="${t?.due_in ?? 3}">
+      <label style="display:flex;gap:8px;align-items:center;margin-top:10px"><input type="checkbox" name="a" style="width:auto"${t?.active === false ? '' : ' checked'}> Active</label>
+      <p class="muted" style="font-size:.85rem;margin:8px 0 0">Recurring ones go out at 7:00 in the morning.</p>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
+      m.querySelector('#cx').onclick = close;
+      m.querySelector('#f').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
+        try { await db(sb.rpc('v2_template_save', { p_id: t?.id || null, p_title: f.get('t'), p_details: f.get('d'), p_to_role: f.get('r'), p_kind: f.get('k'), p_weekday: +f.get('w'), p_month_day: +f.get('m'), p_due_in: +f.get('u'), p_active: !!f.get('a') })); toast('Saved'); close(); templates(); }
+        catch (x) { m.querySelector('#er').textContent = x.message; } };
+    });
+  }
   async function load() {
     try { rows = await db(sb.from('v2_directives').select('*').order('issued_at', { ascending: false })); }
     catch (e) { el.innerHTML = `<div class="card"><p class="empty">Directives are not set up yet. Run the v36 SQL in Supabase.</p></div>`; return; }
@@ -115,6 +154,11 @@ export async function mountDirectives(el, ctx) {
       const unitOf = new Map(sec.filter(x => x.v2_units && x.v2_units.kind === 'section').map(x => [x.user_id, x.v2_units.name]));
       officers.forEach(o => { o.unit = unitOf.get(o.user_id) || ''; });
     }
+    [memos, acked, qs] = await Promise.all([
+      sb.from('v2_memos').select('*').order('created_at', { ascending: false }).limit(20).then(r => (r.error || ctx.mode === 'pres' ? [] : r.data || []), () => []),
+      sb.from('v2_memo_acks').select('memo_id').eq('user_id', me).then(r => new Set((r.data || []).map(a => a.memo_id)), () => new Set()),
+      sb.from('v2_approval_questions').select('*').eq('to_user', me).is('answer', null).order('created_at').then(r => r.data || [], () => []),
+    ]);
     if (role === 'mayor' && ctx.mode !== 'pres') mreq = await sb.from('v2_marshal_requests').select('*').eq('to_mayor_id', me).eq('status', 'open').order('created_at').then(r => r.data || [], () => []);
     paint();
   }

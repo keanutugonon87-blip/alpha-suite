@@ -25,6 +25,7 @@ export const STEPS = [
   { v: 'v47', file: 'v47_president_referrals.sql', does: 'The President acknowledges, sends back or closes incident reports the General Marshal referred', check: fn('v2_incident_president', { p_id: '00000000-0000-0000-0000-000000000000', p_action: '', p_note: null }) },
   { v: 'v48', file: 'v48_line_of_authority_access.sql', does: 'SAILS-level access belongs to the SAILS President: a Class Mayor manages only his class officers and sees only his own section', check: fn('v2_president_overview', {}) },
   { v: 'v49', file: 'v49_president_supervision.sql', does: 'President supervision: deputy, escalation alerts, section warnings, scorecards, role log, calendar clashes, funds overview, monthly report', check: fn('v2_scorecard', { p_days: 28 }) },
+  { v: 'v50', file: 'v50_president_tools.sql', does: 'President tools: memos with acknowledgment, council meeting hub, recurring directives, questions on approvals', check: fn('v2_memo_status', { p_id: '00000000-0000-0000-0000-000000000000' }) },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },
