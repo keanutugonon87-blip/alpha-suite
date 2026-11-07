@@ -39,7 +39,7 @@ export async function mountMarshal(el, ctx) {
   }
   function blocks() {
     return `${setupNote()}<p class="muted" style="margin:0 2px 8px">Marshal 1 covers Alpha, 2 covers Bravo, 3 covers Charlie, 4 covers Delta, across every year level. Pick who covers each block.</p>
-      ${X.blocks.map(b => `<div class="card" style="margin-bottom:10px"><div class="row"><div class="m"><b>Block ${esc(b.letter)}</b></div><select data-bl="${esc(b.letter)}" aria-label="Marshal for block ${esc(b.letter)}"><option value="">No one yet</option>${X.dms.map(m => `<option value="${m.user_id}"${b.user_id === m.user_id ? ' selected' : ''}>${esc(m.full_name)}</option>`).join('')}</select></div>${sections(b)}</div>`).join('') || '<p class="empty">No blocks yet.</p>'}
+      ${X.blocks.map(b => `<div class="card" style="margin-bottom:10px"><div class="row"><div class="m" style="flex:1;min-width:70px"><b>Block ${esc(b.letter)}</b></div><select style="width:auto;flex:0 1 220px;min-width:140px" data-bl="${esc(b.letter)}" aria-label="Marshal for block ${esc(b.letter)}"><option value="">No one yet</option>${X.dms.map(m => `<option value="${m.user_id}"${b.user_id === m.user_id ? ' selected' : ''}>${esc(m.full_name)}</option>`).join('')}</select></div>${sections(b)}</div>`).join('') || '<p class="empty">No blocks yet.</p>'}
       ${X.dms.length ? '' : '<p class="muted" style="margin:6px 2px">There are no Department Marshal accounts yet. The President or the Mayor approves them under Accounts, with the role “Department Marshal”.</p>'}`;
   }
   function myBlock() {
