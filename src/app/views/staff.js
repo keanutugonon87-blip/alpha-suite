@@ -113,7 +113,7 @@ export async function renderStaff(root, tabId) {
   if (p.role === 'pending') return pendingScreen(root, p);
   // The SAILS President account runs the President Desk. The server knows the real role; the screens reuse the Mayor's President Desk.
   const realPres = p.role === 'sails_president';
-  if (realPres) p = { ...p, role: 'mayor' };
+  if (realPres) p = { ...p, role: 'mayor', real: 'sails_president' };
   // Mode: 'pres' (President account), 'class' (Class Mayor while a President account exists), 'acting' (Mayor acting as President until one exists)
   const mode = realPres ? 'pres' : p.role === 'mayor' ? await sb.rpc('v2_is_president').then(r => (r.error || r.data === true ? 'acting' : 'class'), () => 'acting') : null;
 
@@ -154,7 +154,7 @@ export async function renderStaff(root, tabId) {
   const navHtml = GROUPS.concat(rest.length ? [['More', rest.map(t0 => t0.id)]] : []).map(([name, ids]) => { const items = tabs.filter(t0 => ids.includes(t0.id)); if (!items.length) return '';
     const open = !shut.has(name) || items.some(t0 => t0.id === cur.id);
     return `<div class="grp${open ? '' : ' shut'}" data-g="${name}"><button class="gh" type="button" aria-expanded="${open}"><span>${name}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="gb">${items.map(btn).join('')}</div></div>`; }).join('');
-  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.role]}</small></div>
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${ROLE_LABEL[p.real || p.role]}</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="lg" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><button class="btn ghost sm" id="out">${t('signout')}</button></div>
     <div class="banner" id="bn" hidden></div>
     <div class="shell${navCollapsed ? ' nav-c' : ''}"><nav class="tabs" aria-label="Sections"><button class="navtoggle" id="nt" type="button" aria-expanded="${navCollapsed ? 'false' : 'true'}" aria-label="Collapse or expand the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg><span>Hide menu</span></button>${navHtml}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? tabLabel(cur) : t('more')}</span></button>` : ''}</nav><main id="view"></main></div>`;
