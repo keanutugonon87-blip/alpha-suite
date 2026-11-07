@@ -16,10 +16,11 @@ const rd = k => { try { return localStorage.getItem(k); } catch { return null; }
 export async function mountPresident(el, ctx) {
   // old links: #/staff/directives, #/staff/vp, #/staff/classup, or a pane asked for by another screen
   const asked = ctx.section === 'vp' ? 'vpa' : ctx.section === 'office' ? null : ctx.section === 'directives' || ctx.section === 'classup' ? ctx.section : ctx.pane || null;
-  let grp = (asked && groupOf(asked)) || (GROUPS.some(g => g[0] === rd(SK)) ? rd(SK) : 'today'), part = asked && groupOf(asked) ? asked : null;
-  if (!asked) grp = 'today';   // a fresh open starts on what needs the President
+  const only = ctx.group || null;   // when the sidebar holds the four groups, this desk shows one group and no top row of group buttons
+  let grp = only || (asked && groupOf(asked)) || (GROUPS.some(g => g[0] === rd(SK)) ? rd(SK) : 'today'), part = asked && groupOf(asked) === grp ? asked : null;
+  if (!asked && !only) grp = 'today';   // a fresh open starts on what needs the President
   let stop = null, token = 0, badge = 0;
-  el.innerHTML = `<div class="bar" id="pg" role="tablist" aria-label="President Desk" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div><div class="bar" id="pp" role="tablist" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div><div id="pb"></div>`;
+  el.innerHTML = `<div class="bar" id="pg" role="tablist" aria-label="President Desk" style="display:${only ? 'none' : 'flex'};gap:6px;flex-wrap:wrap;margin-bottom:8px"></div><div class="subtabs" id="pp" role="tablist"></div><div id="pb"></div>`;
   const gbar = el.querySelector('#pg'), pbar = el.querySelector('#pp'), body = el.querySelector('#pb');
 
   // a small count on Approvals: proposals, calendar items and referrals waiting for the President
@@ -38,14 +39,14 @@ export async function mountPresident(el, ctx) {
     const my = ++token; wr(SK, g); wr(PK + g, part);
     paintGroups();
     pbar.style.display = parts.length > 1 ? 'flex' : 'none';
-    pbar.innerHTML = parts.map(([k, l]) => `<button class="btn ${k === part ? 'gold' : 'ghost'} sm" style="${k === part ? '' : 'opacity:.85'}" role="tab" aria-selected="${k === part}" data-p="${k}">${esc(l)}</button>`).join('');
+    pbar.innerHTML = parts.map(([k, l]) => `<button type="button" role="tab" aria-selected="${k === part}" data-p="${k}">${esc(l)}</button>`).join('');
     pbar.querySelectorAll('[data-p]').forEach(b => b.onclick = () => { if (b.dataset.p !== part) show(grp, b.dataset.p); });
     if (typeof stop === 'function') { try { stop(); } catch { /* ignore */ } } stop = null;
     body.innerHTML = '';
     const mount = await parts.find(x => x[0] === part)[2]();
     if (my !== token) return;
     const sub = document.createElement('div'); body.appendChild(sub);
-    const off = await mount(sub, { ...ctx, go: id => { const gg = groupOf(id); if (!gg) return false; show(gg, id); return true; } });
+    const off = await mount(sub, { ...ctx, go: id => { const gg = groupOf(id); if (!gg) return false; if (only && gg !== only) { wr(PK + gg, id); location.hash = '#/staff/pd-' + gg; return true; } show(gg, id); return true; } });
     if (my !== token) { if (typeof off === 'function') off(); return; }
     stop = off;
   }

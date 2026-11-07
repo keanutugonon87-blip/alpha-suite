@@ -67,6 +67,12 @@ export async function mountOffice(el, ctx) {
     if (role === 'mayor') x.pendAcc = await sb.from('v2_profiles').select('user_id', { count: 'exact', head: true }).eq('role', 'pending').then(r => (r.error ? 0 : r.count || 0), () => 0);
     if (role === 'mayor') { x.creps = await ANY(sb.from('v2_class_reports').select('*').is('reviewed_at', null)); x.casks = await ANY(sb.from('v2_class_asks').select('*').eq('status', 'open')); x.clash = await sb.rpc('v2_coa_conflicts').then(r => r.error ? [] : r.data || [], () => []); }
     if (role === 'mayor') x.q = await ANY(sb.from('v2_approval_questions').select('*').order('created_at'));
+    if (role === 'mayor') {
+      const [nx] = await ANY(sb.from('v2_council_meetings').select('*').in('status', ['planned', 'held']).gte('held_on', today).order('held_on').limit(1));
+      const [mm] = await ANY(sb.from('v2_memos').select('*').order('created_at', { ascending: false }).limit(1));
+      const ms = mm ? await sb.rpc('v2_memo_status', { p_id: mm.id }).then(r => r.data || [], () => []) : [];
+      x.week = { next: nx, memo: mm, memoTo: ms.length, memoAck: ms.filter(m => m.acked_at).length, deputy: await sb.rpc('v2_deputy_status').then(r => r.data, () => null) };
+    }
     if (role === 'mayor') x.secs = await sb.rpc('v2_president_overview').then(r => r.error ? null : r.data, () => null);
     if (role === 'mayor') x.marsh = await ANY(sb.from('v2_marshal_incidents').select('*').order('created_at', { ascending: false }).limit(50));
     if (role === 'mayor') { const [a, b, c] = await Promise.all([ANY(sb.from('v2_vp_meetings').select('*').order('created_at', { ascending: false }).limit(100)), ANY(sb.from('v2_vp_partners').select('*').order('created_at', { ascending: false }).limit(100)), ANY(sb.from('v2_vp_activities').select('*').order('created_at', { ascending: false }).limit(100))]); x.vpa = { meet: a, par: b, act: c }; }
@@ -97,8 +103,8 @@ export async function mountOffice(el, ctx) {
 
   const of = k => recs.filter(r => r.kind === k);
   function needs() {
-    const today = todayISO(), n = [], add = (t, p) => n.push({ t, p });
-    const c = (a, label, p) => { if (a) add(`${a} ${label}`, p); };
+    const today = todayISO(), n = [], add = (t, p, u) => n.push({ t, p, u });
+    const c = (a, label, p, u) => { if (a) add(`${a} ${label}`, p, u); };
     if (role === 'secretary') {
       c(X.events.filter(e => e.status === 'closed' && !e.report_sent_at).length, 'closed event(s) where the absences are not compiled and sent yet', 'go:attendance');
       c((X.rreq || []).filter(r => r.status === 'open').length, 'record request(s) from members waiting for an answer', 'requests'); c((X.rreq || []).filter(r => r.status === 'open' && Date.now() - new Date(r.created_at) > 7 * dayMs).length, 'of them waiting more than 7 days', 'requests');
@@ -119,13 +125,15 @@ export async function mountOffice(el, ctx) {
       const rv = of('post').filter(r => ptype(r) === 'announcement' && r.status === 'review'); c(rv.length, 'announcement(s) waiting for your approval', 'announce');
       c(X.pendAcc || 0, 'account request(s) waiting for your approval', 'go:accounts');
       const day3 = t => Date.now() - new Date(t || Date.now()) > 3 * dayMs, wt = vpItems().filter(i => i.st === 'proposed');
-      c(wt.length, 'VP or Secretary proposal(s) waiting for you' + (wt.some(i => day3(i.since)) ? ' (' + wt.filter(i => day3(i.since)).length + ' waiting more than 3 days)' : ''), 'vpa');
+      c(wt.length, 'VP or Secretary proposal(s) waiting for you' + (wt.some(i => day3(i.since)) ? ' (' + wt.filter(i => day3(i.since)).length + ' waiting more than 3 days)' : ''), 'vpa', wt.some(i => day3(i.since)));
       c((X.coa || []).filter(r => r.status === 'proposed').length, 'calendar activit' + ((X.coa || []).filter(r => r.status === 'proposed').length === 1 ? 'y' : 'ies') + ' waiting for your approval', 'coa');
-      c((X.marsh || []).filter(i => i.status === 'referred' && i.referred_to === 'president' && !i.president_action).length, 'incident report(s) referred to you', 'marsh');
-      c((X.creps || []).filter(r => day3(r.submitted_at)).length, 'weekly report(s) the VP Internal has not read for over 3 days', 'go:classup');
-      c((X.casks || []).filter(r => day3(r.created_at)).length, 'Class Mayor request(s) the VP Internal has not answered for over 3 days', 'go:classup');
+      c((X.marsh || []).filter(i => i.status === 'referred' && i.referred_to === 'president' && !i.president_action).length, 'incident report(s) referred to you', 'marsh', true);
+      c(X.pendAcc || 0, 'account request(s) waiting for your approval', 'go:accounts');
+      c((X.creps || []).filter(r => day3(r.submitted_at)).length, 'weekly report(s) the VP Internal has not read for over 3 days', 'go:classup', true);
+      c((X.casks || []).filter(r => day3(r.created_at)).length, 'Class Mayor request(s) the VP Internal has not answered for over 3 days', 'go:classup', true);
       c((X.clash || []).length, 'calendar clash(es): two activities on the same dates', 'coa');
-      c(((X.secs || {}).sections || []).filter(s => (s.flags || []).length).length, 'section(s) with a warning (no report, many late, idle or no Mayor)', 'secs');
+      const FL = { no_mayor: 'no Class Mayor yet', no_report: 'no weekly report for 2 weeks', many_late: '3 or more directives late', idle: 'no directives sent in 2 weeks' };
+      ((X.secs || {}).sections || []).forEach(s => { if ((s.flags || []).length) add(s.name + ': ' + s.flags.map(f => FL[f] || f).join(', '), 'secs', s.flags.includes('many_late')); });
     } else if (role === 'pio') {
       const posts = of('post'), typed = ts => posts.filter(r => ts.includes(ptype(r))), live = r => ['approved', 'published'].includes(r.status);
       const pp = rs => rs.some(r => ptype(r) === 'announcement') ? 'announce' : rs.some(r => ['documentation', 'media'].includes(ptype(r))) ? 'media' : 'pubs';
@@ -179,7 +187,20 @@ export async function mountOffice(el, ctx) {
       <p class="muted" style="margin:8px 0 0;font-size:.85rem">CBL Section 7 and Article XVI, Sections 4 and 5. A post cannot be approved or published until its checks are ticked.</p></div>`;
   }
 
+  function presHome() {
+    const nd = needs(), ur = nd.filter(x => x.u), rest = nd.filter(x => !x.u);
+    const row = x => `<div class="row" data-n="${nd.indexOf(x)}" style="cursor:pointer"><div class="m"><b>${esc(x.t)}</b></div>${x.u ? '<span class="tag bad">urgent</span>' : ''}<span class="muted">›</span></div>`;
+    const W = X.week || {}, late = ((X.secs || {}).sections || []).reduce((a, s) => a + (s.late || 0), 0);
+    const wr = (t, sub, go) => `<button type="button" class="weekrow" data-w="${go}"><div><b>${esc(t)}</b><small>${esc(sub)}</small></div><span class="muted">›</span></button>`;
+    return `<div class="twocol"><div><h3 style="margin:0 2px 8px">Needs you</h3>${nd.length ? `<div class="card">${ur.map(row).join('')}${rest.map(row).join('')}</div>` : '<div class="card"><p class="caught">You are all caught up. Nothing is waiting for you.</p></div>'}</div>
+      <div><h3 style="margin:0 2px 8px">This week</h3><div class="card" style="padding:4px 14px">
+        ${wr(W.next ? W.next.title : 'No council meeting planned', W.next ? fmtDate(W.next.held_on + 'T00:00:00+08:00') + (W.next.held_at ? ' · ' + W.next.held_at : '') : 'Plan the next one in Council', 'council')}
+        ${wr(W.memo ? W.memo.title : 'No memos sent', W.memo ? W.memoAck + ' of ' + W.memoTo + ' acknowledged' : 'Send one to the Class Mayors', 'memos')}
+        ${wr(late ? late + ' late directive' + (late === 1 ? '' : 's') : 'No late directives', late ? 'Across the sections' : 'The sections are on time', 'secs')}
+        ${wr(W.deputy ? 'Deputy: ' + W.deputy.user_name : 'No deputy named', W.deputy ? 'Until ' + fmtDate(W.deputy.to_on + 'T00:00:00+08:00') : 'Name one if you will be away', 'rec')}</div></div></div>`;
+  }
   function overview() {
+    if (role === 'mayor' && ctx.bare) return presHome();
     const nd = needs();
     return `<div class="grid">${stats()}</div><h3 style="margin:16px 2px 8px">Needs you</h3>
       <div class="card">${nd.length ? nd.map((x, i) => `<div class="row" data-n="${i}" style="cursor:pointer"><div class="m"><b>${esc(x.t)}</b></div><span class="muted">›</span></div>`).join('') : '<p class="empty">Nothing is waiting. Everything is up to date.</p>'}</div>
@@ -391,7 +412,7 @@ export async function mountOffice(el, ctx) {
       <div id="pb">${pane === 'over' ? overview() : pane === 'report' ? report() : pane === 'requests' ? reqPane() : pane === 'faq' ? faqPane() : pane === 'trash' ? trashPane() : pane === 'coa' ? coaPane() : pane === 'vpa' ? vpaPane() : pane === 'hist' ? histPane() : pane === 'marsh' ? marshPane() : pane === 'secs' ? secsPane() : (pane === 'score' || pane === 'funds' || pane === 'rec') ? '<div id="svb"></div>' : pane === 'classify' ? flowList(r => ['approved', 'classified', 'published'].includes(r.flow), 'Nothing approved yet. Approved files appear here for you to classify.', 'Files the Secretary reviewed and the Mayor or VP Internal approved. Open one, read it, and mark it non-confidential (members can read it once the PIO posts it) or confidential (only the Mayor, Secretary and Auditor can read it).') : pane === 'publish' ? flowList(r => ['classified', 'published'].includes(r.flow) && r.classification === 'public', 'Nothing to post yet. Files the Auditor marks non-confidential appear here.', 'Non-confidential files. Posting one puts it on the Documents tab of every member\'s screen. You cannot post a confidential file.') : list(P[2], P[3])}</div>`;
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
     el.querySelectorAll('[data-go]').forEach(b => b.onclick = () => { location.hash = '#/staff/' + b.dataset.go; });
-    if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (ctx.go && ctx.go(p.startsWith('go:') ? p.slice(3) : p)) return; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
+    if (pane === 'over') { el.querySelectorAll('[data-w]').forEach(b => b.onclick = () => { if (ctx.go) ctx.go(b.dataset.w); }); const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const p = nd[+r.dataset.n].p; if (ctx.go && ctx.go(p.startsWith('go:') ? p.slice(3) : p)) return; if (p.startsWith('go:')) location.hash = '#/staff/' + p.slice(3); else { pane = p; draw(); } }); return; }
     if (pane === 'faq') { el.querySelector('#fa').onclick = () => faqForm(null);
       el.querySelectorAll('[data-fe]').forEach(b => b.onclick = () => faqForm((X.faq || []).find(f => f.id === b.dataset.fe)));
       el.querySelectorAll('[data-fd]').forEach(b => b.onclick = async () => { if (!await confirmDialog('Students will no longer see it.', { ok: 'Delete', danger: true, title: 'Delete this question?' })) return; try { await db(sb.from('v2_faq').delete().eq('id', b.dataset.fd)); toast('Deleted'); await load(); } catch (e) { toast(e.message, true); } }); return; }
