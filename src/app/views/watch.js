@@ -1,5 +1,5 @@
 import { t, getLang } from '../i18n.js';
-import { studentSearch, sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl } from '../core.js';
+import { studentSearch, sb, db, watch, esc, fmtDate, toast, modal, skeleton, safeWrite, uuid, todayISO, confirmDialog, resizeImage, blobToDataUrl, askText } from '../core.js';
 import { exportXLSX } from '../xlsx.js';
 import { scanLoop, showReceipt } from '../qr.js';
 
@@ -21,7 +21,8 @@ export async function mountWatch(el, ctx) {
   el.innerHTML = skeleton(5);
 
   async function draw() {
-    const [members, standards, viol, paidRows] = await Promise.all([
+    const [insp, members, standards, viol, paidRows] = await Promise.all([
+      sb.from('v2_inspections').select('*').order('opened_at', { ascending: false }).limit(1).then(x => (x.data && x.data[0]) || null, () => null),
       db(sb.from('v2_members').select('id,full_name,student_no,section,status').order('full_name')),
       db(sb.from('v2_standards').select('*').eq('active', true).order('sort_order')),
       db(sb.from('v2_violations').select(VCOLS).order('created_at')).catch(() => db(sb.from('v2_violations').select('*').order('created_at'))),
@@ -101,11 +102,12 @@ export async function mountWatch(el, ctx) {
       });
     }
 
+    const gated = ['marshall', 'dept_marshal'].includes(r) && !(insp && insp.status === 'open');
     let body;
     if (tab === 'ledger') {
       const isAtt = v => { const s0 = std(v.standard_id); return !!s0 && (!!s0.kind || ATT.test(s0.title)); };
       const shown = viol.filter(v => (!q || (mname(v.member_id) + ' ' + (members.find(m => m.id === v.member_id)?.student_no || '')).toLowerCase().includes(q.toLowerCase())) && !isAtt(v)).slice().reverse();
-      body = `<div class="bar"><input id="q" placeholder="Search name or Student ID…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp">${t('wInspect')}</button><button class="btn gold" id="qri">📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
+      body = `<div class="bar"><input id="q" placeholder="Search name or Student ID…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp"${gated ? ' disabled' : ''}>${t('wInspect')}</button><button class="btn gold" id="qri"${gated ? ' disabled' : ''}>📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
         ${awaiting.length || open.length ? '<p class="swipe-hint">Tip: on a phone, swipe a row right to approve or resolve it.</p>' : ''}${groupedLedger(shown)}`;
     } else if (tab === 'standing') {
       const by = {}; open.forEach(v => by[v.member_id] = (by[v.member_id] || 0) + 1);
@@ -119,11 +121,21 @@ export async function mountWatch(el, ctx) {
       body = `<div class="bar">${ctx.can('mayor','vice_mayor') ? '<button class="btn gold" id="addStd">+ Standard</button>' : ''}</div><div class="card">${standards.map(s => `<div class="row"><div class="m"><b>${esc(s.title)}${s.fine ? ` <span class="tag warn">Fine ${peso0(s.fine)}</span>` : ''}${s.kind ? ' <span class="tag">attendance</span>' : ''}</b><small>${esc(s.rule)}</small></div>
         ${ctx.can('mayor','vice_mayor') ? `<div style="display:flex;gap:4px"><button class="btn ghost sm" data-es="${s.id}">Edit</button><button class="btn ghost sm" data-rs="${s.id}">Remove</button></div>` : ''}</div>`).join('')}</div>`;
     }
-    el.innerHTML = `<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
+    const on = !!(insp && insp.status === 'open'), isGM = r === 'general_marshal';
+    const banner = `<div class="card pad" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1 1 200px"><b>${on ? 'Inspection is open' : 'Inspection is closed'}</b><br><small class="muted">${on ? esc(insp.note) + ' · opened by ' + esc(insp.opened_by_name || '') + ' · ' + fmtDate(insp.opened_at) : insp ? 'Last closed ' + fmtDate(insp.closed_at) + (insp.closed_by_name ? ' by ' + esc(insp.closed_by_name) : '') : 'The SAILS General Marshal opens it.'}${gated ? ' Scanning starts when it opens.' : ''}</small></div>${isGM ? (on ? '<button class="btn danger" id="icl">Close inspection</button>' : '<button class="btn gold" id="iop">Open inspection</button>') : ''}</div>`;
+    el.innerHTML = `${banner}<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
       <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
 
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; try { localStorage.setItem(TK, tab); } catch { /* ignore */ } draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
+    el.querySelector('#iop')?.addEventListener('click', async () => {
+      const note = await askText('Open inspection', 'What is being inspected?', { ok: 'Open', placeholder: 'e.g. Uniform inspection, Block Alpha' }); if (!note) return;
+      try { await db(sb.rpc('v2_inspection_open', { p_note: note })); toast('Inspection opened. The SAILS President and the Class Mayors were notified.'); draw().catch(() => {}); } catch (e) { toast(e.message || 'Could not open', true); }
+    });
+    el.querySelector('#icl')?.addEventListener('click', async () => {
+      if (!await confirmDialog('The SAILS President and the Class Mayors will be notified.', { ok: 'Close inspection', title: 'Close inspection?' })) return;
+      try { await db(sb.rpc('v2_inspection_close')); toast('Inspection closed. The SAILS President and the Class Mayors were notified.'); draw().catch(() => {}); } catch (e) { toast(e.message || 'Could not close', true); }
+    });
     el.querySelector('#add')?.addEventListener('click', () => report(members, standards));
     el.querySelector('#insp')?.addEventListener('click', () => inspect(members, standards));
     el.querySelector('#qri')?.addEventListener('click', () => scanInspect(members, standards));
@@ -327,5 +339,5 @@ export async function mountWatch(el, ctx) {
   }
 
   await draw();
-  return watch(['v2_violations', 'v2_members', 'v2_standards'], () => draw().catch(() => {}));
+  return watch(['v2_violations', 'v2_members', 'v2_standards', 'v2_inspections'], () => draw().catch(() => {}));
 }
