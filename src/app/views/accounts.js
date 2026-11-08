@@ -3,14 +3,12 @@ import { pushState, enablePush, disablePush } from '../push.js';
 
 const ROLE_INFO = {
   mayor: 'Full control. Approves entries, closes periods, manages accounts.',
-  vice_mayor: 'Co-manages students, violations and accounts. Approves violation resolutions.',
   vp_internal: 'Chief Mate – Internal. Everything the Vice Mayor can do, plus the VP Desk: meetings and programs, committee tasks, resolutions.',
   vp_external: 'Chief Mate – External. Everything the Vice Mayor can do, plus the VP Desk: partners, joint activities, representation log, Coordinating Council.',
   secretary: 'Keeps the student list, officer profiles and violation records.',
   treasurer: 'Records collections and expenses. Entries wait for the Mayor to approve.',
   auditor: 'Checks the money and the audit log. Does not record entries.',
   marshall: 'Reports violations. Reports wait for approval.',
-  sails: 'Reports violations. Reports wait for approval.',
   pio: 'Posts notices and keeps officer profiles up to date.',
 };
 const ago = d => { const s = (Date.now() - new Date(d)) / 1000; if (s < 90) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; };
@@ -28,7 +26,7 @@ function describe(a) {
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
 
 export async function mountAccounts(el, ctx) {
-  const ALLOWED = ctx.mode === 'class' ? ['vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'pio', 'sails'] : ROLES.filter(r => r !== 'sails_president');   // a Class Mayor manages only his class officers
+  const ALLOWED = ctx.mode === 'class' ? ['secretary', 'treasurer', 'auditor', 'marshall', 'pio'] : ROLES.filter(r => r !== 'sails_president');   // a Class Mayor manages only his class officers
   const isMayor = ctx.can('mayor'), canAlert = ctx.can('mayor', 'vice_mayor');
   let tab = 'people', pstate = 'unsupported', af = { who: '', table: '', from: '', to: '', page: 0 };
   if (canAlert) pstate = await pushState();

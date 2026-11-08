@@ -2,7 +2,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 
 // Called only by database functions/triggers (shared secret in the x-hook-secret header).
-//   kind 'signup'   -> Mayor / Vice Mayor devices only.
+//   kind 'signup'   -> SAILS President devices only (Mayor until a President account exists).
 //   kind 'reminder' -> one personal message per student: items = [{ member_id, title, body }], sent only to that student's linked devices.
 //   kind 'duty'     -> officer duty reminders: items = [{ user_id, title, body }], sent only to that officer's own devices.
 //   anything else   -> a new public notice, sent to every subscribed device.

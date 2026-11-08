@@ -6,7 +6,7 @@ import { ROLE_LABEL } from '../core.js';
    Flow: sent → received → working → done → confirmed. An officer who cannot do it asks to be released; the Mayor decides. */
 const STATUS = { sent: ['Sent', 'warn'], received: ['Received', ''], working: ['Working', ''], done: ['Done · to confirm', 'warn'], confirmed: ['Confirmed', 'ok'], revoke_asked: ['Release asked', 'bad'], revoked: ['Closed', ''] };
 const PRI = { urgent: ['Urgent', 'bad'], normal: ['Normal', ''], low: ['Low', ''] };
-const CLASS_OFFICERS = ['vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'];
+const CLASS_OFFICERS = ['secretary', 'treasurer', 'auditor', 'marshall', 'pio'];
 const chainFor = ctx => ({
   mayor: ctx.mode === 'pres' ? ['vp_internal', 'vp_external', 'general_marshal'] : ctx.mode === 'acting' ? [...CLASS_OFFICERS, 'vp_internal', 'vp_external', 'general_marshal'] : CLASS_OFFICERS,
   vp_internal: ['mayor'], vp_external: ['mayor'], general_marshal: ['dept_marshal'] });

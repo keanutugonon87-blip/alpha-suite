@@ -1,5 +1,5 @@
 /* Read-only table of who can do what. Keep it in step with the role checks in the SQL files. */
-const ROLES = [['mayor', 'Mayor'], ['vice_mayor', 'Vice'], ['vp_internal', 'VP Int'], ['vp_external', 'VP Ext'], ['secretary', 'Sec'], ['treasurer', 'Treas'], ['auditor', 'Aud'], ['marshall', 'Marsh'], ['sails', 'SAILS'], ['pio', 'PIO']];
+const ROLES = [['mayor', 'Mayor'], ['vp_internal', 'VP Int'], ['vp_external', 'VP Ext'], ['secretary', 'Sec'], ['treasurer', 'Treas'], ['auditor', 'Aud'], ['marshall', 'Marsh'], ['pio', 'PIO']];
 const ALL = ROLES.map(r => r[0]);
 const SCREENS = [
   ['Today (own duties)', ALL],

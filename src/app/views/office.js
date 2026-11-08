@@ -346,7 +346,7 @@ export async function mountOffice(el, ctx) {
     const acts = c => {
       const a = [];
       if (mayor) {
-        if (c.status === 'proposed') a.push(`<button class="btn gold sm" data-ad="${c.id}" data-act="approve">Approve</button><button class="btn ghost sm" data-ad="${c.id}" data-act="return">Return</button>`);
+        if (c.status === 'proposed') a.push(`<button class="btn gold sm" data-ad="${c.id}" data-act="approve">Approve</button><button class="btn ghost sm" data-vq="coa:${c.id}">Ask a question</button><button class="btn ghost sm" data-ad="${c.id}" data-act="return">Return</button>`);
         if (c.status === 'approved') a.push(`<button class="btn ghost sm" data-ad="${c.id}" data-act="cancel">Cancel activity</button>`);
         if (c.status === 'cancelled') a.push(`<button class="btn ghost sm" data-ad="${c.id}" data-act="reinstate">Bring back</button>`);
         a.push(`<button class="btn ghost sm" data-ae="${c.id}">Edit</button><button class="btn ghost sm" data-ax="${c.id}">Remove</button>`);
@@ -422,7 +422,7 @@ export async function mountOffice(el, ctx) {
       el.querySelector('#hq').oninput = e => { histQ = e.target.value; const pos = e.target.selectionStart; draw(); const n = el.querySelector('#hq'); n.focus(); n.setSelectionRange(pos, pos); };
       el.querySelector('#hp').onclick = () => histPrint((X.decisions || []).filter(d => (histF === 'all' || d.decision === histF) && (!histQ.trim() || (d.title + ' ' + (d.note || '') + ' ' + (d.proposer_name || '')).toLowerCase().includes(histQ.trim().toLowerCase())))); return; }
     if (pane === 'vpa') { el.querySelectorAll('[data-vo]').forEach(b => b.onclick = () => vpDecide(b.dataset.vo, true)); el.querySelectorAll('[data-vr]').forEach(b => b.onclick = () => vpDecide(b.dataset.vr, false)); return; }
-    el.querySelectorAll('[data-vq]').forEach(b => b.onclick = () => { const [k, id] = b.dataset.vq.split(':'), src = { meet: 'vp_meeting', par: 'vp_partner', act: 'vp_activity', doc: 'record' }[k];
+    el.querySelectorAll('[data-vq]').forEach(b => b.onclick = () => { const [k, id] = b.dataset.vq.split(':'), src = { meet: 'vp_meeting', par: 'vp_partner', act: 'vp_activity', doc: 'record', coa: 'coa' }[k];
       modal(`<h3>Ask a question</h3><form id="f"><label>Your question</label><textarea name="q" rows="3" required minlength="3" maxlength="500"></textarea><p class="muted" style="font-size:.85rem;margin:6px 0 0">The writer gets a phone alert and answers in their Directives. You decide after you read the answer.</p><div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Send question</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
         m.querySelector('#cx').onclick = close;
         m.querySelector('#f').onsubmit = async e => { e.preventDefault(); try { await db(sb.rpc('v2_question_ask', { p_src: src, p_id: id, p_question: new FormData(e.target).get('q') })); toast('Question sent'); close(); await load(); } catch (x) { m.querySelector('#er').textContent = x.message; } };
