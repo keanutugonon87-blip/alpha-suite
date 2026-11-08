@@ -73,6 +73,7 @@ export async function mountOffice(el, ctx) {
       const ms = mm ? await sb.rpc('v2_memo_status', { p_id: mm.id }).then(r => r.data || [], () => []) : [];
       x.week = { next: nx, memo: mm, memoTo: ms.length, memoAck: ms.filter(m => m.acked_at).length, deputy: await sb.rpc('v2_deputy_status').then(r => r.data, () => null) };
     }
+    if (role === 'mayor') x.insp = await import('./inspection.js').then(m => m.inspectionAlerts(ctx.profile.user_id || ctx.user?.id), () => null);
     if (role === 'mayor') x.secs = await sb.rpc('v2_president_overview').then(r => r.error ? null : r.data, () => null);
     if (role === 'mayor') x.marsh = await ANY(sb.from('v2_marshal_incidents').select('*').order('created_at', { ascending: false }).limit(50));
     if (role === 'mayor') { const [a, b, c] = await Promise.all([ANY(sb.from('v2_vp_meetings').select('*').order('created_at', { ascending: false }).limit(100)), ANY(sb.from('v2_vp_partners').select('*').order('created_at', { ascending: false }).limit(100)), ANY(sb.from('v2_vp_activities').select('*').order('created_at', { ascending: false }).limit(100))]); x.vpa = { meet: a, par: b, act: c }; }
@@ -123,6 +124,7 @@ export async function mountOffice(el, ctx) {
       c(of('finding').filter(r => r.status === 'open').length, 'open finding(s) not reported yet', 'findings'); c(of('finding').filter(r => r.status === 'reported' && !(r.flags || {}).assembly).length, 'reported finding(s) not yet presented to the General Assembly', 'findings');
     } else if (role === 'mayor') {
       const rv = of('post').filter(r => ptype(r) === 'announcement' && r.status === 'review'); c(rv.length, 'announcement(s) waiting for your approval', 'announce');
+      if (X.insp && (X.insp.open || X.insp.unread)) add(X.insp.unread && X.insp.latest ? `Inspection ${X.insp.latest.kind}: ${X.insp.latest.note}${X.insp.unread > 1 ? ' (' + X.insp.unread + ' new)' : ''}` : `Inspection is open: ${X.insp.open.note}`, 'go:inspection', !!X.insp.open);
       c(X.pendAcc || 0, 'account request(s) waiting for your approval', 'go:accounts');
       const day3 = t => Date.now() - new Date(t || Date.now()) > 3 * dayMs, wt = vpItems().filter(i => i.st === 'proposed');
       c(wt.length, 'VP or Secretary proposal(s) waiting for you' + (wt.some(i => day3(i.since)) ? ' (' + wt.filter(i => day3(i.since)).length + ' waiting more than 3 days)' : ''), 'vpa', wt.some(i => day3(i.since)));

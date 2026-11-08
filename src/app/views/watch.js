@@ -17,7 +17,7 @@ export async function mountWatch(el, ctx) {
   const canReport = ctx.can('mayor','vice_mayor','secretary','marshall','sails','general_marshal','dept_marshal');
   const canApprove = ctx.can('mayor','vice_mayor');
   const TK = 'alpha-f-watch-tab', openSet = new Set();
-  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
+  let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards', 'inspection'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
   el.innerHTML = skeleton(5);
 
   async function draw() {
@@ -104,7 +104,8 @@ export async function mountWatch(el, ctx) {
 
     const gated = ['marshall', 'dept_marshal'].includes(r) && !(insp && insp.status === 'open');
     let body;
-    if (tab === 'ledger') {
+    if (tab === 'inspection') body = '<div id="inspHost"></div>';
+    else if (tab === 'ledger') {
       const isAtt = v => { const s0 = std(v.standard_id); return !!s0 && (!!s0.kind || ATT.test(s0.title)); };
       const shown = viol.filter(v => (!q || (mname(v.member_id) + ' ' + (members.find(m => m.id === v.member_id)?.student_no || '')).toLowerCase().includes(q.toLowerCase())) && !isAtt(v)).slice().reverse();
       body = `<div class="bar"><input id="q" placeholder="Search name or Student ID…" value="${esc(q)}" style="flex:1 1 100%">${canReport ? `<button class="btn gold" id="add">+ Report</button><button class="btn ghost" id="insp"${gated ? ' disabled' : ''}>${t('wInspect')}</button><button class="btn gold" id="qri"${gated ? ' disabled' : ''}>📷 Scan</button>` : ''}<button class="btn ghost" id="csv">Excel</button></div>
@@ -123,8 +124,9 @@ export async function mountWatch(el, ctx) {
     }
     const on = !!(insp && insp.status === 'open'), isGM = r === 'general_marshal';
     const banner = `<div class="card pad" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap"><div style="flex:1 1 200px"><b>${on ? 'Inspection is open' : 'Inspection is closed'}</b><br><small class="muted">${on ? esc(insp.note) + ' · opened by ' + esc(insp.opened_by_name || '') + ' · ' + fmtDate(insp.opened_at) : insp ? 'Last closed ' + fmtDate(insp.closed_at) + (insp.closed_by_name ? ' by ' + esc(insp.closed_by_name) : '') : 'The SAILS General Marshal opens it.'}${gated ? ' Scanning starts when it opens.' : ''}</small></div>${isGM ? (on ? '<button class="btn danger" id="icl">Close inspection</button>' : '<button class="btn gold" id="iop">Open inspection</button>') : ''}</div>`;
-    el.innerHTML = `${banner}<div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
-      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button></div>${body}`;
+    el.innerHTML = `${banner}<div class="grid" style="margin-bottom:12px${tab === 'inspection' ? ';display:none' : ''}"><div class="stat gold"><small>${t('wOutstanding')}</small><b>${open.length}</b></div><div class="stat"><small>${t('wAwaiting')}</small><b>${awaiting.length}</b></div><div class="stat"><small>${t('wTotal')}</small><b>${viol.length}</b></div></div>
+      <div class="bar"><button class="btn ${tab==='ledger'?'':'ghost'}" data-t="ledger">${t('wLedger')}</button><button class="btn ${tab==='standing'?'':'ghost'}" data-t="standing">${t('wStanding')}</button><button class="btn ${tab==='standards'?'':'ghost'}" data-t="standards">${t('wStandards')}</button><button class="btn ${tab==='inspection'?'':'ghost'}" data-t="inspection">Inspection</button></div>${body}`;
+    if (tab === 'inspection') import('./inspection.js').then(m => m.mountInspection(el.querySelector('#inspHost'), ctx)).catch(() => {});
 
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; try { localStorage.setItem(TK, tab); } catch { /* ignore */ } draw(); });
     const qi = el.querySelector('#q'); if (qi) { qi.oninput = () => { q = qi.value; const pos = qi.selectionStart; draw().then(() => { const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(pos, pos); }); }; }
@@ -201,12 +203,15 @@ export async function mountWatch(el, ctx) {
   function inspect(members, standards) {
     const act = members.filter(m => m.status === 'active');
     modal(`<h3>Inspection</h3><p class="muted" style="margin:0 0 8px">Choose what you checked, then tap only the students who failed it.</p><form id="if">
-      <label>Standard</label><select name="s" required><option value="">Select…</option>${standards.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select>
-      <label>Date</label><input name="d" type="date" required value="${todayISO()}">
-      <div class="chips" id="il" style="max-height:42vh;overflow:auto;margin-top:10px">${act.map(m => `<button type="button" role="checkbox" aria-checked="false" data-m="${m.id}">${esc(m.full_name)}</button>`).join('')}</div>
-      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1" id="go">Record 0</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
+      <div class="insp-fields"><div><label>Standard</label><select name="s" required><option value="">Select…</option>${standards.map(s => `<option value="${s.id}">${esc(s.title)}</option>`).join('')}</select></div>
+      <div><label>Date</label><input name="d" type="date" required value="${todayISO()}"></div></div>
+      <div class="insp-head"><b>Who failed it?</b><span class="muted" id="ic">0 selected</span></div>
+      <input id="iq" type="search" placeholder="Search a student…" autocomplete="off">
+      <div class="pickrows" id="il">${act.map(m => `<button type="button" role="checkbox" aria-checked="false" data-m="${m.id}" data-n="${esc(m.full_name.toLowerCase())}"><span class="ck" aria-hidden="true"></span><span>${esc(m.full_name)}</span></button>`).join('')}</div>
+      <div class="insp-foot"><button class="btn gold" style="flex:1" id="go">Record 0</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`,
       (m, close) => { m.querySelector('#cx').onclick = close;
-        const picked = new Set(), go = m.querySelector('#go'), upd = () => { go.textContent = `Record ${picked.size}`; };
+        const picked = new Set(), go = m.querySelector('#go'), upd = () => { go.textContent = `Record ${picked.size}`; m.querySelector('#ic').textContent = `${picked.size} selected`; };
+        m.querySelector('#iq').oninput = e => { const f = e.target.value.trim().toLowerCase(); m.querySelectorAll('#il [data-m]').forEach(b => { b.hidden = !!f && !b.dataset.n.includes(f); }); };
         m.querySelectorAll('#il [data-m]').forEach(b => b.onclick = () => { const id = b.dataset.m, on = !picked.has(id); on ? picked.add(id) : picked.delete(id); b.setAttribute('aria-checked', on); b.classList.toggle('on', on); upd(); });
         m.querySelector('#if').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
           if (!picked.size) return void (m.querySelector('#er').textContent = 'Tap at least one student, or close if everyone passed.');

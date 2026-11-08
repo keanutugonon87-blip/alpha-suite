@@ -423,3 +423,16 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .weekrow{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 2px;border-bottom:1px solid var(--line,rgba(130,150,180,.18));cursor:pointer;width:100%;background:none;border-left:0;border-right:0;border-top:0;text-align:left;font:inherit;color:inherit}
 .weekrow:last-child{border-bottom:0}.weekrow small{display:block;color:var(--muted,#8fa0b8)}
 .caught{padding:18px 4px;color:var(--muted,#8fa0b8)}
+
+/* Watch: roomier inspection form */
+.insp-fields{display:grid;grid-template-columns:1fr;gap:14px;margin:4px 0 18px}
+.insp-fields label{margin-top:0}
+.insp-head{display:flex;justify-content:space-between;align-items:baseline;margin:6px 2px 8px}
+.pickrows{display:flex;flex-direction:column;gap:6px;max-height:40vh;overflow:auto;margin:10px 0 0;padding:2px}
+.pickrows button{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:12px 14px;min-height:46px;border:1px solid var(--line);background:var(--card);color:inherit;border-radius:12px;font:inherit;cursor:pointer}
+.pickrows button[hidden]{display:none}
+.pickrows .ck{flex:0 0 20px;height:20px;border-radius:6px;border:2px solid var(--line);background:transparent}
+.pickrows button.on{border-color:var(--flag,#c0392b);background:rgba(192,57,43,.14);font-weight:700}
+.pickrows button.on .ck{background:var(--flag,#c0392b);border-color:var(--flag,#c0392b);box-shadow:inset 0 0 0 3px var(--card)}
+.insp-foot{display:flex;gap:10px;margin-top:16px;position:sticky;bottom:0;padding-top:10px}
+@media(min-width:560px){.insp-fields{grid-template-columns:2fr 1fr}}

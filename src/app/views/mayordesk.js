@@ -9,7 +9,7 @@ const TABS = [['agenda', 'Agenda'], ['minutes', 'Minutes'], ['letters', 'Letters
 const day = d => fmtDate(d + 'T00:00:00+08:00');
 
 export async function mountMayorDesk(el, ctx) {
-  let tab = 'agenda', items = [], cal = [], got = new Set(), setup = false;
+  let tab = 'agenda', items = [], cal = [], got = new Set(), setup = false, insp = null;
   const key = i => i.src + ':' + i.id;
   el.innerHTML = skeleton(4);
 
@@ -28,6 +28,7 @@ export async function mountMayorDesk(el, ctx) {
     });
     rc.forEach(r => items.push({ src: 'record', id: r.id, tab: r.kind === 'minutes' ? 'minutes' : 'letters', kind: KIND[r.kind] || 'Record', title: r.title, when: r.on_date, sub: [r.ref_no, r.on_date ? day(r.on_date) : '', r.party].filter(Boolean).join(' · '), body: r.body, at: r.approved_at || r.updated_at }));
     cal = ca;
+    insp = await import('./inspection.js').then(m => m.inspectionAlerts(ctx.profile.user_id || ctx.user?.id), () => null);
     got = new Set(rv.map(x => x.src + ':' + x.src_id));
     paint();
   }
@@ -43,12 +44,14 @@ export async function mountMayorDesk(el, ctx) {
     const empty = { agenda: 'No meeting agenda has been sent to you.', minutes: 'No minutes yet.', letters: 'No approved letters or resolutions yet.', calendar: 'No approved activities coming up.' }[tab];
     el.innerHTML = `<p class="muted" style="margin:0 2px 10px">You receive these from the SAILS Secretary and the President. Read them and mark them received.</p>
       <h3 style="margin:0 2px 8px">New for you</h3>
+      ${insp && (insp.open || insp.unread) ? `<button type="button" class="weekrow" id="ip" style="margin-bottom:8px"><div><b>${insp.open ? 'Inspection is open' : 'Inspection ' + esc(insp.latest.kind)}</b><small>${esc(insp.open ? insp.open.note : insp.latest.note)}${insp.unread ? ' · ' + insp.unread + ' new' : ''}</small></div><span class="muted">›</span></button>` : ''}
       <div class="card">${fresh.length ? fresh.slice(0, 6).map(row).join('') : '<p class="caught">You are all caught up. Nothing new.</p>'}</div>
       <button type="button" class="weekrow" id="rp" style="margin-top:10px"><div><b>Weekly report to the SAILS VP Internal</b><small>Write and send it from Report up</small></div><span class="muted">›</span></button>
       <div class="subtabs" role="tablist" style="margin-top:14px">${TABS.map(([id, l]) => `<button type="button" role="tab" aria-selected="${id === tab}" data-t="${id}">${l}${count(id) ? ` <span class="badge">${count(id)}</span>` : ''}</button>`).join('')}</div>
       ${tab === 'calendar'
         ? `<div class="card">${cal.map(c => `<div class="row"><div class="m"><b>${esc(c.title)}</b><small>${day(c.starts_on)}${c.ends_on && c.ends_on !== c.starts_on ? ' – ' + day(c.ends_on) : ''}${c.time_note ? ' · ' + esc(c.time_note) : ''}${c.venue ? ' · ' + esc(c.venue) : ''}</small></div></div>`).join('') || `<p class="empty">${empty}</p>`}</div>`
         : `<div class="card">${list.map(row).join('') || `<p class="empty">${empty}</p>`}</div>`}`;
+    el.querySelector('#ip')?.addEventListener('click', () => { location.hash = '#/staff/watch'; });
     el.querySelector('#rp').onclick = () => { location.hash = '#/staff/report'; };
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     el.querySelectorAll('[data-o]').forEach(r => r.onclick = () => open(items.find(i => key(i) === r.dataset.o)));
