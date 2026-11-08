@@ -39,7 +39,7 @@ export async function deskItems(ctx) {
     const l = n(liq, r => r.status === 'submitted'); if (l) add('📑', `${l} liquidation report${s(l)} ${w(l)} for your approval`, 'Budget', 'requests');
   }
   if (mayor || isVp || role === 'vice_mayor') {
-    const d = n(recs, r => r.flow === 'reviewed'); if (d && (mayor || role !== 'vp_external')) add('🗂️', `${d} record${s(d)} from the Secretary ${w(d)} for approval`, mayor ? 'President Desk › VP approvals' : 'VP Desk › Records', 'vp');
+    const d = n(recs, r => r.flow === 'reviewed'); if (d && (mayor || role !== 'vp_external')) add('🗂️', `${d} record${s(d)} from the SAILS Secretary ${w(d)} for approval`, mayor ? 'President Desk › VP approvals' : 'VP Desk › Records', 'vp');
   }
   if (mayor) {
     const p = n(meet, r => r.status === 'proposed') + n(par, r => r.status === 'proposed') + n(act, r => r.status === 'proposed'); if (p) add('🧭', `${p} VP proposal${s(p)} ${w(p)} for your decision`, 'President Desk › VP approvals', 'vp');

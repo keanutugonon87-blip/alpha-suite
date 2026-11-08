@@ -4,8 +4,8 @@ import { scanLoop } from '../qr.js';
 /* Attendance: log in and log out by QR card.
    Only the President (Mayor) and the Vice Mayor (Internal and External) set an event and its category.
    The Marshals scan the students' cards and confirm each scan.
-   The Secretary compiles who was missed (excused students unticked), then sends the fines report to the Mayor, Vice Mayor, Marshals and Treasurer.
-   The PIO sends the report to the students through the app. */
+   The SAILS Secretary compiles who was missed (excused students unticked), then sends the fines report to the Mayor, Vice Mayor, Marshals and Treasurer.
+   The SAILS PIO sends the report to the students through the app. */
 const KINDS = { flag: 'Flag ceremony', event: 'Event (log in / log out)', inspection: 'Inspection' };   // inspection is only kept so old events still show a name; it is run from Watch
 const needV2 = e => /relation|schema cache|does not exist|function .* not|could not find/i.test(e.message || '') ? 'Run the v21 and v22 SQL in Supabase first (supabase/v21_events_attendance.sql, then v22_attendance_report.sql).' : e.message;
 const defStd = (k, stds) => (stds.find(s => (k === 'flag' ? /flag/i : /log\s*in|event log/i).test(s.title)) || stds.find(s => !s.kind) || {}).id || '';
@@ -51,18 +51,18 @@ async function draw(host, ctx, members, standards, redraw) {
     return [
       [e.ordered_at ? 'ok' : waiting(e) ? 'warn' : '', 'Ordered by the Mayor', e.ordered_at ? `${e.ordered_by_name || 'Mayor'} · ${on(e.ordered_at)}` : waiting(e) ? 'Waiting for the Mayor’s order' : 'Set before orders were required'],
       [(e.scanner_names || []).length ? 'ok' : '', 'Scanners assigned', (e.scanner_names || []).join(', ') || (e.legacy_open ? 'Any scanning officer' : '—')],
-      [sent ? 'ok' : okd || rev ? 'warn' : '', 'Announced by the PIO', sent ? 'Sent as a notice' : okd ? `Approved by ${fl(okd).approved_by || 'the Mayor'}, ready to send` : rev ? 'Waiting for the Mayor’s approval' : ann.length ? 'Draft' : 'Not drafted yet'],
+      [sent ? 'ok' : okd || rev ? 'warn' : '', 'Announced by the SAILS PIO', sent ? 'Sent as a notice' : okd ? `Approved by ${fl(okd).approved_by || 'the Mayor'}, ready to send` : rev ? 'Waiting for the Mayor’s approval' : ann.length ? 'Draft' : 'Not drafted yet'],
       [c.in.size ? 'ok' : '', 'Attendance scanned', `In ${c.in.size} of ${act.length}${who.length ? ' · by ' + who.join(', ') : ''}`],
-      [e.finalized_at ? 'ok' : '', 'Compiled by the Secretary', e.finalized_at ? `${e.compiled_by_name || 'Secretary'} · ${on(e.finalized_at)}` : 'Not yet'],
+      [e.finalized_at ? 'ok' : '', 'Compiled by the SAILS Secretary', e.finalized_at ? `${e.compiled_by_name || 'Secretary'} · ${on(e.finalized_at)}` : 'Not yet'],
       [e.report_sent_at ? 'ok' : '', 'Fines report sent', e.report_sent_at ? `${e.report_by_name || 'Secretary'} · ${on(e.report_sent_at)}` : 'Not yet'],
       [e.notified_at ? 'ok' : '', 'Students notified', e.notified_at ? `${e.notified_by_name || 'PIO'} · ${on(e.notified_at)}` : 'Not yet'],
-      [doc.some(p => ['approved', 'published'].includes(p.status)) ? 'ok' : doc.length ? 'warn' : '', 'Documented by the PIO', doc.some(p => ['approved', 'published'].includes(p.status)) ? 'Photos and media filed' : doc.length ? 'In draft' : 'Not yet'],
+      [doc.some(p => ['approved', 'published'].includes(p.status)) ? 'ok' : doc.length ? 'warn' : '', 'Documented by the SAILS PIO', doc.some(p => ['approved', 'published'].includes(p.status)) ? 'Photos and media filed' : doc.length ? 'In draft' : 'Not yet'],
     ]; };
   const cnt = id => { const o = { in: new Set(), out: new Set() }; scans.filter(s => s.event_id === id).forEach(s => o[s.kind].add(s.member_id)); return o; };
   const finesOf = id => viol.filter(v => v.event_id === id && !['rejected', 'awaiting_approval'].includes(v.status) && v.excuse_status !== 'accepted');
   const stage = e => e.notified_at ? ['Students notified', 'ok'] : e.report_sent_at ? ['Report sent', 'warn'] : e.finalized_at ? ['Compiled', 'warn'] : e.status === 'open' ? ['Open', 'ok'] : ['Closed', ''];
   const card = e => { const c = cnt(e.id), open = e.status === 'open', [lbl, cls] = stage(e), fl = finesOf(e.id), tot = fl.reduce((t, v) => t + (+std(v.standard_id)?.fine || 0), 0);
-    const report = sees && e.report_sent_at ? `<div class="card pad" style="margin:8px 0 0"><b>Fines report from ${esc(e.report_by_name || 'the Secretary')}</b>
+    const report = sees && e.report_sent_at ? `<div class="card pad" style="margin:8px 0 0"><b>Fines report from ${esc(e.report_by_name || 'the SAILS Secretary')}</b>
         <p class="muted" style="margin:4px 0">${fl.length} student${fl.length === 1 ? '' : 's'}, ${peso(tot)} in fines. ${collects ? 'Please collect them.' : 'Treasurer and Mayor collect.'}${e.report_note ? `<br>“${esc(e.report_note)}”` : ''}</p>
         <details${collects ? ' open' : ''}><summary>Show the list</summary>${fl.map(v => { const f = +std(v.standard_id)?.fine || 0; return `<div class="fr"><span>${esc(mname(v.member_id))}</span><b>${paid.has(v.id) ? 'paid' : peso(f)}</b>${collects && f && !paid.has(v.id) ? `<button class="btn gold sm" data-co="${v.id}">Collect</button>` : ''}</div>`; }).join('')}</details></div>` : '';
     return `<div class="row stk vw"><div class="m"><b>${esc(e.title)} <span class="tag ${cls}">${lbl}</span></b>
@@ -74,7 +74,7 @@ async function draw(host, ctx, members, standards, redraw) {
       ${canCompile && e.finalized_at && !e.report_sent_at ? `<button class="btn gold sm" data-sr="${e.id}">Send fines report</button>` : ''}
       ${canNotify && e.report_sent_at && !e.notified_at ? `<button class="btn gold sm" data-nt="${e.id}">Send to students</button>` : ''}
       ${manage ? `<button class="btn ghost sm" data-cl="${e.id}">${open ? 'Close' : 'Reopen'}</button><button class="btn ghost sm" data-dl="${e.id}">Delete</button>` : ''}</div></div>`; };
-  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President sets the event and names the officers who scan. The Secretary compiles, the PIO tells the students.</p>'}
+  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President sets the event and names the officers who scan. The SAILS Secretary compiles, the SAILS PIO tells the students.</p>'}
     <div class="card">${events.map(card).join('') || '<p class="empty">No events yet.</p>'}</div>`;
   const ev = id => events.find(e => e.id === id);
   host.querySelector('#ne')?.addEventListener('click', () => newEvent());

@@ -1,6 +1,6 @@
 import { sb, db, watch, esc, toast, modal, skeleton, fmtDate, fmtDateTime } from '../core.js';
 
-/* The VP Internal reads the Class Mayors' weekly reports and decides on their requests. Class Mayors report to him; he can also send them directives. */
+/* The SAILS VP Internal reads the Class Mayors' weekly reports and decides on their requests. Class Mayors report to him; he can also send them directives. */
 export async function mountClassUp(el, ctx) {
   let reps = [], asks = [], tab = 'asks';
   el.innerHTML = skeleton(4);

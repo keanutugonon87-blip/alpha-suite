@@ -3,7 +3,7 @@ import { sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, modal, skeleton,
 /* Fund Budget Requests.
    Treasurer fills in the form and signs, then sends it to the President (Mayor).
    The President approves (and signs) or returns it with a comment.
-   The Secretary files the approved request, and a copy goes into Documents.
+   The SAILS Secretary files the approved request, and a copy goes into Documents.
    Expenses can then be linked to an approved request in Treasury. Everyone on staff can read; each step is limited to its own officer. */
 const CATS = ['Event Expenses', 'Supplies', 'Printing', 'Transportation', 'Snacks / Food', 'Other'];
 const STATUS = { draft: ['Draft', ''], submitted: ['Waiting for the President', 'warn'], returned: ['Returned', 'bad'], approved: ['Approved · to be filed', 'ok'], filed: ['Filed', 'ok'] };
@@ -36,7 +36,7 @@ export async function mountRequests(el, ctx) {
     draw();
   }
   const liqOf = r => liqs.find(l => l.request_id === r.id);
-  const LIQ = { draft: ['Liquidation in progress', ''], submitted: ['Liquidation: waiting for the President', 'warn'], returned: ['Liquidation returned', 'bad'], approved: ['Liquidation: waiting for the Auditor', 'warn'], audited: ['Liquidation: audited, to be filed', 'ok'], filed: ['Liquidation filed', 'ok'] };
+  const LIQ = { draft: ['Liquidation in progress', ''], submitted: ['Liquidation: waiting for the President', 'warn'], returned: ['Liquidation returned', 'bad'], approved: ['Liquidation: waiting for the SAILS Auditor', 'warn'], audited: ['Liquidation: audited, to be filed', 'ok'], filed: ['Liquidation filed', 'ok'] };
   const mine = r => (isTre && ['draft', 'returned'].includes(r.status)) || (isMayor && r.status === 'submitted') || (canFile && r.status === 'approved')
     || (['approved', 'filed'].includes(r.status) && (() => { const l = liqOf(r); return (isTre && (!l || ['draft', 'returned'].includes(l.status))) || (isMayor && l?.status === 'submitted') || (ctx.can('auditor') && l?.status === 'approved') || (canFile && l?.status === 'audited'); })());
 
@@ -44,7 +44,7 @@ export async function mountRequests(el, ctx) {
     const todo = reqs.filter(mine), shown = reqs.filter(r => only === 'all' || (only === 'todo' ? mine(r) : r.status === only));
     el.innerHTML = `<div class="bar">${isTre ? '<button class="btn gold" id="nr">+ New budget request</button>' : ''}
       <select id="fl" style="width:auto"><option value="all">All requests</option><option value="todo">Needs me (${todo.length})</option>${Object.entries(STATUS).map(([k, [l]]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
-      <p class="muted" style="margin:0 0 10px">The Treasurer fills in the request and signs. The President approves. The Secretary files it. Approved requests can be linked to expenses in Treasury.</p>
+      <p class="muted" style="margin:0 0 10px">The SAILS Treasurer fills in the request and signs. The President approves. The SAILS Secretary files it. Approved requests can be linked to expenses in Treasury.</p>
       <div class="card">${shown.map(r => { const [l, c] = STATUS[r.status];
         const lq = liqOf(r), ls = ['approved', 'filed'].includes(r.status) ? (LIQ[lq?.status] || ['Needs a liquidation report', 'bad']) : null;
         return `<div class="row" data-r="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)} <span class="tag ${c}">${l}</span>${ls ? ` <span class="tag ${ls[1]}">${ls[0]}</span>` : ''}</b><small>${esc(r.req_no)} · ${esc(fundLabel(r.fund))} · ${esc(r.category)}${r.activity_date ? ' · ' + fmtDate(r.activity_date) : ''}</small></div>
@@ -90,7 +90,7 @@ export async function mountRequests(el, ctx) {
 
   /* ---- the signing step: a typed stamp for sure, and an optional drawn signature ---- */
   function sign(r, act) {
-    const T = { submit: ['Send to the President', 'Send for approval', 'You are signing as the one who prepared this request.'], approve: ['Approve this request', 'Approve and sign', 'You are approving this request as the President.'], file: ['File this request', 'File and sign', 'You are receiving this approved request for the records.'], return: ['Return to the Treasurer', 'Return it', 'Say what needs to change. No signature is needed.'] }[act];
+    const T = { submit: ['Send to the President', 'Send for approval', 'You are signing as the one who prepared this request.'], approve: ['Approve this request', 'Approve and sign', 'You are approving this request as the President.'], file: ['File this request', 'File and sign', 'You are receiving this approved request for the records.'], return: ['Return to the SAILS Treasurer', 'Return it', 'Say what needs to change. No signature is needed.'] }[act];
     modal(`<h3>${T[0]}</h3><p class="muted" style="margin:0 0 6px">${esc(r.req_no)} · ${esc(r.title)} · ${peso(r.total)}</p><p class="muted" style="margin:0 0 8px">${T[2]}</p>
       ${act === 'return' ? '<label>What needs to change</label><textarea id="nt" rows="3" maxlength="500" required></textarea>' : `<div class="card pad" style="margin-bottom:8px"><b>${esc(ctx.profile.full_name)}</b><br><small class="muted">${ROLE_LABEL[ctx.profile.role]} · stamped ${fmtDateTime(new Date())}</small></div>
         <label>Signature (optional, draw with your finger)</label><div id="sp"></div>${act === 'approve' ? '<label>Note (optional)</label><input id="nt" maxlength="500">' : ''}`}
@@ -100,7 +100,7 @@ export async function mountRequests(el, ctx) {
         try { if (act === 'submit') await db(sb.rpc('v2_fbr_submit', { p_id: r.id, p_sig: sig() }));
           else if (act === 'file') await db(sb.rpc('v2_fbr_file', { p_id: r.id, p_sig: sig() }));
           else await db(sb.rpc('v2_fbr_decide', { p_id: r.id, p_approve: act === 'approve', p_note: note, p_sig: sig() }));
-          toast({ submit: 'Sent to the President', approve: 'Approved', return: 'Returned to the Treasurer', file: 'Filed. A copy is in Documents.' }[act]); close(); load(); }
+          toast({ submit: 'Sent to the President', approve: 'Approved', return: 'Returned to the SAILS Treasurer', file: 'Filed. A copy is in Documents.' }[act]); close(); load(); }
         catch (x) { m.querySelector('#er').textContent = needV24(x); m.querySelector('#go').disabled = false; } };
     });
   }
@@ -142,7 +142,7 @@ export async function mountRequests(el, ctx) {
       m.querySelector('#pr').onclick = () => printHTML('Liquidation ' + r.req_no, `${letterhead('Liquidation and Audit Report', `${r.req_no} · ${r.title}`)}${body}`);
       m.querySelector('#ls')?.addEventListener('click', go(() => liqSign(r, l, 'submit', { actual, left })));
       m.querySelector('#ld')?.addEventListener('click', async () => {
-        if (!(await confirmDialog('The liquidation report and its signatures will be deleted, so the Treasurer can prepare it again. The expenses stay. This cannot be undone.', { ok: 'Delete report', danger: true, title: 'Delete this report?' }))) return;
+        if (!(await confirmDialog('The liquidation report and its signatures will be deleted, so the SAILS Treasurer can prepare it again. The expenses stay. This cannot be undone.', { ok: 'Delete report', danger: true, title: 'Delete this report?' }))) return;
         try { await db(sb.rpc('v2_liq_delete', { p_id: l.id })); close(); toast('Report deleted'); load(); } catch (x) { toast(/function|schema cache|could not find/i.test(x.message) ? 'Run the v26 SQL in Supabase first (supabase/v26_delete_requests.sql).' : x.message, true); } });
       m.querySelector('#la')?.addEventListener('click', go(() => liqSign(r, l, 'approve')));
       m.querySelector('#lr')?.addEventListener('click', go(() => liqSign(r, l, 'return')));
@@ -152,7 +152,7 @@ export async function mountRequests(el, ctx) {
   }
   function liqSign(r, l, act, x = {}) {
     const T = { submit: ['Send the liquidation report', 'Send for approval', 'You are signing as the one who prepared this report.'], approve: ['Approve the liquidation report', 'Approve and sign', 'You are approving this report as the President.'],
-      return: ['Return the liquidation report', 'Return it', 'Say what needs to change. No signature is needed.'], audit: ['Audit report', 'Sign the audit report', 'Tick what you checked, give your opinion and sign as the Auditor.'], file: ['File the liquidation report', 'File and sign', 'You are receiving the audited report for the records.'] }[act];
+      return: ['Return the liquidation report', 'Return it', 'Say what needs to change. No signature is needed.'], audit: ['Audit report', 'Sign the audit report', 'Tick what you checked, give your opinion and sign as the SAILS Auditor.'], file: ['File the liquidation report', 'File and sign', 'You are receiving the audited report for the records.'] }[act];
     modal(`<h3>${T[0]}</h3><p class="muted" style="margin:0 0 6px">${esc(r.req_no)} · ${esc(r.title)}</p><p class="muted" style="margin:0 0 8px">${T[2]}</p>
       ${act === 'submit' ? `<label>Cash returned to the fund (₱)</label><input id="cr" type="number" min="0" step="0.01" inputmode="decimal" value="${Math.max(0, x.left || 0)}"><small class="muted">The unspent amount is ${peso(Math.max(0, x.left || 0))}.</small><label>Remarks (optional)</label><textarea id="nt" rows="2" maxlength="1000"></textarea>` : ''}
       ${act === 'return' ? '<label>What needs to change</label><textarea id="nt" rows="3" maxlength="500"></textarea>' : ''}
@@ -167,7 +167,7 @@ export async function mountRequests(el, ctx) {
           else if (act === 'file') await db(sb.rpc('v2_liq_file', { p_id: l.id, p_sig: sig() }));
           else if (act === 'audit') await db(sb.rpc('v2_liq_audit', { p_id: l.id, p_checks: Object.fromEntries([...m.querySelectorAll('[data-ck]')].map(c => [c.dataset.ck, c.checked])), p_opinion: opinion, p_remarks: note, p_sig: sig() }));
           else await db(sb.rpc('v2_liq_decide', { p_id: l.id, p_approve: act === 'approve', p_note: note, p_sig: sig() }));
-          toast({ submit: 'Sent to the President', approve: 'Approved. It goes to the Auditor.', return: 'Returned to the Treasurer', audit: opinion === 'clear' ? 'Audit signed. The Secretary can file it.' : 'Findings sent back to the Treasurer', file: 'Filed. A copy is in Documents.' }[act]); close(); load();
+          toast({ submit: 'Sent to the President', approve: 'Approved. It goes to the SAILS Auditor.', return: 'Returned to the SAILS Treasurer', audit: opinion === 'clear' ? 'Audit signed. The SAILS Secretary can file it.' : 'Findings sent back to the SAILS Treasurer', file: 'Filed. A copy is in Documents.' }[act]); close(); load();
         } catch (e) { m.querySelector('#er').textContent = needV25(e); m.querySelector('#go').disabled = false; } };
     });
   }

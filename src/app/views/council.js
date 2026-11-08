@@ -52,7 +52,7 @@ export async function mountCouncil(el, ctx) {
     el.querySelector('#cm')?.addEventListener('click', async () => { try { await db(sb.rpc('v2_council_close', { p_id: m.id, p_minutes: el.querySelector('#mn').value })); toast('Meeting closed'); load(); } catch (e) { toast(e.message, true); } });
     el.querySelector('#na')?.addEventListener('click', () => modal(`<h3>Decision to carry out</h3><form id="f"><label>What was decided</label><input name="t" required minlength="3" maxlength="140">
       <label>Who carries it out</label><select name="o" required>${owners.map(o => `<option value="${o.user_id}">${esc(o.full_name)} · ${esc(ROLE_LABEL[o.role])}</option>`).join('')}</select><label>Due (optional)</label><input name="d" type="date" min="${todayISO()}"><label>Details (optional)</label><textarea name="x" rows="3" maxlength="800"></textarea>
-      <p class="muted" style="font-size:.85rem;margin:8px 0 0">It is sent to them now as a directive. A Class Mayor is reached through the VP Internal.</p>
+      <p class="muted" style="font-size:.85rem;margin:8px 0 0">It is sent to them now as a directive. A Class Mayor is reached through the SAILS VP Internal.</p>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Send directive</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (mm, close) => {
       mm.querySelector('#cx').onclick = close;
       mm.querySelector('#f').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);

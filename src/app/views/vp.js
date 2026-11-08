@@ -30,8 +30,8 @@ const CFG = {
     before: (p, old) => { if ((p.progress || null) !== (old?.progress || null)) p.reported_on = todayISO(); return p; },
     row: r => [r.title, r.progress ? `Report ${fmtDate(r.reported_on)}: ${esc(r.progress).slice(0, 70)}` : 'No progress report yet', r.status] },
   del: { t: 'v2_vp_delegations', name: 'task from the Mayor', who: ['mayor'], order: ['created_at', false],
-    fields: [{ k: 'to_role', l: 'Given to', type: 'select', o: [['both', 'Both Vice Presidents'], ['vp_internal', 'VP Internal'], ['vp_external', 'VP External']] }, { k: 'title', l: 'Task', req: 1 }, { k: 'details', l: 'Details', type: 'area' }, { k: 'from_date', l: 'From', type: 'date' }, { k: 'to_date', l: 'Until', type: 'date' }],
-    row: r => [r.title, `${{ both: 'Both VPs', vp_internal: 'VP Internal', vp_external: 'VP External' }[r.to_role]}${r.to_date ? ' · until ' + fmtDate(r.to_date) : ''}${r.status === 'done' ? ' · done by ' + esc(r.done_by_name || '') : ''}`, r.status === 'done' ? 'done' : 'open'] },
+    fields: [{ k: 'to_role', l: 'Given to', type: 'select', o: [['both', 'Both Vice Presidents'], ['vp_internal', 'SAILS VP Internal'], ['vp_external', 'SAILS VP External']] }, { k: 'title', l: 'Task', req: 1 }, { k: 'details', l: 'Details', type: 'area' }, { k: 'from_date', l: 'From', type: 'date' }, { k: 'to_date', l: 'Until', type: 'date' }],
+    row: r => [r.title, `${{ both: 'Both VPs', vp_internal: 'SAILS VP Internal', vp_external: 'SAILS VP External' }[r.to_role]}${r.to_date ? ' · until ' + fmtDate(r.to_date) : ''}${r.status === 'done' ? ' · done by ' + esc(r.done_by_name || '') : ''}`, r.status === 'done' ? 'done' : 'open'] },
   par: { t: 'v2_vp_partners', name: 'partner', who: ['mayor', 'vp_external', 'vice_mayor'], approval: 'active', order: ['name', true],
     fields: [{ k: 'name', l: 'Name', req: 1 }, { k: 'kind', l: 'Kind', type: 'select', o: [['organization', 'Student organization'], ['institution', 'Institution or school'], ['alumni', 'Alumni'], ['community', 'Community group']] }, { k: 'contact_name', l: 'Contact person' }, { k: 'contact', l: 'Phone, email or page' },
       { k: 'notes', l: 'Notes', type: 'area' }, { k: 'adviser_status', l: 'Adviser review', type: 'select', o: [['pending', ADV.pending], ['endorsed', ADV.endorsed], ['not_endorsed', ADV.not_endorsed]] }, { k: 'adviser_note', l: 'Adviser note' }],
@@ -77,7 +77,7 @@ export async function mountVp(el, ctx) {
     const soon = x => x && (new Date(x) - new Date(today)) / dayMs;
     const dels = d.del.filter(x => x.status === 'open' && mine(x));
     if (dels.length) add(`${dels.length} task${dels.length === 1 ? '' : 's'} from the Mayor ${isMayor ? 'not done yet' : 'for you'}`, sides.includes('int') ? 'int' : 'ext', 'del');
-    const waiting = recs.filter(x => x.flow === 'reviewed').length; if (waiting && (isMayor || role === 'vp_internal' || role === 'vice_mayor')) add(`${waiting} record(s) from the Secretary waiting for your approval`, 'int', 'docs');
+    const waiting = recs.filter(x => x.flow === 'reviewed').length; if (waiting && (isMayor || role === 'vp_internal' || role === 'vice_mayor')) add(`${waiting} record(s) from the SAILS Secretary waiting for your approval`, 'int', 'docs');
     if (isMayor) {
       const w = (k, label, s, p) => { const c = d[k].filter(x => x.status === 'proposed').length; if (c) add(`${c} ${label} waiting for your decision`, s, p); };
       w('meet', 'meeting or program(s)', 'int', 'meet'); w('par', 'partner(s)', 'ext', 'par'); w('act', 'joint activit' + (d.act.filter(x => x.status === 'proposed').length === 1 ? 'y' : 'ies'), 'ext', 'act');
@@ -115,7 +115,7 @@ export async function mountVp(el, ctx) {
   const FL = { reviewed: ['waiting for approval', 'warn'], returned: ['returned', 'bad'], approved: ['approved', 'ok'], classified: ['classified', 'ok'], published: ['posted', 'ok'], draft: ['draft', 'warn'] };
   function docsList() {
     const can = isMayor || role === 'vp_internal' || role === 'vice_mayor', rows = recs.filter(x => x.flow && x.flow !== 'draft').sort((a, b) => (b.flow === 'reviewed') - (a.flow === 'reviewed'));
-    return `<p class="muted" style="margin:0 2px 8px">Minutes, resolutions and letters the Secretary sent for approval. ${can ? 'Approve them, or return them with a note.' : ''} After approval the Auditor classifies them and the PIO posts the non-confidential ones to the members.</p>
+    return `<p class="muted" style="margin:0 2px 8px">Minutes, resolutions and letters the SAILS Secretary sent for approval. ${can ? 'Approve them, or return them with a note.' : ''} After approval the SAILS Auditor classifies them and the SAILS PIO posts the non-confidential ones to the members.</p>
       <div class="card">${rows.map(r => `<div class="row" data-di="${r.id}" style="cursor:pointer"><div class="m"><b>${esc(r.title)}</b><small>${[r.ref_no, fmtDate(r.on_date), r.classification === 'confidential' ? 'confidential 🔒' : r.classification ? 'non-confidential' : ''].filter(Boolean).map(esc).join(' · ')}</small></div><span class="tag ${FL[r.flow][1]}">${FL[r.flow][0]}</span></div>`).join('') || '<p class="empty">Nothing sent for approval yet.</p>'}</div>`;
   }
   function docView(r) {
@@ -125,7 +125,7 @@ export async function mountVp(el, ctx) {
       ${r.flow_note ? `<div class="card pad" style="margin:8px 0"><small class="muted">Note</small><div>${esc(r.flow_note)}</div></div>` : ''}<small class="muted">Sent by ${esc(r.reviewed_by_name || '—')}${r.approved_by_name ? ' · approved by ' + esc(r.approved_by_name) : ''}</small>
       <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:14px">${can ? '<button class="btn gold" id="ap">Approve</button><button class="btn ghost" id="rt">Return with a note</button>' : ''}<button class="btn ghost" id="cx">Close</button></div><div class="err" id="er"></div>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
-      m.querySelector('#ap')?.addEventListener('click', async () => { try { await db(sb.rpc('v2_doc_approve', { p_id: r.id, p_ok: true, p_note: null })); close(); toast('Approved. The Auditor classifies it next.'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
+      m.querySelector('#ap')?.addEventListener('click', async () => { try { await db(sb.rpc('v2_doc_approve', { p_id: r.id, p_ok: true, p_note: null })); close(); toast('Approved. The SAILS Auditor classifies it next.'); load(); } catch (x) { m.querySelector('#er').textContent = x.message; } });
       m.querySelector('#rt')?.addEventListener('click', () => { close(); modal(`<h3>Return with a note</h3><label>What needs to change</label><textarea id="nt" rows="3" maxlength="300" required></textarea><div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:1">Return</button><button class="btn ghost" id="cx2">Cancel</button></div><div class="err" id="er"></div>`, (m2, close2) => {
         m2.querySelector('#cx2').onclick = close2;
         m2.querySelector('#go').onclick = async () => { const n = m2.querySelector('#nt').value.trim(); if (!n) return void (m2.querySelector('#er').textContent = 'Write what needs to change.'); try { await db(sb.rpc('v2_doc_approve', { p_id: r.id, p_ok: false, p_note: n })); close2(); toast('Returned'); load(); } catch (x) { m2.querySelector('#er').textContent = x.message; } }; }); });

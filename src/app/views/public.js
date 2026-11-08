@@ -37,7 +37,7 @@ function installBar(box) {
 const sanctionText = (v, ord) => v.excused ? 'excused, no fine' : v.kind ? 'attendance record' : v.fine ? `Fine ₱${Number(v.fine).toLocaleString('en-PH')}` : v.offense === 1 ? '1st offense: verbal warning' : `${ord(v.offense)} offense: ₱25 fine`;
 const ordn = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
 
-/* Balance reminders: a student links their own phone to their QR card, so the Treasurer can remind only those who still owe. */
+/* Balance reminders: a student links their own phone to their QR card, so the SAILS Treasurer can remind only those who still owe. */
 async function remBox(rm, token) {
   if (!rm) return;
   const bar = (txt, btn = '') => { rm.innerHTML = `<div class="alertbar" style="margin:10px 0"><span>🔔 ${txt}</span>${btn}</div>`; };
@@ -224,7 +224,7 @@ export async function renderPublic(root) {
       };
     });
   }
-  /* FAQ: questions the Secretary keeps up to date; tap one to open its answer */
+  /* FAQ: questions the SAILS Secretary keeps up to date; tap one to open its answer */
   function faqView() {
     const items = data.faq || [];
     if (!items.length) return `<div class="card"><p class="empty">${t('faqEmpty')}</p></div>`;

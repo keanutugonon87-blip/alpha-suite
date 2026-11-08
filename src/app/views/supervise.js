@@ -25,7 +25,7 @@ async function funds(el) {
   const f = await rpc('v2_funds_overview');
   if (!f) { el.innerHTML = NOTE; return; }
   const bal = +f.opening + +f.collected - +f.spent;
-  el.innerHTML = `<p class="muted" style="margin:0 2px 8px">The class fund of the open period. Read only. The Auditor checks it, and the Class Mayor runs it.</p>
+  el.innerHTML = `<p class="muted" style="margin:0 2px 8px">The class fund of the open period. Read only. The SAILS Auditor checks it, and the Class Mayor runs it.</p>
     <div class="grid" style="margin-bottom:12px"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Collected</small><b>${peso(f.collected)}</b></div><div class="stat"><small>Spent</small><b>${peso(f.spent)}</b></div><div class="stat"><small>Pending entries</small><b>${f.pending}</b></div></div>
     <div class="card">
       <div class="row"><div class="m"><b>Opening balance</b></div><span>${peso(f.opening)}</span></div>
@@ -37,13 +37,13 @@ async function funds(el) {
 
 const ACCESS = [
   ['Own directives inbox', '✓', '✓', '✓', '✓', '✓'],
-  ['Issue directives', 'VPs, General Marshal', 'Class officers', 'Class Mayors', 'Dept. Marshals (General Marshal)', '—'],
+  ['Issue directives', 'VPs, SAILS General Marshal', 'Class officers', 'Class Mayors', 'Dept. Marshals (SAILS General Marshal)', '—'],
   ['Accounts and roles', 'All except the President role', 'Own class officers', '—', '—', '—'],
   ['VP meetings, partners, activities', 'Approve', '—', 'Own work', '—', '—'],
   ['Calendar', 'Decide', 'Own drafts', 'Own drafts', '—', '—'],
   ['Class money, Watch, documents', 'Read', 'Run it', 'Read', '—', '—'],
   ['Marshal blocks and incident reports', 'Read, act on referrals', '—', '—', 'Run it', '—'],
-  ['Class Mayors’ reports and requests', 'Read all', 'Own', 'Decide (VP Internal)', '—', '—'],
+  ['Class Mayors’ reports and requests', 'Read all', 'Own', 'Decide (SAILS VP Internal)', '—', '—'],
   ['Role log, scorecards', 'Read', '—', '—', '—', '—'],
 ];
 
@@ -54,7 +54,7 @@ async function records(el, ctx) {
   el.innerHTML = `
     <h3 style="margin:0 2px 8px">Deputy while you are away</h3>
     <div class="card" style="margin-bottom:14px">${dep ? `<div class="row"><div class="m"><b>${esc(dep.user_name)}</b><small>Acts for the President from ${fmtDate(dep.from_on + 'T00:00:00+08:00')} to ${fmtDate(dep.to_on + 'T00:00:00+08:00')}${dep.active_now ? ' · active now' : ''}. Decisions are marked “acting for the President”. Roles stay with you.</small></div>${dep.me ? '' : '<button class="btn ghost sm" id="dr">End</button>'}</div>`
-      : '<p class="muted" style="margin:0 0 8px">Nobody is named. If you are away, name a Vice President or the General Marshal for up to 14 days.</p>'}
+      : '<p class="muted" style="margin:0 0 8px">Nobody is named. If you are away, name a Vice President or the SAILS General Marshal for up to 14 days.</p>'}
       ${real ? '<div class="acts" style="margin-top:8px"><button class="btn gold sm" id="dn">Name a deputy</button></div>' : ''}</div>
     <h3 style="margin:0 2px 8px">Monthly report for the adviser</h3>
     <div class="card" style="margin-bottom:14px"><div class="row"><div class="m"><b>SAILS monthly report</b><small>Approvals, directives, reports from Class Mayors, incidents, funds and the activities of the month. Opens a page you can print or save as PDF.</small></div><div style="display:flex;gap:6px"><input type="month" id="mm" value="${tonight.slice(0, 7)}" style="width:auto"><button class="btn gold sm" id="mp">Open</button></div></div></div>

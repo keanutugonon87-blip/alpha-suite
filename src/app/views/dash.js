@@ -2,7 +2,7 @@ import { sb, db, esc, peso, fmtDate, toast, modal, FUNDS, todayISO } from '../co
 import { showReceipt } from '../qr.js';
 import { ymManila } from '../money.js';
 
-/* Treasurer overview: where the money is, what needs the Treasurer, who owes and for how long, and the last eight weeks.
+/* Treasurer overview: where the money is, what needs the SAILS Treasurer, who owes and for how long, and the last eight weeks.
    Everything is worked out from records the app already keeps, so there is no extra setup. */
 const dayMs = 864e5;
 const wkStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(x.getDate() - ((x.getDay() + 6) % 7)); return x; };
@@ -34,7 +34,7 @@ export async function drawOverview(host, ctx, base, { goal, rows, collect, isMay
   const monthOut = sum(ok.filter(e => e.kind === 'expense' && ymManila(e.occurred_at) === ym)), monthIn = sum(ok.filter(e => e.kind === 'collection' && ymManila(e.occurred_at) === ym));
   const wk = wkStart(now).getTime(), weekIn = sum(ok.filter(e => e.kind === 'collection' && new Date(e.occurred_at).getTime() >= wk));
 
-  /* what needs the Treasurer (or the Mayor, when it is the Mayor looking) */
+  /* what needs the SAILS Treasurer (or the Mayor, when it is the Mayor looking) */
   const needs = [];
   const add = (n, text, hash, act) => { if (n > 0) needs.push({ text: text.replace('{n}', n), hash, act }); };
   add(pend.length, isMayor ? '{n} entries are waiting for your approval' : '{n} entries are waiting for the Mayor to approve', '#/staff/treasury');
@@ -88,8 +88,8 @@ export async function drawOverview(host, ctx, base, { goal, rows, collect, isMay
 
   host.innerHTML = `<div class="grid"><div class="stat gold"><small>Money on hand</small><b>${peso(total)}</b></div><div class="stat"><small>Collected this week</small><b>${peso(weekIn)}</b></div><div class="stat"><small>Spent this month</small><b>${peso(monthOut)}</b></div></div>
     ${goal ? `<div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between"><b>Weekly goal</b><small class="muted">${peso(weekIn)} of ${peso(goal)}</small></div><div class="prog" style="margin-top:8px"><i style="width:${Math.min(100, weekIn / goal * 100)}%"></i></div></div>` : ''}
-    ${readonly ? '<p class="muted" style="margin:12px 2px 0;font-size:.85rem">This is the Treasurer’s desk, shown to you as an overview only. Approving entries is under Treasury.</p>' : ''}
-    <h3 style="margin:16px 2px 8px">${readonly ? 'At the Treasurer\'s desk' : 'Needs you'}</h3>
+    ${readonly ? '<p class="muted" style="margin:12px 2px 0;font-size:.85rem">This is the SAILS Treasurer’s desk, shown to you as an overview only. Approving entries is under Treasury.</p>' : ''}
+    <h3 style="margin:16px 2px 8px">${readonly ? 'At the SAILS Treasurer\'s desk' : 'Needs you'}</h3>
     <div class="card">${needs.length ? needs.map((n, i) => `<div class="row" ${readonly && n.act ? '' : `data-n="${i}" style="cursor:pointer"`}><div class="m"><b>${esc(n.text)}</b></div>${readonly && n.act ? '' : '<span class="muted">›</span>'}</div>`).join('') : '<p class="empty">Nothing is waiting. Everything is up to date.</p>'}</div>
     <h3 style="margin:16px 2px 8px">The Purser’s duties <small class="muted" style="font-weight:400">· CBL Section 5</small></h3>
     <div class="card">${duties.map(([t, st, txt, h, act], i) => `<div class="row" ${h || act ? `data-d="${i}" style="cursor:pointer"` : ''}><div class="m"><b>${esc(t)}</b><small>${esc(txt)}</small></div><span class="tag ${st}">${st === 'ok' ? 'OK' : st === 'bad' ? 'Gap' : st === 'warn' ? 'To do' : '—'}</span></div>`).join('')}</div>

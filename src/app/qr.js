@@ -183,7 +183,7 @@ export function makeQRCodes({ guard = false } = {}) {
       for (const [i, r] of list.entries()) {
         btn.textContent = `Making ${i + 1}/${list.length}…`;
         let mem = byNo.get(r.no.toLowerCase());
-        if (mem && guard && pins.has(mem.id)) { note.push(`${r.no} (${mem.full_name}) already signed up — ask the Treasurer or Mayor for a new card`); continue; }
+        if (mem && guard && pins.has(mem.id)) { note.push(`${r.no} (${mem.full_name}) already signed up — ask the SAILS Treasurer or Mayor for a new card`); continue; }
         if (!mem) { mem = { id: uuid(), full_name: r.name, student_no: r.no, section: r.sec || null, status: 'active' };
           await db(sb.from('v2_members').insert(mem)); added++; }
         else if (mem.full_name.toLowerCase() !== r.name.toLowerCase()) note.push(`${r.no}: kept roster name "${mem.full_name}" (you typed "${r.name}")`);

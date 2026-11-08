@@ -55,7 +55,7 @@ export async function mountBalances(el, ctx) {
     catch (e) { return toast(/function|schema cache/i.test(e.message) ? 'Reminders are not switched on in the database yet.' : e.message, true); }
     try { roster = await db(sb.rpc('v2_reminder_roster', { p_charge: c.id })); } catch { /* older database: no roster yet */ }
     const recent = st.last && Date.now() - new Date(st.last) < 6 * 3600e3, unreach = roster.filter(r => !r.linked), reach = roster.filter(r => r.linked);
-    const text = `Reminder from the BSMT 1-Alpha Treasurer: ${c.title} (${peso(c.amount)} each${c.due_on ? ', due ' + fmtDate(c.due_on) : ''}). Still owing:\n${unreach.map(r => `• ${r.name} — ${peso(r.owed)}`).join('\n')}\nPlease settle with the Treasurer. Salamat!`;
+    const text = `Reminder from the BSMT 1-Alpha Treasurer: ${c.title} (${peso(c.amount)} each${c.due_on ? ', due ' + fmtDate(c.due_on) : ''}). Still owing:\n${unreach.map(r => `• ${r.name} — ${peso(r.owed)}`).join('\n')}\nPlease settle with the SAILS Treasurer. Salamat!`;
     modal(`<h3>Remind those who owe</h3><p class="muted" style="margin:0 0 10px">${esc(c.title)} · ${peso(c.amount)} each</p>
       <div class="grid"><div class="stat"><small>Still owe</small><b>${st.owing}</b></div><div class="stat gold"><small>Phone alert works</small><b>${st.reachable}</b></div></div>
       <p class="muted" style="margin:10px 0 0">Each student gets a phone alert with their own amount. Only students who turned on reminders in <b>My Status</b> can be reached.</p>
