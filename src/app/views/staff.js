@@ -35,7 +35,7 @@ const TABS = [
   { id: 'treasury', label: 'Treasury', load: () => import('./treasury.js').then(m => m.mountTreasury), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
   { id: 'desk', label: 'Desk', load: () => import('./desk.js').then(m => m.mountDesk), roles: ['mayor', 'treasurer'] },
   { id: 'balances', label: 'Balances', load: () => import('./balances.js').then(m => m.mountBalances), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary'] },
-  { id: 'watch', label: 'Watch', load: () => import('./watch.js').then(m => m.mountWatch), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
+  { id: 'watch', label: 'Watch', load: () => import('./watch.js').then(m => m.mountWatch), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio', 'general_marshal', 'dept_marshal'] },
   { id: 'attendance', label: 'Attendance', load: () => import('./attendance.js').then(m => m.mountAttendance), roles: ['mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'treasurer', 'auditor', 'pio'] },
   { id: 'requests', label: 'Budget', load: () => import('./requests.js').then(m => m.mountRequests), roles: ['mayor', 'vp_internal', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'marshall', 'sails', 'pio'] },
   { id: 'students', label: 'Students', load: () => import('./students.js').then(m => m.mountStudents), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor'] },

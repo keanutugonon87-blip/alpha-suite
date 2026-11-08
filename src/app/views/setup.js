@@ -32,6 +32,7 @@ export const STEPS = [
   { v: 'v54', file: 'v54_class_mayor_receives_only.sql', does: 'A Class Mayor receives directives but no longer sends them', check: null },
   { v: 'v55', file: 'v55_mayor_desk_receives.sql', does: 'Mayor Desk only receives the agenda, minutes and approved letters; the SAILS Secretary writes them', check: null },
   { v: 'v56', file: 'v56_officers_keep_their_desks.sql', does: 'SAILS Secretary, Treasurer, PIO and Marshal keep their own desks and tools', check: null },
+  { v: 'v57', file: 'v57_marshal_watch.sql', does: 'SAILS Marshals get Watch and QR scan inspection for the students in their own block', check: null },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the SAILS Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },

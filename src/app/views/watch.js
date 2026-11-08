@@ -14,7 +14,7 @@ const STATUS = { awaiting_approval:['awaiting approval','warn'], pending:['pendi
 
 export async function mountWatch(el, ctx) {
   const r = ctx.profile.role, name = ctx.profile.full_name;
-  const canReport = ctx.can('mayor','vice_mayor','secretary','marshall','sails');
+  const canReport = ctx.can('mayor','vice_mayor','secretary','marshall','sails','general_marshal','dept_marshal');
   const canApprove = ctx.can('mayor','vice_mayor');
   const TK = 'alpha-f-watch-tab', openSet = new Set();
   let tab = (() => { try { const t = localStorage.getItem(TK); return ['ledger', 'standing', 'standards'].includes(t) ? t : 'ledger'; } catch { return 'ledger'; } })(), q = '';
@@ -48,7 +48,7 @@ export async function mountWatch(el, ctx) {
     function actions(v) {
       const a = [];
       if (v.status === 'awaiting_approval' && canApprove) a.push(`<button class="btn gold sm" data-act="approve" data-id="${v.id}">Approve</button><button class="btn ghost sm" data-act="reject" data-id="${v.id}">Reject</button>`);
-      if (v.status === 'pending' && ctx.can('marshall','sails','mayor','vice_mayor','secretary')) a.push(`<button class="btn ghost sm" data-act="reqres" data-id="${v.id}">Request resolve</button>`);
+      if (v.status === 'pending' && ctx.can('marshall','sails','mayor','vice_mayor','secretary','general_marshal','dept_marshal')) a.push(`<button class="btn ghost sm" data-act="reqres" data-id="${v.id}">Request resolve</button>`);
       if (v.status === 'resolve_requested' && ctx.can('secretary','mayor','vice_mayor')) a.push(`<button class="btn ghost sm" data-act="forward" data-id="${v.id}">Forward to VP</button>`);
       if (v.status === 'resolve_forwarded' && canApprove) a.push(`<button class="btn gold sm" data-act="resolve" data-id="${v.id}">Resolve</button>`);
       const s = std(v.standard_id);
