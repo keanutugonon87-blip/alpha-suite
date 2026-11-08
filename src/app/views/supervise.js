@@ -1,7 +1,7 @@
 import { sb, db, esc, toast, modal, fmtDate, fmtDateTime, peso, printHTML, letterhead, ROLE_LABEL, todayISO } from '../core.js';
 
 /* The President's supervision panes: scorecards, funds overview, and records (deputy, role log, access map, monthly report). Read only except the deputy. */
-const RG = { vp_internal: 'VP Internal', vp_external: 'VP External', general_marshal: 'General Marshal', dept_marshal: 'Department Marshal', mayor: 'Class Mayor' };
+const RG = { vp_internal: 'SAILS VP Internal', vp_external: 'SAILS VP External', general_marshal: 'SAILS General Marshal', dept_marshal: 'SAILS Department Marshal', mayor: 'Class Mayor' };
 const NOTE = '<div class="card"><p class="empty">Run the v49 SQL in Supabase to turn this on.</p></div>';
 const rpc = (n, a) => sb.rpc(n, a || {}).then(r => (r.error ? null : r.data), () => null);
 
