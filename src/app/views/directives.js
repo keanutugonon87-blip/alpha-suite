@@ -8,12 +8,12 @@ const STATUS = { sent: ['Sent', 'warn'], received: ['Received', ''], working: ['
 const PRI = { urgent: ['Urgent', 'bad'], normal: ['Normal', ''], low: ['Low', ''] };
 const CLASS_OFFICERS = ['secretary', 'treasurer', 'auditor', 'marshall', 'pio'];
 const chainFor = ctx => ({
-  mayor: ctx.mode === 'pres' ? ['vp_internal', 'vp_external', 'general_marshal'] : ctx.mode === 'acting' ? [...CLASS_OFFICERS, 'vp_internal', 'vp_external', 'general_marshal'] : CLASS_OFFICERS,
+  mayor: ctx.mode === 'pres' ? ['vp_internal', 'vp_external', 'general_marshal'] : [],   // a Class Mayor only receives directives; the class officers have no system access
   vp_internal: ['mayor'], vp_external: ['mayor'], general_marshal: ['dept_marshal'] });
 const OPEN = ['sent', 'received', 'working', 'done', 'revoke_asked'];
 
 export async function mountDirectives(el, ctx) {
-  const CHAIN = chainFor(ctx), role = ctx.profile.role, issuer = !!CHAIN[role], me = ctx.profile.user_id || ctx.user?.id;
+  const CHAIN = chainFor(ctx), role = ctx.profile.role, issuer = !!(CHAIN[role] && CHAIN[role].length), me = ctx.profile.user_id || ctx.user?.id;
   const mayor = issuer;   // issuers see the board and the officer names
   const canDecide = d => d.issued_by === me || (ctx.mode !== 'class' && ctx.can('mayor'));
   let rows = [], tab = 'open', officers = [], mreq = [], memos = [], acked = new Set(), qs = [];
