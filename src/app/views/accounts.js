@@ -111,7 +111,7 @@ export async function mountAccounts(el, ctx) {
           <small>Joined ${fmtDate(p.created_at)}${changed(p) ? ` · role changed ${fmtDate(p.updated_at)}` : ''}</small>
           ${canAlert ? `<small>${links.get(p.user_id) ? `Student: ${esc(links.get(p.user_id).member_name)} · ${links.get(p.user_id).has_pin ? 'PIN set' : 'no PIN yet'}` : 'Not linked to a student record'}${isMayor ? ` · <a href="#" data-ln="${p.user_id}">${links.get(p.user_id) ? 'change' : 'link'}</a>` : ''}</small>` : ''}</div></div>
         <div class="acts">${isMayor && p.user_id !== ctx.profile.user_id && ALLOWED.includes(p.role)
-          ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ALLOWED.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select><button class="btn danger sm" data-del="${p.user_id}">Remove</button>`
+          ? `<select data-u="${p.user_id}" data-prev="${p.role}" aria-label="Role">${ALLOWED.map(r => `<option value="${r}"${p.role === r ? ' selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>${ctx.mode === 'pres' ? `<button class="btn danger sm" data-del="${p.user_id}">Remove</button>` : ''}`
           : `<span class="tag ok">${ROLE_LABEL[p.role]}${p.user_id === ctx.profile.user_id ? ' (you)' : ''}</span>`}</div></div>`).join('')}</div>`
       : tab === 'backups' ? `${(() => {
           const stamp = n => { const m = n && n.match(/(\d{4})-(\d{2})-(\d{2})-(\d{2})(\d{2})/); return m ? new Date(`${m[1]}-${m[2]}-${m[3]}T${m[4]}:${m[5]}:00+08:00`) : null; };
