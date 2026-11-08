@@ -140,6 +140,7 @@ export async function renderStaff(root, tabId) {
     if (tabId === 'office' || tabId === 'home') tabId = ctx.section === 'vp' ? 'pd-approvals' : ctx.section === 'directives' || ctx.section === 'classup' ? 'pd-people' : 'pd-today';
   }
   // Related screens share one menu entry (Money, Class, Admin) with buttons to switch between them. Old links to a single screen still land in the right place.
+  if (mode === 'class') tabs = tabs.filter(t => !['docs', 'duties', 'accounts', 'roles', 'system'].includes(t.id));   // Admin belongs to the SAILS President
   const HUBS = [['money', 'Money', ['treasury', 'desk', 'balances', 'requests', 'pack']], ['class', 'Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['admin', 'Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   for (const [hid, hlabel, ids] of HUBS) {
     const members = tabs.filter(t => ids.includes(t.id)); if (members.length < 2) continue;

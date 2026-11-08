@@ -1,5 +1,5 @@
--- v53 · Only the SAILS President approves or removes accounts. A Class Mayor can no longer delete an account.
--- (Approval was already President-only in v51.) The Class Mayor can still move his class officers between class roles.
+-- v53 · Only the SAILS President manages accounts: approve, remove and change roles. A Class Mayor has no account admin.
+-- (Approval was already President-only in v51.)
 -- Safe to run twice.
 drop policy if exists profiles_mayor_del on public.v2_profiles;
 create policy profiles_mayor_del on public.v2_profiles for delete to authenticated
@@ -16,3 +16,21 @@ begin
   end if;
   execute d;
 end $$;
+
+-- Class Mayor can no longer edit other people's profiles or change roles
+drop policy if exists profiles_mayor_upd on public.v2_profiles;
+create policy profiles_mayor_upd on public.v2_profiles for update to authenticated
+  using (user_id = (select auth.uid()) or public.v2_is_real_president())
+  with check (user_id = (select auth.uid()) or public.v2_is_real_president());
+
+create or replace function public.v2_profile_role_guard() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if new.role is distinct from old.role and auth.uid() is not null then
+    if old.user_id = auth.uid() then raise exception 'You cannot change your own role'; end if;
+    if new.role = 'sails_president' and public.v2_president_exists() then raise exception 'The SAILS President role is given in the database only'; end if;
+    if not public.v2_is_real_president() then raise exception 'Only the SAILS President manages accounts and roles'; end if;
+  end if;
+  return new;
+end $$;
+revoke all on function public.v2_profile_role_guard() from public, anon;
