@@ -7,12 +7,12 @@ const CATS_IN = ['Class Dues', 'Contribution', 'Fines', 'Fundraising', 'Donation
 const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
 
 export async function mountTreasury(el, ctx) {
-  const canWrite = ctx.can('treasurer'), isMayor = ctx.can('mayor');
+  const canWrite = !!ctx.collects, isMayor = ctx.can('mayor'), isSailsT = ctx.profile.role === 'treasurer';   // the Class Treasurer records; the SAILS Treasurer counts and confirms; the Class Mayor supervises
   let reqs = [], curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
   async function entryExtras() {
-    for (const cols of ['id,request_id,approval_ref,ack_at', 'id,request_id']) { try { return await db(sb.from('v2_entries').select(cols).limit(5000)); } catch { /* column not installed yet */ } }
+    for (const cols of ['id,request_id,approval_ref,ack_at,confirmed_at,confirmed_by_name', 'id,request_id,approval_ref,ack_at', 'id,request_id']) { try { return await db(sb.from('v2_entries').select(cols).limit(5000)); } catch { /* column not installed yet */ } }
     return [];
   }
   const basis = e => e.kind !== 'expense' ? '' : e.request_id ? ` · Request ${esc(reqs.find(r => r.id === e.request_id)?.req_no || '')}` : e.approval_ref ? ` · Approval: ${esc(e.approval_ref)}` : '';
@@ -39,9 +39,13 @@ export async function mountTreasury(el, ctx) {
     const coll = ok.filter(e => e.kind === 'collection').reduce((s, e) => s + +e.amount, 0), exp = ok.filter(e => e.kind === 'expense').reduce((s, e) => s + +e.amount, 0);
     const bal = +cur.opening_balance + coll - exp, pendingN = curE.filter(e => e.status === 'pending').length;
 
-    const canApprove = e => e.status === 'pending' && (needsSecond(e, limit) ? ctx.can('mayor', 'vice_mayor', 'secretary', 'treasurer') && e.recorded_by !== ctx.profile.user_id : isMayor);
+    const canApprove = e => e.status === 'pending' && (needsSecond(e, limit) ? !ctx.collects && ctx.can('mayor', 'vice_mayor', 'secretary', 'treasurer') && e.recorded_by !== ctx.profile.user_id : isMayor);
+    const hasConf = entries.some(e => 'confirmed_at' in e); entries.forEach(e => { e.hasConfCol = hasConf; });
+    const isUnconf = e => e.kind === 'collection' && e.status === 'approved' && (e.source || 'manual') === 'manual' && !e.confirmed_at;
+    const unc = hasConf ? entries.filter(isUnconf) : [], uncSum = unc.reduce((s, e) => s + +e.amount, 0), oldest = unc.reduce((m, e) => !m || e.occurred_at < m ? e.occurred_at : m, null);
+    const confBanner = !hasConf ? '' : unc.length ? `<div class="card pad" style="margin-bottom:12px;border-left:4px solid var(--gold,#d4a017)"><b>${unc.length} collection${unc.length === 1 ? '' : 's'} · ${peso(uncSum)} not yet confirmed by the SAILS Treasurer</b><small class="muted" style="display:block">Oldest: ${fmtDate(oldest)}</small>${isSailsT ? '<button class="btn gold sm" id="cfm" style="margin-top:8px">Count and confirm</button>' : ctx.collects ? '<button class="btn gold sm" id="hand" style="margin-top:8px">Hand over to the SAILS Treasurer</button>' : ''}</div>` : '<p class="caught">Every collection is confirmed by the SAILS Treasurer.</p>';
     const rowHTML = (e, actions) => `<div class="row"><div class="lead"><span class="ini ${e.kind === 'expense' ? 'out' : ''}">${esc(initials(e.who))}</span><div class="m"><b>${esc(e.who)} <span class="tag ${e.status === 'approved' ? 'ok' : e.status === 'pending' ? 'warn' : 'bad'}">${e.status}</span>${e.locked ? ' <span class="tag" title="This month is closed">🔒</span>' : ''}${e.status === 'pending' && needsSecond(e, limit) ? ' <span class="tag warn" title="Big expense: another officer must approve it">needs a 2nd officer</span>' : ''}</b>
-      <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.kind === 'collection' && e.status === 'approved' && e.ack_at ? ' · acknowledged' : ''}${basis(e)}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
+      <small>${esc(e.charge || e.category)} · ${esc(fundLabel(e.fundK))}${e.purpose && e.purpose !== e.charge ? ` · ${esc(e.purpose)}` : ''}${e.receipt_no ? ` · ${esc(e.receipt_no)}` : ''}${e.kind === 'collection' && e.status === 'approved' && e.ack_at ? ' · acknowledged' : ''}${e.confirmed_at ? ` · confirmed by ${esc(e.confirmed_by_name || 'the SAILS Treasurer')}` : isUnconf(e) && e.hasConfCol ? ' · not yet confirmed' : ''}${basis(e)}${e.method === 'gcash' ? ' · GCash' : ''}${e.void_reason ? ` · voided: ${esc(e.void_reason)}` : ''}</small>
       <div class="acts">${e.hasImg ? `<button class="btn ghost sm" data-img="${e.id}">Photo</button>` : ''}${e.kind === 'collection' && e.status === 'approved' ? `<button class="btn ghost sm" data-rc="${e.id}">Receipt</button>` : ''}${actions && canApprove(e) ? (needsSecond(e, limit) && !e.hasImg ? '<span class="tag bad" title="Add a receipt photo first">no receipt photo</span>' : `<button class="btn gold sm" data-ok="${e.id}">Approve</button>`) : ''}${actions && (canWrite || isMayor) && e.status !== 'voided' && !e.locked ? `<button class="btn ghost sm" data-void="${e.id}">Void</button>` : ''}</div></div></div>
       <div class="amt ${e.kind === 'expense' ? 'out' : 'in'}">${e.kind === 'expense' ? '−' : '+'}${peso(e.amount)}</div></div>`;
     const rows = (arr, actions) => {
@@ -56,7 +60,7 @@ export async function mountTreasury(el, ctx) {
       const soon = charges.filter(c => !c.closed && c.due_on && (new Date(c.due_on) - Date.now()) / 864e5 <= 7).length;
       const pm = ymManila(new Date(Date.now() - 31 * 864e5)), prevOpen = entries.some(e => e.status === 'approved' && ymManila(e.occurred_at) === pm) && !lockedMonths.has(pm);
       const todo = [pendingN ? ['pending', `${pendingN} waiting for approval`] : null, soon ? ['due', `${soon} charge${soon > 1 ? 's' : ''} due within a week or late`] : null, prevOpen ? ['month', 'Last month is not closed yet'] : null].filter(Boolean);
-      body = `${todo.length ? `<div class="todo" role="list" aria-label="To do">${todo.map(([k, t]) => `<button class="btn ghost sm" role="listitem" data-todo="${k}">${esc(t)}</button>`).join('')}</div>` : ''}<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
+      body = `${confBanner}${todo.length ? `<div class="todo" role="list" aria-label="To do">${todo.map(([k, t]) => `<button class="btn ghost sm" role="listitem" data-todo="${k}">${esc(t)}</button>`).join('')}</div>` : ''}<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
         <div class="stat"><small>Collected</small><b>${peso(coll)}</b></div><div class="stat"><small>Spent</small><b>${peso(exp)}</b></div></div>
         <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
           <input id="q" type="search" placeholder="Search name, receipt, purpose" aria-label="Search entries" value="${esc(qtext)}" style="flex:1 1 150px;min-width:0"><select id="flt" style="width:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
@@ -84,6 +88,14 @@ export async function mountTreasury(el, ctx) {
     el.querySelectorAll('[data-past]').forEach(b => b.onclick = () => { openPast = openPast === b.dataset.past ? null : b.dataset.past; draw(); });
     $('#addIn')?.addEventListener('click', () => entryForm('collection', cur));
     $('#fab')?.addEventListener('click', () => entryForm('collection', cur));
+    $('#hand')?.addEventListener('click', async () => { try { const r = await db(sb.rpc('v2_handover')); toast(`Handed over: ${r.n} collection(s), ${peso(r.amount)}. The SAILS Treasurer was alerted.`); } catch (x) { toast(x.message, true); } });
+    $('#cfm')?.addEventListener('click', () => modal(`<h3>Count and confirm</h3><p class="muted" style="margin:0 0 8px">Count the cash handed over, then tick what you received. Each one is marked confirmed by you.</p>
+      <div class="card" style="max-height:46vh;overflow:auto;padding:4px 10px">${unc.slice().sort((a, b) => a.occurred_at.localeCompare(b.occurred_at)).map(e => `<label class="ck"><input type="checkbox" name="c" value="${e.id}" data-a="${e.amount}" checked><span>${esc(e.who)} · ${esc(e.charge || e.category || '')} · ${peso(e.amount)}<small class="muted" style="display:block">${fmtDate(e.occurred_at)} · recorded by ${esc(e.recorded_by_name || '')}</small></span></label>`).join('')}</div>
+      <p id="tot" style="margin:10px 0 0"></p><div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" style="flex:1" id="go">Confirm</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
+      const boxes = () => [...m.querySelectorAll('[name=c]')], sel = () => boxes().filter(b => b.checked), upd = () => { m.querySelector('#tot').innerHTML = `<b>${sel().length}</b> selected · <b>${peso(sel().reduce((s, b) => s + +b.dataset.a, 0))}</b>`; m.querySelector('#go').disabled = !sel().length; };
+      boxes().forEach(b => b.onchange = upd); upd(); m.querySelector('#cx').onclick = close;
+      m.querySelector('#go').onclick = async () => { const go = m.querySelector('#go'); go.disabled = true; try { const n = await db(sb.rpc('v2_confirm_collections', { p_ids: sel().map(b => b.value) })); toast(`${n} collection${n === 1 ? '' : 's'} confirmed`); close(); draw().catch(() => {}); } catch (x) { m.querySelector('#er').textContent = x.message; go.disabled = false; } };
+    }));
     $('#addOut')?.addEventListener('click', () => entryForm('expense', cur));
     $('#scan')?.addEventListener('click', async () => { const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, { member: r.id }); } });
     $('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));

@@ -53,14 +53,14 @@ export async function mountWatch(el, ctx) {
       if (v.status === 'resolve_requested' && ctx.can('secretary','mayor','vice_mayor')) a.push(`<button class="btn ghost sm" data-act="forward" data-id="${v.id}">Forward to VP</button>`);
       if (v.status === 'resolve_forwarded' && canApprove) a.push(`<button class="btn gold sm" data-act="resolve" data-id="${v.id}">Resolve</button>`);
       const s = std(v.standard_id);
-      if (isCounted(v) && s?.fine && !paid.has(v.id) && v.excuse_status !== 'accepted' && ctx.can('treasurer')) a.push(`<button class="btn gold sm" data-act="collect" data-id="${v.id}">Collect ${peso0(s.fine)}</button>`);
+      if (isCounted(v) && s?.fine && !paid.has(v.id) && v.excuse_status !== 'accepted' && ctx.collects) a.push(`<button class="btn gold sm" data-act="collect" data-id="${v.id}">Collect ${peso0(s.fine)}</button>`);
       if (isCounted(v) && !s?.kind && !v.excuse_status && canReport) a.push(`<button class="btn ghost sm" data-act="excuse" data-id="${v.id}">Excuse letter</button>`);
       if (v.excuse_status === 'pending' && canApprove) a.push(`<button class="btn gold sm" data-act="review" data-id="${v.id}">Review excuse</button>`);
       if (ctx.can('mayor')) a.push(`<button class="btn ghost sm" data-act="del" data-id="${v.id}">Delete</button>`);
       return a.join('');
     }
 
-    const canPay = ctx.can('treasurer');
+    const canPay = !!ctx.collects;
     const payable = v => isCounted(v) && std(v.standard_id)?.fine && !paid.has(v.id) && v.excuse_status !== 'accepted';
     const fineOf = v => +std(v.standard_id).fine;
     /* One collapsible block per student: their violations together, with tick-boxes to pay chosen fines or everything owed. */

@@ -27,7 +27,7 @@ export async function mountAttendance(el, ctx) {
 
 async function draw(host, ctx, members, standards, redraw) {
   const manage = ctx.can('mayor', 'vice_mayor'), scanRoles = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'general_marshal', 'dept_marshal'), isMayor = ctx.can('mayor'), uid = ctx.profile.user_id, canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
-  const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor', 'general_marshal', 'dept_marshal'), collects = ctx.can('treasurer');
+  const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor', 'general_marshal', 'dept_marshal'), collects = !!ctx.collects;
   const act = members.filter(x => x.status === 'active'), mname = id => members.find(m => m.id === id)?.full_name || '?';
   let events, scans, viol = [], paid = new Set(), posts = [];
   try {

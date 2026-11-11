@@ -121,7 +121,7 @@ export async function renderStaff(root, tabId) {
   // A Vice President or the SAILS General Marshal named as the President's deputy gets the President Desk while the deputy period is active.
   const deputy = ['vp_internal', 'vp_external', 'general_marshal'].includes(p.role) ? await sb.rpc('v2_deputy_status').then(r => !!(r.data && r.data.me && r.data.active_now), () => false) : false;
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor')) || (p.role === 'class_treasurer' && r.includes('treasurer'));
-  const ctx = { profile: p, mode, can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['secretary', 'pio'].includes(x))), section: null };
+  const ctx = { profile: p, mode, collects: p.role === 'class_treasurer', can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['secretary', 'pio'].includes(x))), section: null };
   const OFFICE = { secretary: 'SAILS Secretary Desk', auditor: 'SAILS Audit Desk', pio: 'SAILS PIO Desk', marshall: 'Class Marshal Desk', mayor: 'President Desk' };
   let tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
   // Classroom level: no Budget tab (budget goes through the SAILS). The Class Mayor's SAILS Report tab holds the weekly report, the requests and the monthly pack.
