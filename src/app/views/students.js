@@ -3,8 +3,8 @@ import { exportXLSX } from '../xlsx.js';
 import { showMemberCards, makeQRCodes } from '../qr.js';
 
 export async function mountStudents(el, ctx) {
-  const canEdit = ctx.can('mayor', 'vice_mayor', 'secretary'), canQR = ctx.can('mayor', 'treasurer'), canMake = ctx.can('mayor', 'treasurer', 'vice_mayor', 'secretary');
-  const canCollect = ctx.can('mayor', 'treasurer');
+  const canEdit = ctx.can('mayor', 'vice_mayor', 'secretary'), canQR = ctx.can('treasurer'), canMake = ctx.can('mayor', 'treasurer', 'vice_mayor', 'secretary');
+  const canCollect = ctx.can('treasurer');
   let q = '', rows = [], pins = new Map(), owes = new Map();
   el.innerHTML = skeleton(6);
 

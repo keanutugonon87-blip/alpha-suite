@@ -120,10 +120,13 @@ export async function renderStaff(root, tabId) {
 
   // A Vice President or the SAILS General Marshal named as the President's deputy gets the President Desk while the deputy period is active.
   const deputy = ['vp_internal', 'vp_external', 'general_marshal'].includes(p.role) ? await sb.rpc('v2_deputy_status').then(r => !!(r.data && r.data.me && r.data.active_now), () => false) : false;
-  const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor'));
-  const ctx = { profile: p, mode, can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['treasurer', 'secretary', 'pio'].includes(x))), section: null };
-  const OFFICE = { secretary: 'SAILS Secretary Desk', auditor: 'SAILS Audit Desk', pio: 'SAILS PIO Desk', marshall: 'Marshal Desk', mayor: 'President Desk' };
+  const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor')) || (p.role === 'class_treasurer' && r.includes('treasurer'));
+  const ctx = { profile: p, mode, can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['secretary', 'pio'].includes(x))), section: null };
+  const OFFICE = { secretary: 'SAILS Secretary Desk', auditor: 'SAILS Audit Desk', pio: 'SAILS PIO Desk', marshall: 'Class Marshal Desk', mayor: 'President Desk' };
   let tabs = TABS.filter(t => has(t.roles)).map(t => t.id === 'office' ? { ...t, label: OFFICE[p.role] } : t);
+  // Classroom level: no Budget tab (budget goes through the SAILS). The Class Mayor's SAILS Report tab holds the weekly report, the requests and the monthly pack.
+  if (mode === 'class' || p.role === 'class_treasurer') tabs = tabs.filter(t => t.id !== 'requests');
+  if (mode === 'class') { if (tabId === 'pack') tabId = 'report'; tabs = tabs.filter(t => t.id !== 'pack').map(t => t.id === 'report' ? { ...t, label: 'SAILS Report', load: () => import('./classreport.js').then(m => m.mountSailsReport) } : t); }
   if (mode === 'class') tabs = tabs.filter(t => t.id !== 'vp').map(t => t.id === 'office' ? { ...t, label: 'Mayor Desk', load: () => import('./mayordesk.js').then(m => m.mountMayorDesk) } : t);
   if (mode === 'pres') tabs = tabs.filter(t => t.id === 'office' || t.id === 'directives' || t.id === 'vp' || t.id === 'accounts');
   if (mode !== 'pres' && mode !== 'acting') tabs = tabs.filter(t => t.id !== 'report' || mode === 'class');

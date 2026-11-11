@@ -1,5 +1,5 @@
 /* Read-only table of who can do what. Keep it in step with the role checks in the SQL files. */
-const ROLES = [['mayor', 'Mayor'], ['vp_internal', 'VP Int'], ['vp_external', 'VP Ext'], ['secretary', 'Sec'], ['treasurer', 'Treas'], ['auditor', 'Aud'], ['marshall', 'Marsh'], ['pio', 'PIO']];
+const ROLES = [['mayor', 'Mayor'], ['vp_internal', 'VP Int'], ['vp_external', 'VP Ext'], ['secretary', 'Sec'], ['treasurer', 'Treas'], ['class_treasurer', 'Cl Treas'], ['auditor', 'Aud'], ['marshall', 'Marsh'], ['pio', 'PIO']];
 const ALL = ROLES.map(r => r[0]);
 const SCREENS = [
   ['Today (own duties)', ALL],
@@ -76,7 +76,7 @@ const ACTIONS = [
 ];
 const grid = (title, rows) => `<div class="card pad" style="margin-bottom:12px;overflow-x:auto"><b>${title}</b>
   <table class="rolegrid"><thead><tr><th></th>${ROLES.map(r => `<th scope="col">${r[1]}</th>`).join('')}</tr></thead><tbody>
-  ${rows.map(([n, who]) => `<tr><th scope="row">${n}</th>${ROLES.map(r => (who.includes(r[0]) || (r[0].startsWith('vp_') && who.includes('vice_mayor'))) ? `<td aria-label="${r[1]}: yes"><span class="tag ok">✓</span></td>` : `<td aria-label="${r[1]}: no" class="muted">–</td>`).join('')}</tr>`).join('')}
+  ${rows.map(([n, who]) => `<tr><th scope="row">${n}</th>${ROLES.map(r => (who.includes(r[0]) || (r[0] === 'class_treasurer' && who.includes('treasurer')) || (r[0].startsWith('vp_') && who.includes('vice_mayor'))) ? `<td aria-label="${r[1]}: yes"><span class="tag ok">✓</span></td>` : `<td aria-label="${r[1]}: no" class="muted">–</td>`).join('')}</tr>`).join('')}
   </tbody></table></div>`;
 export async function mountRoles(el) {
   el.innerHTML = `<h2 style="margin:0 0 4px">Who can do what</h2><p class="muted" style="margin:0 0 12px">Each officer sees only the screens and buttons their role allows. The database enforces it too, so a hidden button cannot be bypassed.</p>${grid('Screens', SCREENS)}${grid('Actions', ACTIONS)}`;

@@ -3,7 +3,7 @@ import { exportXLSX } from '../xlsx.js';
 import { percentPaid } from '../money.js';
 
 export async function mountBalances(el, ctx) {
-  const canWrite = ctx.can('mayor', 'treasurer'), canRemind = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor'), canWaive = ctx.can('mayor', 'vice_mayor'), isMayor = ctx.can('mayor');
+  const canWrite = ctx.can('treasurer'), canRemind = ctx.can('mayor', 'vice_mayor', 'treasurer', 'auditor'), canWaive = ctx.can('mayor', 'vice_mayor'), isMayor = ctx.can('mayor');
   let sel = null, only = 'owing';
   el.innerHTML = skeleton(5);
 

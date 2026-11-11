@@ -7,8 +7,8 @@ export const sb = createClient(SB_URL, SB_KEY, {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true, storageKey: 'alpha-auth' },
 });
 
-export const ROLE_LABEL = { pending: 'Pending', mayor: 'Mayor', vp_internal: 'SAILS VP Internal', vp_external: 'SAILS VP External', secretary: 'SAILS Secretary', treasurer: 'SAILS Treasurer',
-  auditor: 'SAILS Auditor', marshall: 'Marshall', pio: 'SAILS PIO', general_marshal: 'SAILS General Marshal', sails_president: 'SAILS President', dept_marshal: 'SAILS Marshal' };
+export const ROLE_LABEL = { pending: 'Pending', mayor: 'Mayor', vp_internal: 'SAILS VP Internal', vp_external: 'SAILS VP External', secretary: 'SAILS Secretary', treasurer: 'SAILS Treasurer', class_treasurer: 'Class Treasurer',
+  auditor: 'SAILS Auditor', marshall: 'Class Marshal', pio: 'SAILS PIO', general_marshal: 'SAILS General Marshal', sails_president: 'SAILS President', dept_marshal: 'SAILS Marshal' };
 export const ROLES = Object.keys(ROLE_LABEL).filter(r => r !== 'pending');
 
 /* ---- formatting ---- */

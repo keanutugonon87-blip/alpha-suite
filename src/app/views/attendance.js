@@ -27,7 +27,7 @@ export async function mountAttendance(el, ctx) {
 
 async function draw(host, ctx, members, standards, redraw) {
   const manage = ctx.can('mayor', 'vice_mayor'), scanRoles = ctx.can('mayor', 'vice_mayor', 'secretary', 'marshall', 'sails', 'general_marshal', 'dept_marshal'), isMayor = ctx.can('mayor'), uid = ctx.profile.user_id, canCompile = ctx.can('mayor', 'secretary'), canNotify = ctx.can('mayor', 'pio');
-  const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor', 'general_marshal', 'dept_marshal'), collects = ctx.can('mayor', 'treasurer');
+  const sees = ctx.can('mayor', 'vice_mayor', 'marshall', 'treasurer', 'secretary', 'pio', 'auditor', 'general_marshal', 'dept_marshal'), collects = ctx.can('treasurer');
   const act = members.filter(x => x.status === 'active'), mname = id => members.find(m => m.id === id)?.full_name || '?';
   let events, scans, viol = [], paid = new Set(), posts = [];
   try {
@@ -116,7 +116,7 @@ async function draw(host, ctx, members, standards, redraw) {
   /* The Mayor's order: who is assigned to scan this event */
   async function orderEvent(e) {
     if (!e) return;
-    const off = await db(sb.from('v2_profiles').select('user_id,full_name,role').in('role', ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'secretary', 'marshall', 'sails', 'general_marshal', 'dept_marshal']).order('full_name')).catch(() => []), cur = new Set(e.scanner_ids || []);
+    const off = await db(sb.from('v2_profiles').select('user_id,full_name,role').in('role', ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'secretary', 'class_treasurer', 'marshall', 'sails', 'general_marshal', 'dept_marshal']).order('full_name')).catch(() => []), cur = new Set(e.scanner_ids || []);
     modal(`<h3>Order: ${esc(e.title)}</h3><p class="muted" style="margin:0 0 8px">Only the officers you tick can scan this event. Nobody else can, not even you, unless you tick yourself.</p>
       <div class="card" style="max-height:40vh;overflow:auto;padding:6px 10px">${off.map(o => `<label class="ck"><input type="checkbox" data-u="${o.user_id}"${cur.has(o.user_id) ? ' checked' : ''}><span>${esc(o.full_name)} · ${esc(ROLE_LABEL[o.role] || o.role)}</span></label>`).join('') || '<p class="empty">No officers found.</p>'}</div>
       <label>Note for the officers (optional)</label><input id="on" maxlength="300" value="${esc(e.order_note || '')}" placeholder="Gate 1, 6:30 AM, bring your phones">

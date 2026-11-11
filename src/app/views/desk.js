@@ -15,7 +15,7 @@ const readGoal = () => { try { return +localStorage.getItem(GK) || 0; } catch { 
 
 export async function mountDesk(el, ctx) {
   const isMayor = ctx.can('mayor');
-  let q = '', only = 'owing', data = null, pane = isMayor ? 'overview' : readPane();   // the Mayor gets the overview only; collecting is the SAILS Treasurer's work
+  let q = '', only = 'owing', data = null, pane = isMayor ? 'overview' : readPane();   // the Mayor gets the overview only; collecting is the Class Treasurer's work
   el.innerHTML = skeleton(4);
   const off = watch(['v2_entries', 'v2_charges', 'v2_violations', 'v2_promises'], () => { if (document.contains(el) && !document.querySelector('.modal')) load().catch(() => {}); });
   await load();

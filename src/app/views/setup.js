@@ -37,6 +37,7 @@ export const STEPS = [
   { v: 'v58', file: 'v58_inspection_open_close.sql', does: 'The SAILS General Marshal opens and closes inspection; the President and Class Mayors are notified', check: mark('v58') },
   { v: 'v59', file: 'v59_audit_privacy_receipts.sql', does: 'Audit trail, meeting privacy, who has received what, SAILS Marshal attendance, setup checks', check: mark('v59') },
   { v: 'v60', file: 'v60_close_public_access.sql', does: 'New functions are closed to visitors who are not signed in', check: mark('v60') },
+  { v: 'v61', file: 'v61_class_treasurer_progress.sql', does: 'Class Treasurer role, Nameplate and Siglakas progress reports, the Class Mayor supervises collection only', check: mark('v61') },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the SAILS Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },
