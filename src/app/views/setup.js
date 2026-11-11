@@ -4,6 +4,7 @@ import { sb, esc } from '../core.js';
 const MISS = /does not exist|schema cache|could not find|not found/i;
 const table = (t, col = 'id') => async () => { const r = await sb.from(t).select(col).limit(0); return !(r.error && MISS.test(r.error.message || '')); };
 const fn = (name, args) => async () => { const r = await sb.rpc(name, args); return !(r.error && (r.error.code === 'PGRST202' || /could not find the function/i.test(r.error.message || ''))); };
+const mark = k => async () => { const r = await sb.rpc('v2_schema_marks'); return !r.error && !!(r.data && r.data[k]); };   // needs v59; until then these show as not installed
 const ZERO = '00000000-0000-0000-0000-000000000000';
 export const STEPS = [
   { v: 'v21', file: 'v21_events_attendance.sql', does: 'Attendance events and scanning', check: table('v2_events') },
@@ -26,14 +27,16 @@ export const STEPS = [
   { v: 'v48', file: 'v48_line_of_authority_access.sql', does: 'SAILS-level access belongs to the SAILS President: a Class Mayor manages only his class officers and sees only his own section', check: fn('v2_president_overview', {}) },
   { v: 'v49', file: 'v49_president_supervision.sql', does: 'President supervision: deputy, escalation alerts, section warnings, scorecards, role log, calendar clashes, funds overview, monthly report', check: fn('v2_scorecard', { p_days: 28 }) },
   { v: 'v50', file: 'v50_president_tools.sql', does: 'President tools: memos with acknowledgment, council meeting hub, recurring directives, questions on approvals', check: fn('v2_memo_status', { p_id: '00000000-0000-0000-0000-000000000000' }) },
-  { v: 'v51', file: 'v51_president_approves_accounts.sql', does: 'Account requests are reviewed and approved by the SAILS President only; a Class Mayor cannot see pending sign-ups', check: null },
-  { v: 'v52', file: 'v52_retire_vice_mayor_sails.sql', does: 'Retire the Vice Mayor and SAILS Officer roles so no one can be given them', check: null },
-  { v: 'v53', file: 'v53_president_removes_accounts.sql', does: 'Only the SAILS President manages accounts: approve, remove and change roles', check: null },
-  { v: 'v54', file: 'v54_class_mayor_receives_only.sql', does: 'A Class Mayor receives directives but no longer sends them', check: null },
-  { v: 'v55', file: 'v55_mayor_desk_receives.sql', does: 'Mayor Desk only receives the agenda, minutes and approved letters; the SAILS Secretary writes them', check: null },
-  { v: 'v56', file: 'v56_officers_keep_their_desks.sql', does: 'SAILS Secretary, Treasurer, PIO and Marshal keep their own desks and tools', check: null },
-  { v: 'v57', file: 'v57_marshal_watch.sql', does: 'SAILS Marshals get Watch and QR scan inspection for the students in their own block', check: null },
-  { v: 'v58', file: 'v58_inspection_open_close.sql', does: 'The SAILS General Marshal opens and closes inspection; the President and Class Mayors are notified', check: null },
+  { v: 'v51', file: 'v51_president_approves_accounts.sql', does: 'Account requests are reviewed and approved by the SAILS President only; a Class Mayor cannot see pending sign-ups', check: mark('v51') },
+  { v: 'v52', file: 'v52_retire_vice_mayor_sails.sql', does: 'Retire the Vice Mayor and SAILS Officer roles so no one can be given them', check: mark('v52') },
+  { v: 'v53', file: 'v53_president_removes_accounts.sql', does: 'Only the SAILS President manages accounts: approve, remove and change roles', check: mark('v53') },
+  { v: 'v54', file: 'v54_class_mayor_receives_only.sql', does: 'A Class Mayor receives directives but no longer sends them', check: mark('v54') },
+  { v: 'v55', file: 'v55_mayor_desk_receives.sql', does: 'Mayor Desk only receives the agenda, minutes and approved letters; the SAILS Secretary writes them', check: mark('v55') },
+  { v: 'v56', file: 'v56_officers_keep_their_desks.sql', does: 'SAILS Secretary, Treasurer, PIO and Marshal keep their own desks and tools', check: mark('v56') },
+  { v: 'v57', file: 'v57_marshal_watch.sql', does: 'SAILS Marshals get Watch and QR scan inspection for the students in their own block', check: mark('v57') },
+  { v: 'v58', file: 'v58_inspection_open_close.sql', does: 'The SAILS General Marshal opens and closes inspection; the President and Class Mayors are notified', check: mark('v58') },
+  { v: 'v59', file: 'v59_audit_privacy_receipts.sql', does: 'Audit trail, meeting privacy, who has received what, SAILS Marshal attendance, setup checks', check: mark('v59') },
+  { v: 'v60', file: 'v60_close_public_access.sql', does: 'New functions are closed to visitors who are not signed in', check: mark('v60') },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the SAILS Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },

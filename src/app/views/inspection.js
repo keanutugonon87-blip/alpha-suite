@@ -1,4 +1,4 @@
-import { sb, db, watch, esc, fmtDate, skeleton } from '../core.js';
+import { sb, db, watch, esc, fmtDate, skeleton, toast } from '../core.js';
 
 /* Inspection monitor for the SAILS President and the Class Mayor (also shown as a sub-tab of Watch).
    Notifications: every time the SAILS General Marshal opens or closes inspection.
@@ -31,6 +31,27 @@ export async function mountInspection(el, ctx) {
   let tab = 'notes', q = '', D = null;
   el.innerHTML = skeleton(4);
 
+  async function exp(which) {
+    try {
+      toast('Preparing Excel…');
+      const { exportXLSX } = await import('../xlsx.js'), by = ctx.profile.full_name;
+      const money = { type: 'money' };
+      if (which === 'hist') {
+        await exportXLSX({ filename: 'Alpha-Inspection-History.xlsx', by, sheets: [{ name: 'History', title: 'Violation history', subtitle: 'Every approved violation, newest first',
+          summary: [['Violations', D.rows.length], ['Fines', total(D.rows.filter(v => v.fine)), 'money'], ['Unpaid', owed(D.rows.filter(v => v.fine)), 'money']],
+          columns: [{ label: 'Date', key: 'date', width: 14 }, { label: 'Student', key: 'name', width: 30 }, { label: 'Classroom', key: 'room', width: 18 }, { label: 'Violation', key: 'title', width: 32 }, { label: 'Status', key: 'status', width: 18 }, { label: 'Fine', key: 'fine', ...money, total: true }, { label: 'Paid', key: 'paidtxt', width: 10 }],
+          rows: D.rows.slice().reverse().map(v => ({ date: v.occurred_on, name: v.name, room: v.room, title: v.title, status: STATUS[v.status] || v.status, fine: v.fine, paidtxt: v.fine ? (v.paid ? 'Paid' : 'Unpaid') : '' })) }] });
+      } else {
+        const byRoom = group(D.rows, v => v.room), byPerson = group(D.rows.filter(v => v.fine), v => v.member_id);
+        await exportXLSX({ filename: 'Alpha-Fines.xlsx', by, sheets: [
+          { name: 'By classroom', title: 'Fines by classroom', subtitle: 'Approved violations with a fine', columns: [{ label: 'Classroom', key: 'room', width: 24 }, { label: 'Students', key: 'n' }, { label: 'Violations', key: 'v' }, { label: 'Fines', key: 'tot', ...money, total: true }, { label: 'Unpaid', key: 'ow', ...money, total: true }],
+            rows: Object.keys(byRoom).sort().map(r => ({ room: r, n: new Set(byRoom[r].map(v => v.member_id)).size, v: byRoom[r].length, tot: total(byRoom[r]), ow: owed(byRoom[r]) })) },
+          { name: 'By individual', title: 'Fines by individual', subtitle: 'Largest unpaid first', columns: [{ label: 'Student', key: 'name', width: 32 }, { label: 'Classroom', key: 'room', width: 18 }, { label: 'Fines', key: 'n' }, { label: 'Total', key: 'tot', ...money, total: true }, { label: 'Unpaid', key: 'ow', ...money, total: true }],
+            rows: Object.values(byPerson).sort((a, b) => owed(b) - owed(a) || total(b) - total(a)).map(l => ({ name: l[0].name, room: l[0].room, n: l.length, tot: total(l), ow: owed(l) })) }] });
+      }
+      toast('Excel ready');
+    } catch (e) { toast(e.message || 'Could not make the file', true); }
+  }
   async function load() {
     const [insp, members, units, standards, viol, ent] = await Promise.all([
       sb.from('v2_inspections').select('*').order('opened_at', { ascending: false }).limit(60).then(r => r.data || [], () => []),
@@ -71,12 +92,12 @@ export async function mountInspection(el, ctx) {
   }
   function history() {
     const f = q.trim().toLowerCase(), list = D.rows.slice().reverse().filter(v => !f || (v.name + ' ' + v.no + ' ' + v.title + ' ' + v.room).toLowerCase().includes(f)).slice(0, 150);
-    return `<input id="hq" placeholder="Search a name, student ID or violation…" value="${esc(q)}" style="margin-bottom:10px"><div class="card">${list.map(v => `<div class="row"><div class="m"><b>${esc(v.name)}</b><small>${esc(v.title)} · ${esc(v.room)} · ${fmtDate(v.occurred_on)} · ${STATUS[v.status] || v.status}${v.excuse_status === 'accepted' ? ' · excused' : ''}</small></div><div style="text-align:right">${v.fine ? `<b>${peso(v.fine)}</b><small class="muted" style="display:block">${v.paid ? 'paid' : 'unpaid'}</small>` : '<span class="muted">–</span>'}</div></div>`).join('') || '<p class="empty">No violations.</p>'}</div>`;
+    return `<div style="display:flex;gap:8px;margin-bottom:10px"><input id="hq" placeholder="Search a name, student ID or violation…" value="${esc(q)}" style="flex:1"><button type="button" class="btn ghost" id="xh">Excel</button></div><div class="card">${list.map(v => `<div class="row"><div class="m"><b>${esc(v.name)}</b><small>${esc(v.title)} · ${esc(v.room)} · ${fmtDate(v.occurred_on)} · ${STATUS[v.status] || v.status}${v.excuse_status === 'accepted' ? ' · excused' : ''}</small></div><div style="text-align:right">${v.fine ? `<b>${peso(v.fine)}</b><small class="muted" style="display:block">${v.paid ? 'paid' : 'unpaid'}</small>` : '<span class="muted">–</span>'}</div></div>`).join('') || '<p class="empty">No violations.</p>'}</div>`;
   }
   function fines() {
     const byRoom = group(D.rows, v => v.room), byPerson = group(D.rows.filter(v => v.fine), v => v.member_id);
     const tot = D.rows.filter(v => v.fine);
-    return `<div class="card pad" style="margin-bottom:14px;display:flex;gap:18px;flex-wrap:wrap"><div><small class="muted">All fines</small><div style="font-size:1.3rem;font-weight:700">${peso(total(tot))}</div></div><div><small class="muted">Paid</small><div style="font-size:1.3rem;font-weight:700">${peso(total(tot) - owed(tot))}</div></div><div><small class="muted">Unpaid</small><div style="font-size:1.3rem;font-weight:700">${peso(owed(tot))}</div></div></div>
+    return `<div style="text-align:right;margin-bottom:8px"><button type="button" class="btn ghost sm" id="xf">Excel</button></div><div class="card pad" style="margin-bottom:14px;display:flex;gap:18px;flex-wrap:wrap"><div><small class="muted">All fines</small><div style="font-size:1.3rem;font-weight:700">${peso(total(tot))}</div></div><div><small class="muted">Paid</small><div style="font-size:1.3rem;font-weight:700">${peso(total(tot) - owed(tot))}</div></div><div><small class="muted">Unpaid</small><div style="font-size:1.3rem;font-weight:700">${peso(owed(tot))}</div></div></div>
       <h3 style="margin:0 2px 8px">By classroom</h3><div class="card">${Object.keys(byRoom).sort().map(r => { const l = byRoom[r]; return `<div class="row"><div class="m"><b>${esc(r)}</b><small>${new Set(l.map(v => v.member_id)).size} students · ${l.length} violations</small></div><div style="text-align:right"><b>${peso(total(l))}</b><small class="muted" style="display:block">${peso(owed(l))} unpaid</small></div></div>`; }).join('') || '<p class="empty">No fines yet.</p>'}</div>
       <h3 style="margin:14px 2px 8px">By individual</h3><div class="card">${Object.values(byPerson).sort((a, b) => owed(b) - owed(a) || total(b) - total(a)).map(l => `<div class="row"><div class="m"><b>${esc(l[0].name)}</b><small>${esc(l[0].room)} · ${l.length} fine${l.length === 1 ? '' : 's'}</small></div><div style="text-align:right"><b>${peso(total(l))}</b><small class="muted" style="display:block">${owed(l) ? peso(owed(l)) + ' unpaid' : 'all paid'}</small></div></div>`).join('') || '<p class="empty">No fines yet.</p>'}</div>`;
   }
@@ -89,6 +110,8 @@ export async function mountInspection(el, ctx) {
       ${{ notes, now, hist: history, fines }[tab]()}`;
     el.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
     el.querySelector('#mr')?.addEventListener('click', () => { writeSeen(uid, new Date().toISOString()); paint(); });
+    el.querySelector('#xh')?.addEventListener('click', () => exp('hist'));
+    el.querySelector('#xf')?.addEventListener('click', () => exp('fines'));
     const hq = el.querySelector('#hq'); if (hq) hq.oninput = () => { q = hq.value; const p = hq.selectionStart; paint(); const n = el.querySelector('#hq'); n.focus(); n.setSelectionRange(p, p); };
   }
 
