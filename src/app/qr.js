@@ -1,7 +1,7 @@
 /* QR helpers: scan student QR, print student QR cards, printable receipts. */
 import QRCode from 'qrcode';
 import jsQR from 'jsqr';
-import { sb, db, esc, peso, fmtDateTime, toast, modal, printHTML, blobToDataUrl, uuid } from './core.js';
+import { sb, db, esc, peso, fmtDateTime, toast, modal, printHTML, blobToDataUrl, uuid, getProfile } from './core.js';
 
 export const qrDataUrl = (text, size = 200) => QRCode.toDataURL(text, { width: size, margin: 1, errorCorrectionLevel: 'M' });
 
@@ -131,6 +131,11 @@ export async function showMemberCards() {
 }
 
 export async function showReceipt(entryId) {
+  // official receipts are released only by the SAILS Treasurer, and only after he has confirmed the collection
+  const me = await getProfile().catch(() => null);
+  if (!me || me.role !== 'treasurer') { modal(`<h3>Official receipt</h3><p>Official receipts and supporting documents are issued by the SAILS Treasurer after he counts and confirms the collection.</p><button class="btn ghost" id="cl" style="width:100%">Close</button>`, (m, close) => { m.querySelector('#cl').onclick = close; }); return; }
+  const cf = await sb.from('v2_entries').select('confirmed_at').eq('id', entryId).single().then(r => r.error ? { confirmed_at: true } : r.data, () => ({ confirmed_at: true }));   // no column yet: the old rules apply
+  if (!cf.confirmed_at) { modal(`<h3>Not confirmed yet</h3><p>Count and confirm this collection first. The official receipt can be issued after that.</p><button class="btn ghost" id="cl" style="width:100%">Close</button>`, (m, close) => { m.querySelector('#cl').onclick = close; }); return; }
   const e = await db(sb.from('v2_entries').select('receipt_no,verify_code,amount,purpose,category,occurred_at,method,gcash_ref,member_id,payer_name,recorded_by_name').eq('id', entryId).single());
   let payer = e.payer_name;
   if (e.member_id) payer = (await db(sb.from('v2_members').select('full_name').eq('id', e.member_id).single())).full_name;

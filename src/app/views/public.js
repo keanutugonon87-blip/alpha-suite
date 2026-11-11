@@ -56,7 +56,7 @@ async function statement(token) {
   try { const { data, error } = await sb.rpc('v2_self_statement', { p_token: token }); if (error) throw error; d = data; }
   catch (e) { return toast(/function|schema cache/i.test(e.message) ? 'Statements are not switched on yet. Ask the Mayor.' : e.message, true); }
   const paid = d.payments.filter(p => p.status === 'approved').reduce((a, p) => a + +p.amount, 0), owe = d.balances.reduce((a, b) => a + +b.owed, 0);
-  const rows = d.payments.map(p => `<div class="row"><div class="m"><b>${esc(p.for)}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : ''}${p.fund ? ' · ' + esc(fundLabel(p.fund)) : ''}${p.status === 'pending' ? ' · awaiting approval' : ''}</small></div><b>${peso(p.amount)}</b></div>`).join('') || `<p class="empty">${t('stmtNone')}</p>`;
+  const rows = d.payments.map(p => `<div class="row"><div class="m"><b>${esc(p.for)}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : p.status === 'approved' && p.confirmed === false ? ' · ' + t('receiptSoon') : ''}${p.fund ? ' · ' + esc(fundLabel(p.fund)) : ''}${p.status === 'pending' ? ' · awaiting approval' : ''}</small></div><b>${peso(p.amount)}</b></div>`).join('') || `<p class="empty">${t('stmtNone')}</p>`;
   const owing = d.balances.filter(b => +b.owed > 0 && !b.closed).map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${peso(b.paid)} / ${peso(b.due)}</small></div><span class="tag bad">${peso(b.owed)}</span></div>`).join('');
   modal(`<h3>${t('stmtTitle')}</h3><p class="muted" style="margin:0 0 8px">${esc(d.name)}${d.student_no && !/^PENDING/.test(d.student_no) ? ' · ' + esc(d.student_no) : ''}</p>
     <div class="grid"><div class="stat gold"><small>${t('stmtPaid')}</small><b>${peso(paid)}</b></div><div class="stat"><small>${t('stmtOwe')}</small><b>${peso(owe)}</b></div></div>
@@ -97,7 +97,7 @@ function renderMe(host, opts = {}) {
         <div style="font-size:1.15rem;font-weight:700;color:var(${owed ? '--bad' : '--ok'})">${owed ? `${t('owed')} ${peso(owed)}` : '✓ ' + t('clear')}</div></div>
         ${owed && note ? `<div class="card pad"><b>${t('howPay')}</b><p style="margin:4px 0 8px;white-space:pre-line">${esc(note)}</p><button class="btn ghost sm" id="cpn">${t('copy')}</button></div>` : ''}
         <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${b.waived ? t('excusedNote') : `${peso(b.paid)} / ${peso(b.due)}`}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : b.waived ? t('excused') : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
-        ${(data.pay || []).length ? `<h3 class="sec">${t('myPays')}</h3><div class="card">${data.pay.map(p => `<div class="row"><div class="m"><b>${esc(p.for || '—')}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : ''}${p.status === 'pending' ? ' · ' + t('pendingTag') : ''}</small></div><span class="tag ok">${peso(p.amount)}</span></div>`).join('')}</div>` : ''}
+        ${(data.pay || []).length ? `<h3 class="sec">${t('myPays')}</h3><div class="card">${data.pay.map(p => `<div class="row"><div class="m"><b>${esc(p.for || '—')}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : p.confirmed === false ? ' · ' + t('receiptSoon') : ''}${p.status === 'pending' ? ' · ' + t('pendingTag') : ''}</small></div><span class="tag ok">${peso(p.amount)}</span></div>`).join('')}</div>` : ''}
         <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${sanctionText(v, ordn)}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
         <div id="rm"></div>
         <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
@@ -210,8 +210,8 @@ export async function renderPublic(root) {
   const tok = () => { try { return localStorage.getItem(ME) || null; } catch { return null; } };   // the QR-card token My Status already keeps on this phone
   const canAsk = () => ['student', 'officer'].includes(auth.kind) || !!tok();
   const age = d => Math.floor((Date.now() - new Date(d)) / 864e5);
-  function askRecord(title = '', hint = '') {
-    modal(`<h3>${t('askRecord')}</h3><p class="muted" style="margin:0 0 8px">${t('askRecordNote')}</p>
+  function askRecord(title = '', hint = '', to = 'secretary') {
+    modal(`<h3>${t(to === 'treasurer' ? 'askReceipt' : 'askRecord')}</h3><p class="muted" style="margin:0 0 8px">${t(to === 'treasurer' ? 'askReceiptNote' : 'askRecordNote')}</p>
       <label>${t('whichRecord')}</label><input id="rq-t" maxlength="120" value="${esc(title)}" placeholder="${esc(hint || t('whichEg'))}">
       <label>${t('whyNeeded')}</label><textarea id="rq-n" rows="3" maxlength="500"></textarea>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="rq-go" style="flex:1">${t('sendRequest')}</button><button class="btn ghost" id="rq-x">${t('cancel')}</button></div>`, (el, close) => {
@@ -219,7 +219,7 @@ export async function renderPublic(root) {
       el.querySelector('#rq-go').onclick = async e => {
         const ttl = el.querySelector('#rq-t').value.trim(); if (ttl.length < 3) return toast(t('whichRecord'), true);
         e.target.disabled = true;
-        try { await db(sb.rpc('v2_record_request', { p_title: ttl, p_note: el.querySelector('#rq-n').value.trim() || null, p_token: tok() })); close(); toast(t('requestSent')); await load(); }
+        try { await db(sb.rpc('v2_record_request', { p_title: ttl, p_note: el.querySelector('#rq-n').value.trim() || null, p_token: tok(), ...(to === 'treasurer' ? { p_to: 'treasurer' } : {}) })); close(); toast(t('requestSent')); await load(); }
         catch (x) { e.target.disabled = false; toast(/function|schema cache|does not exist/i.test(x.message || '') ? t('requestNotReady') : x.message, true); }
       };
     });
@@ -239,7 +239,7 @@ export async function renderPublic(root) {
     const st = { open: ['warn', t('reqOpen')], granted: ['ok', t('reqGranted')], declined: ['bad', t('reqDeclined')] };
     return `<p class="muted" style="margin:0 2px 8px">${t('archiveNote')}</p>
       <div class="card">${CATS.map(row).join('')}</div>
-      ${ask ? `<button class="btn gold" id="rq-new" style="width:100%;margin:10px 0">${t('askRecord')}</button>` : `<p class="muted" style="margin:10px 2px">${t('signInToAsk')}</p>`}
+      ${ask ? `<button class="btn gold" id="rq-new" style="width:100%;margin:10px 0 6px">${t('askRecord')}</button><button class="btn ghost" id="rq-rcpt" style="width:100%;margin:0 0 10px">${t('askReceipt')}</button>` : `<p class="muted" style="margin:10px 2px">${t('signInToAsk')}</p>`}
       ${mine.length ? `<h3 style="margin:16px 2px 8px">${t('myRequests')}</h3><div class="card">${mine.map(r => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(r.title)}</b><small>${fmtDate(r.created_at)}${r.status === 'open' ? ` · ${age(r.created_at)} ${t('daysAgo')}` : ''}</small></div><span class="tag ${st[r.status][0]}">${st[r.status][1]}</span></div>${r.answer_note ? `<p style="margin:6px 0 0">${esc(r.answer_note)}</p>` : ''}</div>`).join('')}</div>` : ''}`;
   }
   function privacyView() {
@@ -319,6 +319,7 @@ export async function renderPublic(root) {
     m.querySelectorAll('[data-dc]').forEach(b => b.onclick = e => { if (e.target.closest('a')) return; pdOpen = pdOpen === b.dataset.dc ? null : b.dataset.dc; paint(); });
     m.querySelectorAll('[data-rq]').forEach(b => b.onclick = () => askRecord(b.dataset.rq));
     m.querySelector('#rq-new')?.addEventListener('click', () => askRecord());
+    m.querySelector('#rq-rcpt')?.addEventListener('click', () => askRecord('', 'Receipt for the ₱… I paid on …', 'treasurer'));
     m.querySelector('#rq-fix')?.addEventListener('click', () => askRecord(t('prvFixTitle')));
     m.querySelectorAll('[data-o]').forEach(b => b.onclick = () => showOfficerProfile(officers[+b.dataset.o]));
   }

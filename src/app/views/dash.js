@@ -9,7 +9,7 @@ const wkStart = d => { const x = new Date(d); x.setHours(0, 0, 0, 0); x.setDate(
 const short = d => d.toLocaleDateString('en-PH', { month: 'short', day: 'numeric' });
 
 async function entries() {   // the request, approval and acknowledgment columns exist only after the v24 and v31 SQL are run, so fall back step by step
-  for (const cols of ['id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose,request_id,approval_ref,ack_at', 'id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose,request_id', 'id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose']) {
+  for (const cols of ['id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose,request_id,approval_ref,ack_at,confirmed_at', 'id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose,request_id,approval_ref,ack_at', 'id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose,request_id', 'id,kind,amount,fund,status,occurred_at,member_id,payer_name,receipt_no,source,purpose']) {
     try { return await db(sb.from('v2_entries').select(cols).in('status', ['approved', 'pending']).order('occurred_at', { ascending: false }).limit(5000)); } catch { /* try fewer columns */ }
   }
   return [];
@@ -56,8 +56,8 @@ export async function drawOverview(host, ctx, base, { goal, rows, collect, isMay
   add(ok.filter(e => e.kind === 'expense' && now - new Date(e.occurred_at) < 60 * dayMs && !has.has(e.id)).length, '{n} expense(s) from the last 60 days have no receipt photo', '#/staff/treasury');
 
   /* the Purser's duties (CBL Section 5), each with where it stands */
-  const hasAck = ent.some(e => 'ack_at' in e), recent = e => now - new Date(e.occurred_at) < 60 * dayMs;
-  const unack = hasAck ? ok.filter(e => e.kind === 'collection' && !e.ack_at) : [];
+  const hasAck = ent.some(e => 'ack_at' in e) && ctx.profile.role === 'treasurer', recent = e => now - new Date(e.occurred_at) < 60 * dayMs;
+  const unack = hasAck ? ok.filter(e => e.kind === 'collection' && !e.ack_at && (!('confirmed_at' in e) || e.confirmed_at)) : [];
   const exps = ok.concat(pend).filter(e => e.kind === 'expense' && recent(e)), noPhoto = exps.filter(e => !has.has(e.id));
   const noBasis = exps.filter(e => (e.source || 'manual') === 'manual' && limit > 0 && +e.amount >= limit && !e.request_id && !e.approval_ref);
   const stage = s => reqs.filter(r => r.status === s).length, liqOpen = reqs.filter(r => ['approved', 'filed'].includes(r.status) && (!lq(r.id) || ['draft', 'returned'].includes(lq(r.id)))).length;
@@ -104,7 +104,7 @@ export async function drawOverview(host, ctx, base, { goal, rows, collect, isMay
     <div class="card pad"><div style="display:flex;gap:6px;align-items:flex-end;height:110px">${W.map(w => `<div style="flex:1;display:flex;gap:2px;align-items:flex-end;height:100%" title="${w.label}: collected ${peso(w.inn)}, spent ${peso(w.out)}"><i style="flex:1;background:#2a9d6f;height:${Math.max(2, w.inn / wMax * 100)}%;border-radius:3px 3px 0 0"></i><i style="flex:1;background:#d9a63c;height:${Math.max(2, w.out / wMax * 100)}%;border-radius:3px 3px 0 0"></i></div>`).join('')}</div>
       <div style="display:flex;gap:6px;margin-top:4px">${W.map(w => `<small class="muted" style="flex:1;text-align:center;font-size:.62rem">${w.label}</small>`).join('')}</div>
       <small class="muted" style="display:block;margin-top:8px"><span style="color:#2a9d6f">■</span> Collected &nbsp; <span style="color:#d9a63c">■</span> Spent</small></div>`;
-  host.querySelectorAll('[data-d]').forEach(r => r.onclick = () => { const d = duties[+r.dataset.d]; if (readonly && d[4]) return; if (d[4] === 'ack') ackList(unack, mem); else if (d[3]) location.hash = d[3]; });
+  host.querySelectorAll('[data-d]').forEach(r => r.onclick = () => { const d = duties[+r.dataset.d]; if (readonly && d[4] && ctx.profile.role !== 'treasurer') return; if (d[4] === 'ack') ackList(unack, mem); else if (d[3]) location.hash = d[3]; });
   host.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const n = needs[+r.dataset.n]; if (n.act) n.act(); else if (n.hash) location.hash = n.hash; });
 }
 

@@ -132,7 +132,6 @@ export async function mountDesk(el, ctx) {
           }
           if (data.v23) db(sb.from('v2_promises').update({ status: 'kept' }).eq('member_id', row.m.id).eq('status', 'open')).catch(() => {});
           close(); toast(`${done} payment${done === 1 ? '' : 's'} recorded`);
-          if (ids.length === 1) showReceipt(ids[0]).catch(() => {});
           load().catch(() => {});
         } catch (x) { m.querySelector('#er').textContent = done ? `${done} saved before the error: ${x.message}` : x.message; m.querySelector('#go').disabled = false; if (done) load().catch(() => {}); }
       };

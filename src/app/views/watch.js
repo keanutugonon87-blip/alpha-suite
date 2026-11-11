@@ -95,7 +95,7 @@ export async function mountWatch(el, ctx) {
               await safeWrite('v2_entries', { id, period_id: cur.id, kind: 'collection', category: 'Fines', member_id: mid, violation_id: v.id, fund: 'sails', amount: fineOf(v), method, gcash_ref: gref || null,
                 purpose: `Fine: ${std(v.standard_id).title}`, recorded_by_name: name, status: 'approved', approved_by_name: 'No approval needed', source: 'manual' }); made.push(id); }
             close(); toast(`${made.length} fine${made.length === 1 ? '' : 's'} paid · ${peso0(total)}`);
-            if (made.length === 1) showReceipt(made[0]).catch(() => {}); else toast('One receipt per fine is in Treasury.');
+            toast('Recorded. The SAILS Treasurer issues the official receipt after confirming.');
             draw().catch(() => {});
           } catch (x) { m.querySelector('#er').textContent = made.length ? `${made.length} saved before the error: ${x.message}` : x.message; m.querySelector('#go').disabled = false; if (made.length) draw().catch(() => {}); }
         };
