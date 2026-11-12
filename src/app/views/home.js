@@ -1,4 +1,4 @@
-import { sb, db, esc, peso, ROLE_LABEL, skeleton, watch, todayISO, toast, toastUndo, modal } from '../core.js';
+import { sb, db, esc, peso, ROLE_LABEL, skeleton, watch, todayISO, toast, toastUndo, modal, fmtDate } from '../core.js';
 import { deskItems } from './inbox.js';
 import { ymManila } from '../money.js';
 import { t, tt, getLang } from '../i18n.js';
@@ -38,6 +38,14 @@ function wireDuties(el, list, redraw) {
   });
 }
 
+/* Approved meetings and programs from the SAILS VPs, for the Class Mayor (read only) */
+function vpCard(rows) {
+  if (!rows || !rows.length) return '';
+  return `<h3 class="sec">From the SAILS VPs</h3><div class="card">${rows.map(r => `<div class="row" style="display:block"><b>${esc(r.title)}</b>
+    <small class="muted" style="display:block">${esc([r.kind === 'program' ? 'Program' : 'Meeting', fmtDate(r.held_on), r.held_at, r.venue].filter(Boolean).join(' · '))}</small>
+    ${r.agenda ? `<small style="display:block;margin-top:2px">${esc(r.agenda)}</small>` : ''}${r.assigned ? `<small class="muted" style="display:block">Assigned: ${esc(r.assigned)}</small>` : ''}</div>`).join('')}</div>`;
+}
+
 export async function mountHome(el, ctx) {
   const role = ctx.profile.role, can = ctx.can;
   el.innerHTML = skeleton(5);
@@ -46,7 +54,7 @@ export async function mountHome(el, ctx) {
     const today = todayISO(), week = new Date(Date.now() + 7 * 864e5).toLocaleDateString('en-CA', { timeZone: 'Asia/Manila' });
     const prevMonth = ymManila(new Date(Date.now() - 31 * 864e5));
     const desk = await deskItems(ctx).catch(() => []);
-    const [pending, vioWait, dueSoon, requests, closes, apprMonth, signup, sec, tre, vioOpen, duties] = await Promise.all([
+    const [pending, vioWait, dueSoon, requests, closes, apprMonth, signup, sec, tre, vioOpen, duties, vpUp] = await Promise.all([
       can('mayor', 'vice_mayor', 'auditor', 'treasurer') ? count(sb.from('v2_entries').select('id', { count: 'exact', head: true }).eq('status', 'pending')) : null,
       can('mayor', 'vice_mayor', 'secretary') ? count(sb.from('v2_violations').select('id', { count: 'exact', head: true }).in('status', ['awaiting_approval', 'resolve_requested', 'resolve_forwarded'])) : null,
       can('mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary') ? quiet(sb.from('v2_charges').select('id,title,due_on').eq('closed', false).not('due_on', 'is', null).lte('due_on', week)).then(r => r ? r.data || [] : null) : null,
@@ -58,6 +66,7 @@ export async function mountHome(el, ctx) {
       quiet(sb.rpc('v2_public_treasury')).then(r => r ? r.data || null : null),
       quiet(sb.rpc('v2_public_standing')).then(r => r ? r.data || null : null),
       quiet(sb.rpc('v2_my_duties')).then(r => r ? r.data || [] : null),
+      role === 'mayor' ? quiet(sb.rpc('v2_vp_upcoming')).then(r => r ? r.data || [] : null) : null,
     ]);
     const items = [];
     if (pending) items.push(['💰', getLang() === 'ceb' ? tt('entriesWait', pending + ' ka entry') : tt('entriesWait', `${pending} entr${pending === 1 ? 'y' : 'ies'}`), can('mayor') ? t('reviewApprove') : t('waitMayor'), 'treasury']);
@@ -74,7 +83,7 @@ export async function mountHome(el, ctx) {
     const stat = (l, v, cls = '') => `<div class="stat ${cls}"><small>${l}</small><b>${v}</b></div>`;
     el.innerHTML = `<div class="card pad"><small class="muted">${new Date().toLocaleDateString('en-PH', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'Asia/Manila' })}</small>
       <h2 style="margin:2px 0 0;border:0;padding:0">${t('hello')}, ${esc(ctx.profile.full_name.split(' ')[0])}</h2><small class="muted">${ROLE_LABEL[role]}</small></div>
-      ${dutyCard(duties)}
+      ${dutyCard(duties)}${vpCard(vpUp)}
       <h3 class="sec">${items.length ? t('needsYou') : t('allClear')}</h3>
       <div class="card">${items.length ? items.map(([ic, t, s, h]) => `<button class="row todo-row" data-go="${h}" style="width:100%;background:none;border:0;border-bottom:1px solid var(--line);text-align:left;cursor:pointer"><span style="font-size:1.3rem;margin-right:10px">${ic}</span><div class="m"><b>${esc(t)}</b><small>${esc(s)}</small></div><span aria-hidden="true">›</span></button>`).join('')
         : `<p class="empty"><b>${t('nothingWaiting')}</b>New approvals, due dates and sign-in problems will show up here.</p>`}</div>
