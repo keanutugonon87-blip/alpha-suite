@@ -43,7 +43,7 @@ const TABS = [
   { id: 'officers', label: 'Officers', load: () => import('./officers.js').then(m => m.mountOfficers), roles: ['mayor', 'vice_mayor', 'secretary', 'pio', 'treasurer', 'auditor', 'marshall', 'sails'] },
   { id: 'notices', label: 'Notices', load: () => import('./notices.js').then(m => m.mountNotices), roles: ['mayor', 'vice_mayor', 'secretary', 'pio'] },
   { id: 'accounts', label: 'Accounts', load: () => import('./accounts.js').then(m => m.mountAccounts), roles: ['mayor', 'vice_mayor', 'auditor'] },
-  { id: 'docs', label: 'Documents', load: () => import('./docs.js').then(m => m.mountDocs), roles: ['mayor', 'vice_mayor', 'secretary'] },
+  { id: 'docs', label: 'Documents', load: () => import('./docs.js').then(m => m.mountDocs), roles: ['vice_mayor', 'secretary'] },
   { id: 'pack', label: 'Monthly pack', load: () => import('./pack.js').then(m => m.mountPack), roles: ['mayor', 'vice_mayor', 'secretary', 'treasurer', 'auditor', 'pio'] },
   { id: 'duties', label: 'Duties', load: () => import('./duties.js').then(m => m.mountDuties), roles: ['mayor', 'vice_mayor'] },
   { id: 'roles', label: 'Roles', load: () => import('./roles.js').then(m => m.mountRoles), roles: ['mayor', 'vice_mayor'] },

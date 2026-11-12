@@ -1,12 +1,12 @@
 import { createClient } from 'npm:@supabase/supabase-js@2';
 
-// Copies the document folders and attached files into the Mayor's Google Drive (one-way: app -> Drive, nothing is ever deleted in Drive).
+// Copies the document folders and attached files into the SAILS President's Google Drive (one-way: app -> Drive, nothing is ever deleted in Drive).
 // Deploy with "Verify JWT" OFF. Needs two function secrets: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
 // The app only gets the "drive.file" permission: it can see only the files and folders it creates itself, nothing else in the Drive.
-//   POST {action:'connect'}  Mayor      -> {url} to open Google's sign-in page
-//   GET  ?code=&state=       Google     -> stores the login, makes the "Alpha 28 Documents" folder, sends the Mayor back to the app
-//   POST {action:'sync'}     Mayor, Vice Mayor, Secretary, or the nightly job (x-hook-secret) -> copies what is missing
-//   POST {action:'unlink'}   Mayor      -> forgets the login (Drive copies stay where they are)
+//   POST {action:'connect'}  SAILS President -> {url} to open Google's sign-in page
+//   GET  ?code=&state=       Google     -> stores the login, makes the "Alpha 28 Documents" folder, sends the President back to the app
+//   POST {action:'sync'}     SAILS President, SAILS Secretary, or the nightly job (x-hook-secret) -> copies what is missing
+//   POST {action:'unlink'}   SAILS President -> forgets the login (Drive copies stay where they are). The Class Mayor has no part in it.
 const APP = 'https://keanutugonon87-blip.github.io/alpha-suite/';
 const ROOT_NAME = 'Alpha 28 Documents';
 const SCOPE = 'openid email https://www.googleapis.com/auth/drive.file';
@@ -100,9 +100,9 @@ Deno.serve(async (req) => {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID'), secret = Deno.env.get('GOOGLE_CLIENT_SECRET');
   const url = new URL(req.url);
 
-  // Google sends the Mayor back here after the consent page
+  // Google sends the President back here after the consent page
   if (req.method === 'GET') {
-    const back = (ok: boolean, why = '') => Response.redirect(`${APP}?drive=${ok ? 'ok' : 'error'}${why ? '&why=' + encodeURIComponent(why.slice(0, 80)) : ''}#/staff/docs`, 302);
+    const back = (ok: boolean, why = '') => Response.redirect(`${APP}?drive=${ok ? 'ok' : 'error'}${why ? '&why=' + encodeURIComponent(why.slice(0, 80)) : ''}#/staff/pd-more`, 302);
     try {
       if (!clientId || !secret) return back(false, 'not set up');
       if (url.searchParams.get('error')) return back(false, url.searchParams.get('error')!);
@@ -124,19 +124,19 @@ Deno.serve(async (req) => {
   const hook = await getSecret('push_hook'); const viaCron = !!hook && req.headers.get('x-hook-secret') === hook;
   const me = viaCron ? { uid: '', role: 'system' } : await who(req);
   if (!me) return json({ error: 'Sign in first' }, 401);
-  const staff = viaCron || ['mayor', 'vice_mayor', 'secretary'].includes(me.role);
+  const staff = viaCron || ['sails_president', 'secretary'].includes(me.role);
   if (!staff) return json({ error: 'Not allowed' }, 403);
 
   try {
     if (body.action === 'connect') {
-      if (me.role !== 'mayor') return json({ error: 'Only the Mayor can link Google Drive' }, 403);
+      if (me.role !== 'sails_president') return json({ error: 'Only the SAILS President can link Google Drive' }, 403);
       if (!clientId || !secret) return json({ error: 'not_configured' }, 400);
       const nonce = crypto.randomUUID(); await setSecret('drive_state', `${nonce}|${Date.now()}`);
       const q = new URLSearchParams({ client_id: clientId, redirect_uri: REDIRECT, response_type: 'code', scope: SCOPE, access_type: 'offline', prompt: 'consent', state: nonce });
       return json({ url: `https://accounts.google.com/o/oauth2/v2/auth?${q}` });
     }
     if (body.action === 'unlink') {
-      if (me.role !== 'mayor') return json({ error: 'Only the Mayor can unlink Google Drive' }, 403);
+      if (me.role !== 'sails_president') return json({ error: 'Only the SAILS President can unlink Google Drive' }, 403);
       const refresh = await getSecret('drive_refresh');
       if (refresh) { try { await fetch(`https://oauth2.googleapis.com/revoke?token=${encodeURIComponent(refresh)}`, { method: 'POST' }); } catch { /* best effort */ } }
       await delSecrets('drive_refresh', 'drive_email', 'drive_root', 'drive_state');

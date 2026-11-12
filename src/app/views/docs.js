@@ -21,7 +21,8 @@ async function driveCall(action, extra = {}) {
 const sizeText = b => b >= 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB';
 
 export async function mountDocs(el, ctx) {
-  const canManage = ctx.can('mayor', 'secretary');
+  const isPres = ctx.profile.role === 'sails_president';   // the SAILS President looks over the documents and links Google Drive; the SAILS Secretary manages them
+  const canManage = ctx.can('secretary');
   el.innerHTML = skeleton(4);
   let docs = [], folders = [], ds = null, here = null, syncing = false;   // here: null = top level, or the id of the open folder
   const folderName = id => (folders.find(f => f.id === id) || {}).name;
@@ -55,9 +56,9 @@ export async function mountDocs(el, ctx) {
   }
   function drawBar() {
     const bar = el.querySelector('#dbar'); if (!bar) return;
-    const mayor = ctx.can('mayor');
+    const mayor = isPres;
     if (!ds) { bar.innerHTML = mayor ? '<span class="muted">Google Drive copy is not switched on in the database yet. Run the v18 SQL.</span>' : ''; return; }
-    if (!ds.linked) { bar.innerHTML = `<div class="m"><b>Google Drive</b><small>${mayor ? 'Not linked. Link it to keep a copy of every folder and file.' : 'Not linked. Ask the Mayor to link it.'}</small></div>${mayor ? '<button class="btn gold sm" id="dl">Link Google Drive</button>' : ''}`; bar.querySelector('#dl')?.addEventListener('click', link); return; }
+    if (!ds.linked) { bar.innerHTML = `<div class="m"><b>Google Drive</b><small>${mayor ? 'Not linked. Link it to keep a copy of every folder and file.' : 'Not linked. Ask the SAILS President to link it.'}</small></div>${mayor ? '<button class="btn gold sm" id="dl">Link Google Drive</button>' : ''}`; bar.querySelector('#dl')?.addEventListener('click', link); return; }
     const wait = (ds.pending_folders || 0) + (ds.pending_files || 0);
     bar.innerHTML = `<div class="m"><b>${syncing ? 'Copying to Google Drive…' : wait ? `${wait} waiting to copy to Google Drive` : '✓ Copied to Google Drive'}</b>
       <small>${esc(ds.email || 'Linked')}${ds.last_sync ? ` · last copy ${esc(when(ds.last_sync))}` : ''}</small>${ds.last_error ? `<small style="color:var(--flag)">${esc(ds.last_error)}</small>` : ''}</div>
