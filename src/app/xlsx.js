@@ -20,7 +20,7 @@ const rowH = (ws, r, h) => { ws.getRow(r).height = h; };
 
 function buildSheet(wb, spec, imgs, meta) {
   const { name, title, subtitle, columns, rows, summary = [] } = spec;
-  const ws = wb.addWorksheet(name.slice(0, 31), { views: [{ showGridLines: false }], properties: { tabColor: { argb: NAVY } } });
+  const ws = wb.addWorksheet((/^history$/i.test(name.trim()) ? name.trim() + ' log' : name).slice(0, 31), { views: [{ showGridLines: false }], properties: { tabColor: { argb: NAVY } } });
   const n = columns.length, last = colLetter(n - 1);
   const val = (r, c) => { const v = typeof c.get === 'function' ? c.get(r) : r[c.key]; return v == null ? '' : v; };
   const widths = columns.map(c => {
@@ -32,8 +32,8 @@ function buildSheet(wb, spec, imgs, meta) {
   // banner
   ws.mergeCells(`A1:${last}1`); ws.mergeCells(`A2:${last}2`); ws.mergeCells(`A3:${last}3`);
   [1, 2, 3].forEach(r => { for (let c = 1; c <= n; c++) ws.getCell(r, c).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: r === 3 ? BRASS : NAVY } }; });
-  const t = ws.getCell('A1'); t.value = title; t.font = { name: 'Cambria', size: 20, bold: true, color: { argb: 'FFFFFFFF' } }; t.alignment = { vertical: 'middle', horizontal: 'left', indent: 8 };
-  const s = ws.getCell('A2'); s.value = subtitle || 'BSMT 1-Alpha · Batch 28 · PIT-COMED'; s.font = { name: 'Calibri', size: 11, color: { argb: 'FFDFF1F8' } }; s.alignment = { vertical: 'top', horizontal: 'left', indent: 8 };
+  const t = ws.getCell('A1'); t.value = '\u00A0'.repeat(13) + title; t.font = { name: 'Cambria', size: 20, bold: true, color: { argb: 'FFFFFFFF' } }; t.alignment = { vertical: 'middle', horizontal: 'left' };   // spaces, not indent: some viewers ignore indent on a merged cell and the badge then covers the title
+  const s = ws.getCell('A2'); s.value = '\u00A0'.repeat(22) + (subtitle || 'BSMT 1-Alpha · Batch 28 · PIT-COMED'); s.font = { name: 'Calibri', size: 11, color: { argb: 'FFDFF1F8' } }; s.alignment = { vertical: 'top', horizontal: 'left' };
   rowH(ws, 1, 40); rowH(ws, 2, 26); rowH(ws, 3, 5);
   ws.addImage(wb.addImage({ base64: imgs.badge, extension: 'png' }), { tl: { col: 0.12, row: 0.1 }, ext: { width: 62, height: 62 }, editAs: 'oneCell' });
 

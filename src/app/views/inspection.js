@@ -37,7 +37,7 @@ export async function mountInspection(el, ctx) {
       const { exportXLSX } = await import('../xlsx.js'), by = ctx.profile.full_name;
       const money = { type: 'money' };
       if (which === 'hist') {
-        await exportXLSX({ filename: 'Alpha-Inspection-History.xlsx', by, sheets: [{ name: 'History', title: 'Violation history', subtitle: 'Every approved violation, newest first',
+        await exportXLSX({ filename: 'Alpha-Inspection-History.xlsx', by, sheets: [{ name: 'Violation history', title: 'Violation history', subtitle: 'Every approved violation, newest first',
           summary: [['Violations', D.rows.length], ['Fines', total(D.rows.filter(v => v.fine)), 'money'], ['Unpaid', owed(D.rows.filter(v => v.fine)), 'money']],
           columns: [{ label: 'Date', key: 'date', width: 14 }, { label: 'Student', key: 'name', width: 30 }, { label: 'Classroom', key: 'room', width: 18 }, { label: 'Violation', key: 'title', width: 32 }, { label: 'Status', key: 'status', width: 18 }, { label: 'Fine', key: 'fine', ...money, total: true }, { label: 'Paid', key: 'paidtxt', width: 10 }],
           rows: D.rows.slice().reverse().map(v => ({ date: v.occurred_on, name: v.name, room: v.room, title: v.title, status: STATUS[v.status] || v.status, fine: v.fine, paidtxt: v.fine ? (v.paid ? 'Paid' : 'Unpaid') : '' })) }] });
