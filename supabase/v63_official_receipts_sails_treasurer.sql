@@ -79,7 +79,7 @@ create policy record_requests_read on public.v2_record_requests for select to au
   or (to_role = 'treasurer' and public.v2_role() in ('treasurer', 'mayor', 'auditor')));
 
 drop function if exists public.v2_record_request(text, text, text);
-create or replace function public.v2_record_request(p_title text, p_note text, p_token text, p_to text default 'secretary') returns uuid
+create or replace function public.v2_record_request(p_title text, p_note text default null, p_token text default null, p_to text default 'secretary') returns uuid
 language plpgsql security definer set search_path = '' as $$
 declare mid uuid := public.v2__req_member(p_token); nm text; rid uuid; dest text := case when p_to = 'treasurer' then 'treasurer' else 'secretary' end;
 begin
@@ -92,7 +92,7 @@ begin
 end $$;
 grant execute on function public.v2_record_request(text, text, text, text) to anon, authenticated, service_role;
 
-create or replace function public.v2_record_answer(p_id uuid, p_ok boolean, p_note text) returns void
+create or replace function public.v2_record_answer(p_id uuid, p_ok boolean, p_note text default null) returns void
 language plpgsql security definer set search_path = '' as $$
 declare r public.v2_record_requests; n text := nullif(btrim(coalesce(p_note, '')), '');
 begin
