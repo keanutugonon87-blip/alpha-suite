@@ -23,7 +23,7 @@ const ICON = {
   roles: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/>',
   system: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
 };
-ICON.inspection = ICON.watch || ICON.home; ICON['pd-today'] = ICON.home; ICON['pd-approvals'] = ICON.office || ICON.home; ICON['pd-people'] = ICON.officers || ICON.home; ICON['pd-more'] = ICON.roles || ICON.home; ICON.report = ICON.docs || ICON.notices || ICON.home; ICON.classup = ICON.officers || ICON.home; ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
+ICON.inspection = ICON.watch || ICON.home; ICON['pd-today'] = ICON.home; ICON['pd-approvals'] = ICON.office || ICON.home; ICON['pd-people'] = ICON.officers || ICON.home; ICON['pd-more'] = ICON.roles || ICON.home; ICON.report = ICON.docs || ICON.notices || ICON.home; ICON.classup = ICON.officers || ICON.home; ICON.receipts = '<path d="M4 13l2-8h12l2 8"/><path d="M4 13v6h16v-6h-5a3 3 0 0 1-6 0z"/>'; ICON.marshal = ICON.watch || ICON.home; ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
   { id: 'marshal', label: 'Marshal Desk', load: () => import('./marshal.js').then(m => m.mountMarshal), roles: ['general_marshal', 'dept_marshal'] },
