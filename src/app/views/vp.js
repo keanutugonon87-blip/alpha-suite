@@ -166,7 +166,7 @@ export async function mountVp(el, ctx) {
     if (!r) return;
     const c = CFG[k], canW = writes(k), pending = c.approval && r.status === 'proposed';
     const steps = canW && c.next && !isMayorOnlyBlock(r) ? c.next(r) : [];
-    const canDel = canW && (isMayor || !c.approval || ['proposed', 'returned'].includes(r.status)) && k !== 'del' || (k === 'del' && isMayor);
+    const canDel = canW && (isMayor || !c.approval || ['proposed', 'returned', 'cancelled'].includes(r.status)) && k !== 'del' || (k === 'del' && isMayor);
     modal(`<h3>${esc(r.title || r.name)}</h3>${r.status && k !== 'rep' ? `<p style="margin:0 0 8px">${tag(k === 'del' ? (r.status === 'done' ? 'done' : 'open') : r.status)}</p>` : ''}
       ${r.mayor_note ? `<div class="card pad" style="margin-bottom:8px"><small class="muted">Mayor's note</small><div>${esc(r.mayor_note)}</div></div>` : ''}
       ${k === 'del' && r.status === 'done' ? `<div class="card pad" style="margin-bottom:8px"><small class="muted">Done by ${esc(r.done_by_name || '')}</small><div>${esc(r.done_note || '')}</div></div>` : ''}
