@@ -4,11 +4,11 @@ import { createClient } from 'npm:@supabase/supabase-js@2';
 // Deploy with "Verify JWT" OFF. Needs two function secrets: GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.
 // The app only gets the "drive.file" permission: it can see only the files and folders it creates itself, nothing else in the Drive.
 //   POST {action:'connect'}  SAILS President -> {url} to open Google's sign-in page
-//   GET  ?code=&state=       Google     -> stores the login, makes the "Alpha 28 Documents" folder, sends the President back to the app
+//   GET  ?code=&state=       Google     -> stores the login, makes the "SAILS 28 Documents" folder, sends the President back to the app
 //   POST {action:'sync'}     SAILS President, SAILS Secretary, or the nightly job (x-hook-secret) -> copies what is missing
 //   POST {action:'unlink'}   SAILS President -> forgets the login (Drive copies stay where they are). The Class Mayor has no part in it.
 const APP = 'https://keanutugonon87-blip.github.io/alpha-suite/';
-const ROOT_NAME = 'Alpha 28 Documents';
+const ROOT_NAME = 'SAILS 28 Documents';
 const SCOPE = 'openid email https://www.googleapis.com/auth/drive.file';
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'content-type, authorization, apikey, x-client-info, x-hook-secret', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS' };
 const json = (o: unknown, status = 200) => new Response(JSON.stringify(o), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
@@ -52,7 +52,11 @@ const makeFolder = async (tok: string, name: string, parent?: string) => (await 
 
 async function ensureRoot(tok: string): Promise<string> {
   const have = await getSecret('drive_root');
-  if (have) { try { const f = await g(`https://www.googleapis.com/drive/v3/files/${have}?fields=id,trashed`, tok); if (!f.trashed) return have; } catch (e) { if (!(e instanceof DriveError) || e.status !== 404) throw e; } }
+  if (have) { try { const f = await g(`https://www.googleapis.com/drive/v3/files/${have}?fields=id,trashed,name`, tok);
+      if (!f.trashed) {   // an older folder name (for example "Alpha 28 Documents") is renamed in place; the files inside stay where they are
+        if (f.name !== ROOT_NAME) await g(`https://www.googleapis.com/drive/v3/files/${have}?fields=id`, tok, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: ROOT_NAME }) }).catch(() => null);
+        return have;
+      } } catch (e) { if (!(e instanceof DriveError) || e.status !== 404) throw e; } }
   // The root was deleted in Drive (or never made): start a new one and re-copy everything into it
   const id = await makeFolder(tok, ROOT_NAME); await setSecret('drive_root', id);
   await db.from('v2_doc_folders').update({ drive_folder_id: null, drive_name: null, drive_error: null }).not('id', 'is', null);

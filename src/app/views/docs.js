@@ -41,9 +41,9 @@ export async function mountDocs(el, ctx) {
   }
   function setupSteps() {
     modal(`<h3>Set up Google Drive (one time)</h3><ol style="padding-left:18px;margin:0;line-height:1.5">
-      <li>Open <b>console.cloud.google.com</b>, make a project called “Alpha 28”.</li>
+      <li>Open <b>console.cloud.google.com</b>, make a project called “SAILS 28”.</li>
       <li><b>APIs & Services > Library</b>: turn on <b>Google Drive API</b>.</li>
-      <li><b>OAuth consent screen</b> (Google Auth Platform): choose <b>External</b>, app name “Alpha 28”, add the scope <b>…/auth/drive.file</b>, then set it to <b>In production</b>. If you leave it in Testing, the link stops working after 7 days.</li>
+      <li><b>OAuth consent screen</b> (Google Auth Platform): choose <b>External</b>, app name “SAILS 28”, add the scope <b>…/auth/drive.file</b>, then set it to <b>In production</b>. If you leave it in Testing, the link stops working after 7 days.</li>
       <li><b>Credentials > Create OAuth client ID > Web application</b>. Under Authorized redirect URIs add:<br><code style="word-break:break-all;user-select:all">${SB_URL}/functions/v1/drive-sync</code></li>
       <li>In Supabase, <b>Edge Functions > Secrets</b>: add <b>GOOGLE_CLIENT_ID</b> and <b>GOOGLE_CLIENT_SECRET</b> from that client.</li>
       <li>Deploy the <b>drive-sync</b> function with <b>Verify JWT off</b>, run the v18 SQL, then tap <b>Link Google Drive</b> again.</li></ol>

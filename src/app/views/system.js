@@ -7,7 +7,7 @@ const SITE = () => location.origin + location.pathname;
 const REMIND = names => `SAILS ’28 sign-in reminder: please set up your PIN now. Open ${SITE()} > Check my status > "First time or forgot your PIN? Set it up". Have your Student ID and QR card ready.\n\nStill needed (${names.length}): ${names.join(', ')}`;
 async function signupSheet() {
   const { qrDataUrl } = await import('../qr.js'); const qr = await qrDataUrl(SITE(), 260);
-  printHTML('Alpha 28 sign-up sheet', `${letterhead('How to sign in to SAILS ’28', 'BSMT 1-Alpha · Batch 28')}
+  printHTML('SAILS 28 sign-up sheet', `${letterhead('How to sign in to SAILS ’28', 'BSMT 1-Alpha · Batch 28')}
     <div style="display:flex;gap:24px;align-items:center;margin:14px 0"><img src="${qr}" style="width:200px;height:200px" alt="QR code to the site"><div style="font-size:15px;line-height:1.6"><b>${esc(SITE())}</b><br>Scan the code or type the link.</div></div>
     <h2>Create your account (one time)</h2><ol style="font-size:15px;line-height:1.8"><li>Open the site and tap <b>Check my status</b>.</li><li>Tap <b>First time or forgot your PIN? Set it up</b>.</li><li>Scan or paste your <b>QR card</b>. This proves the account is yours.</li><li>Type your <b>Student ID</b>, then choose a <b>6-digit PIN</b> twice. Do not use 123456 or 000000.</li></ol>
     <h2>After that</h2><p style="font-size:15px">Sign in with your <b>Student ID</b> and <b>PIN</b>. You stay signed in for 30 days. Never share your PIN. Lost your PIN? Use your QR card to set a new one.</p>
