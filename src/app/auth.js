@@ -1,4 +1,4 @@
-/* Alpha ’28 — sign-in: the lock, the sign-in function, and who is looking at the app. */
+/* SAILS ’28 — sign-in: the lock, the sign-in function, and who is looking at the app. */
 import { sb, SB_URL, SB_KEY } from './core.js';
 
 export const auth = { require: false, viewer: 'open', kind: 'none', member_id: null };

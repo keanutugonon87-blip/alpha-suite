@@ -47,7 +47,7 @@ export async function mountDocs(el, ctx) {
       <li><b>Credentials > Create OAuth client ID > Web application</b>. Under Authorized redirect URIs add:<br><code style="word-break:break-all;user-select:all">${SB_URL}/functions/v1/drive-sync</code></li>
       <li>In Supabase, <b>Edge Functions > Secrets</b>: add <b>GOOGLE_CLIENT_ID</b> and <b>GOOGLE_CLIENT_SECRET</b> from that client.</li>
       <li>Deploy the <b>drive-sync</b> function with <b>Verify JWT off</b>, run the v18 SQL, then tap <b>Link Google Drive</b> again.</li></ol>
-      <p class="muted" style="margin:10px 0 0">Alpha ’28 only gets permission for files and folders it makes itself. It cannot see the rest of your Drive.</p>
+      <p class="muted" style="margin:10px 0 0">SAILS ’28 only gets permission for files and folders it makes itself. It cannot see the rest of your Drive.</p>
       <button type="button" class="btn ghost" id="x" style="width:100%;margin-top:12px">Close</button>`, (m, close) => { m.querySelector('#x').onclick = close; });
   }
   async function link() {

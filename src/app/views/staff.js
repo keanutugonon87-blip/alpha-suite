@@ -54,7 +54,7 @@ const TABKEY = {'home': 'tabHome', 'treasury': 'tabTreasury', 'balances': 'tabBa
 const tabLabel = t0 => TABKEY[t0.id] ? t(TABKEY[t0.id]) : t0.label;
 function authScreen(root, mode = 'in', msg = '', ok = false) {
   root.innerHTML = `<div class="auth"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span>
-    <h1 style="margin:10px 0 4px">Alpha ’28</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
+    <h1 style="margin:10px 0 4px">SAILS ’28</h1><p class="muted" style="margin:0 0 14px">Officer sign in</p>
     <form class="card" id="f">
       ${mode === 'up' ? '<label>Full name</label><input name="name" required autocomplete="name">' : ''}
       <label>Email</label><input name="email" type="email" required autocomplete="email">
@@ -165,7 +165,7 @@ export async function renderStaff(root, tabId) {
   const navHtml = GROUPS.concat(rest.length ? [['More', rest.map(t0 => t0.id)]] : []).map(([name, ids]) => { const items = tabs.filter(t0 => ids.includes(t0.id)); if (!items.length) return '';
     const open = !shut.has(name) || items.some(t0 => t0.id === cur.id);
     return `<div class="grp${open ? '' : ' shut'}" data-g="${name}"><button class="gh" type="button" aria-expanded="${open}"><span>${name}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></button><div class="gb">${items.map(btn).join('')}</div></div>`; }).join('');
-  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>Alpha ’28</b><small>${esc(p.full_name)} · ${p.real ? ROLE_LABEL[p.real] : p.role === 'mayor' && mode === 'class' ? 'Class Mayor' : ROLE_LABEL[p.role]}</small></div>
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>SAILS ’28</b><small>${esc(p.full_name)} · ${p.real ? ROLE_LABEL[p.real] : p.role === 'mayor' && mode === 'class' ? 'Class Mayor' : ROLE_LABEL[p.role]}</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="lg" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button><button class="btn ghost sm" id="out">${t('signout')}</button></div>
     <div class="banner" id="bn" hidden></div>
     <div class="shell${navCollapsed ? ' nav-c' : ''}"><nav class="tabs" aria-label="Sections"><button class="navtoggle" id="nt" type="button" aria-expanded="${navCollapsed ? 'false' : 'true'}" aria-label="Collapse or expand the menu"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 6l-6 6 6 6"/></svg><span>Hide menu</span></button>${navHtml}${extra.length ? `<button class="more${inMore ? ' on' : ''}" id="more" aria-haspopup="dialog" aria-label="More sections"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="19" cy="12" r="1.6"/></svg><span>${inMore ? tabLabel(cur) : t('more')}</span></button>` : ''}</nav><main id="view"></main></div>`;

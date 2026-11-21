@@ -35,7 +35,7 @@ if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController || document.getElementById('upd')) return;
     const b = document.createElement('div'); b.id = 'upd'; b.className = 'updbar'; b.setAttribute('role', 'status');
-    b.innerHTML = '<span>A new version of Alpha ’28 is ready.</span><button class="btn gold sm">Refresh</button>';
+    b.innerHTML = '<span>A new version of SAILS ’28 is ready.</span><button class="btn gold sm">Refresh</button>';
     b.querySelector('button').onclick = () => location.reload(); document.body.appendChild(b);
   });
   // An app left open for days never reloads by itself, so ask the browser to look for a new version when it comes back to the front and every 20 minutes

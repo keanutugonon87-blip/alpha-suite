@@ -26,7 +26,7 @@ export async function mountMarshal(el, ctx) {
   }
 
   const tag = (m, k) => `<span class="tag ${m[k][1]}">${m[k][0]}</span>`;
-  const sections = b => (b.sections || []).map(s => `<div class="row"><div class="m"><b>${esc(s.name)}</b><small>${s.students} student${s.students === 1 ? '' : 's'}</small></div><span class="tag ${s.has_mayor ? 'ok' : ''}">${s.has_mayor ? 'Mayor on Alpha ’28' : 'no Mayor account yet'}</span></div>`).join('') || '<p class="empty">No sections in this block yet.</p>';
+  const sections = b => (b.sections || []).map(s => `<div class="row"><div class="m"><b>${esc(s.name)}</b><small>${s.students} student${s.students === 1 ? '' : 's'}</small></div><span class="tag ${s.has_mayor ? 'ok' : ''}">${s.has_mayor ? 'Mayor on SAILS ’28' : 'no Mayor account yet'}</span></div>`).join('') || '<p class="empty">No sections in this block yet.</p>';
   const setupNote = () => setup ? '<p class="muted" style="margin:0 2px 8px">If a list stays empty or shows an error, run <b>v45_marshal_line.sql</b> in Supabase first.</p>' : '';
 
   function overview() {
@@ -57,7 +57,7 @@ export async function mountMarshal(el, ctx) {
   function ask() {
     const b = X.blocks[0], opts = ((b && b.sections) || []).filter(s => s.has_mayor);
     return `${setupNote()}<p class="muted" style="margin:0 2px 8px">To get a class’s help at a department event, send the request to that section’s Class Mayor. The Mayor accepts, which sends directives to the class Marshals, or declines with a reason. You cannot order class officers yourself.</p>
-      <div class="bar"><button class="btn gold" id="na"${opts.length ? '' : ' disabled'}>+ New request</button></div>${opts.length ? '' : '<p class="muted" style="margin:6px 2px">No section in your block has a Mayor on Alpha ’28 yet.</p>'}
+      <div class="bar"><button class="btn gold" id="na"${opts.length ? '' : ' disabled'}>+ New request</button></div>${opts.length ? '' : '<p class="muted" style="margin:6px 2px">No section in your block has a Mayor on SAILS ’28 yet.</p>'}
       ${X.req.length ? `<div class="card">${X.req.map(r => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="m"><b>${esc(r.title)}</b><small>${esc(r.unit_name)}${r.needed_on ? ' · needed ' + fmtDate(r.needed_on + 'T00:00:00+08:00') : ''}</small></div>${tag(MREQ, r.status)}</div>${r.details ? `<p style="margin:6px 0 0">${esc(r.details)}</p>` : ''}${r.answer_note ? `<p class="muted" style="margin:6px 0 0">Mayor: ${esc(r.answer_note)}</p>` : ''}</div>`).join('')}</div>` : '<p class="empty">No requests yet.</p>'}`;
   }
 
