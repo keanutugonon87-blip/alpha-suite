@@ -2,6 +2,7 @@
 // Run: npm install && npm run build   (commit the output; GitHub Pages serves it as-is)
 import { build } from 'esbuild';
 import { readFileSync, writeFileSync, rmSync, readdirSync, mkdirSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 mkdirSync('assets/build', { recursive: true });
 for (const f of readdirSync('assets/build')) rmSync('assets/build/' + f);
 const r = await build({
@@ -18,7 +19,8 @@ console.log('built', js, css);
 // Everything the landing page needs at start-up (the entry file plus the chunks it imports directly); officer screens load on demand and are cached when first used.
 const closure = new Set(); const walk = f => { if (closure.has(f)) return; closure.add(f); for (const i of r.metafile.outputs[f]?.imports || []) if (i.kind === 'import-statement') walk(i.path); }; walk(js);
 const shell = ['./', 'index.html', ...[...closure].map(f => f.replace(/^.*assets\//, 'assets/')), css.replace(/^.*assets\//, 'assets/'), 'assets/wolf-crest.png', 'assets/icon-192.png', 'manifest.webmanifest'];
-const ver = js.match(/app\.([A-Z0-9]+)\.js/)[1];
+const art = createHash('md5'); for (const f of ['wolf-crest.png', 'icon-192.png', 'icon-512.png']) art.update(readFileSync('assets/' + f));   // a new logo must also refresh the offline copy
+const ver = js.match(/app\.([A-Z0-9]+)\.js/)[1] + art.digest('hex').slice(0, 6).toUpperCase();
 writeFileSync('sw.js', `const V='alpha-${ver}',SHELL=${JSON.stringify(shell)};
 self.addEventListener('install',e=>{e.waitUntil(caches.open(V).then(c=>c.addAll(SHELL)).then(()=>self.skipWaiting()))});
 self.addEventListener('activate',e=>{e.waitUntil(caches.keys().then(k=>Promise.all(k.filter(n=>n!==V).map(n=>caches.delete(n)))).then(()=>self.clients.claim()))});
