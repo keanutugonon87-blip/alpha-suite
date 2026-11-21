@@ -22,7 +22,7 @@ const CFG = {
     next: r => r.status === 'approved' ? [['Mark held', 'done'], ['Cancel', 'cancelled']] : ['proposed', 'returned'].includes(r.status) ? [['Cancel', 'cancelled']] : [],
     row: r => [r.title, `${r.kind === 'program' ? 'Program' : 'Meeting'} · ${fmtDate(r.held_on)}${r.held_at ? ' ' + esc(r.held_at) : ''}${r.venue ? ' · ' + esc(r.venue) : ''}`, r.status] },
   com: { t: 'v2_vp_tasks', name: 'task', who: ['mayor', 'vp_internal', 'vp_external', 'vice_mayor'], order: ['created_at', false],
-    fields: [{ k: 'title', l: 'Task', req: 1 }, { k: 'scope', l: 'Section or year level', ph: '1-Alpha, all 1st years…' }, { k: 'assignee', l: 'Assigned to' }, { k: 'due_on', l: 'Due date', type: 'date' }, { k: 'note', l: 'Note', type: 'area' }],
+    fields: [{ k: 'title', l: 'Task', req: 1 }, { k: 'scope', l: 'Section or year level', ph: 'All 1st years, 2-Bravo…' }, { k: 'assignee', l: 'Assigned to' }, { k: 'due_on', l: 'Due date', type: 'date' }, { k: 'note', l: 'Note', type: 'area' }],
     next: r => r.status === 'todo' ? [['Start', 'doing'], ['Done', 'done']] : r.status === 'doing' ? [['Done', 'done'], ['Back to to-do', 'todo']] : [['Reopen', 'todo']],
     row: r => [r.title, [r.scope, r.assignee, r.due_on ? 'due ' + fmtDate(r.due_on) : ''].filter(Boolean).map(esc).join(' · ') || 'No details', r.status] },
   res: { t: 'v2_vp_resolutions', name: 'resolution', who: ['mayor', 'vp_internal', 'vice_mayor'], order: ['created_at', false],

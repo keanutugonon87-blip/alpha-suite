@@ -116,13 +116,13 @@ export async function showMemberCards() {
   const members = (await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active'))).sort((a, b) => surnameKey(a.full_name).localeCompare(surnameKey(b.full_name)));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
   const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
-  const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/alpha-wordmark.jpg')]);
+  const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/sails-wordmark.jpg')]);
   const cards = [];
   for (const mem of members) {
     try { const code = await db(sb.rpc('v2_member_token', { p_member: mem.id })); cards.push({ mem, code, img: await brandedQR(code, 320, crest) }); } catch (e) { toast(e.message, true); break; }
     m.querySelector('#pg').textContent = `Generating ${cards.length}/${members.length}…`;
   }
-  const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="ALPHA"><small>BSMT 1-ALPHA · BATCH 28 · PIT-COMED</small></div>
+  const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="SAILS ’28"><small>PIT-COMED · BATCH 28</small></div>
     <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div>
     <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
   m.querySelector('#pg').textContent = `${cards.length} cards ready, in alphabetical order by last name. Each code is private to that student — keep the printout safe.`;
@@ -140,7 +140,7 @@ export async function showReceipt(entryId) {
   let payer = e.payer_name;
   if (e.member_id) payer = (await db(sb.from('v2_members').select('full_name').eq('id', e.member_id).single())).full_name;
   const img = await qrDataUrl(`${location.origin}${location.pathname}#/receipt/${e.verify_code}`, 180);
-  const body = `<div style="text-align:center"><img src="assets/wolf-crest.png" width="56"><h3 style="margin:6px 0">OFFICIAL RECEIPT</h3><small>BSMT 1-Alpha · Class Fund</small></div>
+  const body = `<div style="text-align:center"><img src="assets/wolf-crest.png" width="56"><h3 style="margin:6px 0">OFFICIAL RECEIPT</h3><small>SAILS ’28 · Class Fund</small></div>
     <div class="row"><span>Receipt no.</span><b>${esc(e.receipt_no)}</b></div><div class="row"><span>Received from</span><b>${esc(payer)}</b></div>
     <div class="row"><span>Amount</span><b>${peso(e.amount)}</b></div><div class="row"><span>For</span><b>${esc(e.purpose || e.category)}</b></div>
     <div class="row"><span>Date</span><b>${fmtDateTime(e.occurred_at)}</b></div><div class="row"><span>Method</span><b>${e.method === 'gcash' ? 'GCash ' + esc(e.gcash_ref || '') : 'Cash'}</b></div>
@@ -183,7 +183,7 @@ export function makeQRCodes({ guard = false } = {}) {
       const byNo = new Map(have.map(h => [h.student_no.toLowerCase(), h]));
       const pins = guard ? new Set(await sb.rpc('v2_pin_members').then(r => (r.data || []).map(x => x.member_id), () => [])) : new Set();
       const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
-      const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/alpha-wordmark.jpg')]);
+      const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/sails-wordmark.jpg')]);
       const cards = []; let added = 0;
       for (const [i, r] of list.entries()) {
         btn.textContent = `Making ${i + 1}/${list.length}…`;
@@ -196,7 +196,7 @@ export function makeQRCodes({ guard = false } = {}) {
         cards.push({ mem, code, img: await brandedQR(code, 320, crest) });
       }
       cards.sort((a, b) => surnameKey(a.mem.full_name).localeCompare(surnameKey(b.mem.full_name)));
-      const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="ALPHA"><small>BSMT 1-ALPHA · BATCH 28 · PIT-COMED</small></div>
+      const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="SAILS ’28"><small>PIT-COMED · BATCH 28</small></div>
         <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}${c.mem.section ? ' · ' + esc(c.mem.section) : ''}</small></div>
         <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
       m.querySelector('#out').innerHTML = `<p class="muted" style="margin-top:12px">${cards.length} card${cards.length === 1 ? '' : 's'} ready${added ? ` · ${added} new student${added === 1 ? '' : 's'} added to the roster` : ''}. Each code is private to that student — hand it over, don't post it.</p>

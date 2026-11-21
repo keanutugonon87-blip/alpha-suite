@@ -198,7 +198,7 @@ export async function mountRequests(el, ctx) {
         if (!(await confirmDialog(`${r.req_no} “${r.title}” will be deleted${lq ? ', together with its liquidation report' : ''}${r.status === 'filed' || lq?.status === 'filed' ? ' and the copy kept in Documents' : ''}. Expenses linked to it stay, they are only unlinked. This cannot be undone.`, { ok: 'Delete', danger: true, title: 'Delete this request?' }))) return;
         try { await db(sb.rpc('v2_fbr_delete', { p_id: r.id })); close(); toast('Deleted'); load(); } catch (x) { m.querySelector('#er').textContent = /function|schema cache|could not find/i.test(x.message) ? 'Run the v26 SQL in Supabase first (supabase/v26_delete_requests.sql).' : x.message; } });
       m.querySelector('#cx').onclick = close;
-      m.querySelector('#pr').onclick = () => printHTML(r.req_no, `${letterhead('Fund Budget Request', 'BSMT 1-Alpha · Batch 28 · PIT-COMED')}${paper(r)}`);
+      m.querySelector('#pr').onclick = () => printHTML(r.req_no, `${letterhead('Fund Budget Request', 'PIT-COMED · Batch 28')}${paper(r)}`);
       m.querySelector('#ed')?.addEventListener('click', go(() => form(r)));
       m.querySelector('#sn')?.addEventListener('click', go(() => sign(r, 'submit')));
       m.querySelector('#ap')?.addEventListener('click', go(() => sign(r, 'approve')));

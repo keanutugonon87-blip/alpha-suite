@@ -22,7 +22,7 @@ export async function mountStudents(el, ctx) {
     el.querySelector('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
     el.querySelector('#csv').onclick = async () => {
       try { toast('Preparing Excel…'); await exportXLSX({ filename: 'Alpha-Student-Roster.xlsx', by: ctx.profile.full_name, sheets: [
-        { name: 'Roster', title: 'Class Roster', subtitle: 'BSMT 1-Alpha · Batch 28 · PIT-COMED', summary: [['Active', rows.filter(r => r.status === 'active').length], ['Total listed', rows.length], ['ID to follow up', pend]],
+        { name: 'Roster', title: 'Class Roster', subtitle: 'Batch 28 · PIT-COMED', summary: [['Active', rows.filter(r => r.status === 'active').length], ['Total listed', rows.length], ['ID to follow up', pend]],
           columns: [{ label: '#', get: r => rows.indexOf(r) + 1, type: 'int', width: 6 }, { label: 'Student ID', key: 'student_no', width: 18 }, { label: 'Name', key: 'full_name', width: 34 }, { label: 'Section', key: 'section', width: 24 }, { label: 'Status', get: r => /^PENDING/i.test(r.student_no) ? 'Pending' : r.status, type: 'status' }],
           rows: rows.slice().sort((a, b) => a.full_name.localeCompare(b.full_name)) }] }); toast('Excel ready'); } catch (e) { toast(e.message, true); } };
     el.querySelectorAll('[data-col]').forEach(b => b.onclick = () => { const o = owes.get(b.dataset.col); sessionStorage.setItem('alpha-prefill', JSON.stringify({ member: b.dataset.col, charge: o.charge, amount: o.owed })); location.hash = '#/staff/treasury'; });

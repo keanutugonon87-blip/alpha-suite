@@ -67,7 +67,7 @@ async function statement(token) {
       m.querySelector('#sp').onclick = () => {
         const tbl = `<table><thead><tr><th>Date</th><th>For</th><th>Receipt no.</th><th>Verify code</th><th class="r">Amount</th></tr></thead><tbody>${d.payments.map(p => `<tr><td>${fmtDate(p.at)}</td><td>${esc(p.for)}${p.fund ? ' · ' + esc(fundLabel(p.fund)) : ''}</td><td>${esc(p.receipt_no || '—')}${p.status === 'pending' ? ' (awaiting approval)' : ''}</td><td>${esc(p.code || '—')}</td><td class="r">${peso(p.amount)}</td></tr>`).join('') || '<tr><td colspan="5">No payments yet</td></tr>'}</tbody></table>`;
         const ow = d.balances.filter(b => +b.owed > 0 && !b.closed);
-        printHTML('Statement - ' + d.name, `${letterhead('Statement of account', d.name + ' · BSMT 1-Alpha · Batch 28')}<div class="sum"><div>Payments made<b>${peso(paid)}</b></div><div>Still owed<b>${peso(owe)}</b></div></div>
+        printHTML('Statement - ' + d.name, `${letterhead('Statement of account', d.name + ' · PIT-COMED · Batch 28')}<div class="sum"><div>Payments made<b>${peso(paid)}</b></div><div>Still owed<b>${peso(owe)}</b></div></div>
           <h2>Payments</h2>${tbl}${ow.length ? `<h2>Still owed</h2><table><thead><tr><th>Charge</th><th class="r">Paid</th><th class="r">Due</th><th class="r">Owed</th></tr></thead><tbody>${ow.map(b => `<tr><td>${esc(b.charge)}</td><td class="r">${peso(b.paid)}</td><td class="r">${peso(b.due)}</td><td class="r">${peso(b.owed)}</td></tr>`).join('')}</tbody></table>` : '<p>✓ All charges are paid up.</p>'}
           <p style="font-size:11px;color:#58708a">Receipts can be checked at ${esc(location.origin + location.pathname)}#/receipt/&lt;code&gt;. Printed ${new Date().toLocaleString('en-PH', { dateStyle: 'medium', timeStyle: 'short' })}.</p>`);
       };
@@ -176,7 +176,7 @@ function renderMe(host, opts = {}) {
 export async function renderPublic(root) {
   await loadAuth();
   if (auth.require && !auth.viewer) return lockScreen(root);
-  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>SAILS ’28</b><small>BSMT 1-Alpha · Batch 28 · PIT-COMED</small></div>
+  root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>SAILS ’28</b><small>PIT-COMED · Batch 28</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="txt" aria-label="Display: text size and dark mode" title="Text size, dark mode, scenery">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button>${auth.kind === 'guest' ? `<button class="btn ghost sm" id="so">${t('signOut')}</button>` : ''}<a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
@@ -291,7 +291,7 @@ export async function renderPublic(root) {
     };
     const hs = heroScene(SCENE_OF[tab] || tab);
     m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}<div class="hero ${hs.dark ? 'dk' : ''}" style="background:${hs.top}">
-        <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="Alpha crest"></span></div>
+        <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="SAILS crest"></span></div>
         <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
           <p>${esc(tre.open?.name || '')}</p>${fundChips()}</div>
         ${hs.html}</div>

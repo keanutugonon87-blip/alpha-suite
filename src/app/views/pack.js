@@ -77,7 +77,7 @@ export async function mountPack(el, ctx) {
     return S;
   }
 
-  const html = (S) => `${letterhead('Monthly Report · ' + label(k), 'BSMT 1-Alpha · Batch 28 · PIT-COMED')}<p>Prepared ${fmtDate(new Date().toISOString().slice(0, 10))} from the records in SAILS ’28.</p>` + S.map(s => `<h3>${esc(s.title)}</h3>`
+  const html = (S) => `${letterhead('Monthly Report · ' + label(k), 'PIT-COMED · Batch 28')}<p>Prepared ${fmtDate(new Date().toISOString().slice(0, 10))} from the records in SAILS ’28.</p>` + S.map(s => `<h3>${esc(s.title)}</h3>`
     + (s.stats ? `<div class="sum">${s.stats.map(([a, b]) => `<div>${esc(a)}<b>${esc(String(b))}</b></div>`).join('')}</div>` : '')
     + (s.table ? `<table><tr>${s.table.head.map(h => `<th>${esc(h)}</th>`).join('')}</tr>${s.table.rows.map(r => `<tr>${r.map(c => `<td>${esc(String(c))}</td>`).join('')}</tr>`).join('')}</table>` : '')
     + (s.rows || []).map(x => `<p>${esc(x)}</p>`).join('') + (s.note ? `<p><i>${esc(s.note)}</i></p>` : '')).join('')
