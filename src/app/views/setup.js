@@ -41,6 +41,7 @@ export const STEPS = [
   { v: 'v62', file: 'v62_two_key_collection_directives_photos.sql', does: 'SAILS Treasurer confirms collections, directives to the Class Treasurer and Class Marshal, progress figures from collection records, photos on progress reports', check: mark('v62') },
   { v: 'v63', file: 'v63_official_receipts_sails_treasurer.sql', does: 'Official receipts and supporting documents come only from the SAILS Treasurer', check: mark('v63') },
   { v: 'v67', file: 'v67_line_of_authority.sql', does: 'SAILS Line of Authority step 1: Class Secretary role, who directs whom, General Marshal, Auditor independent', check: mark('v67') },
+  { v: 'v68', file: 'v68_class_secretary_seats.sql', does: 'Line of Authority step 2: the Class Secretary takes attendance; the seat list matches the chart', check: mark('v68') },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the SAILS Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
   { v: 'v41', file: 'v41_trash.sql', does: 'Trash bin: removed requests and records can be restored for 7 days, then are deleted for good', check: table('v2_trash') },
