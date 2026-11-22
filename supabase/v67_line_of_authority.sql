@@ -1,7 +1,7 @@
 -- v67: the SAILS Line of Authority, step 1 (roles and reporting lines).
---   General Assembly -> SAILS President -> VP Internal, VP External, Secretary, Treasurer, Auditor, PIO, Grand Marshal
+--   General Assembly -> SAILS President -> VP Internal, VP External, Secretary, Treasurer, Auditor, PIO, General Marshal
 --   VP Internal -> Class Mayor. SAILS Secretary -> Class Secretary. SAILS Treasurer -> Class Treasurer.
---   Grand Marshal -> SAILS Marshals -> Class Marshals. The Auditor is independent (the Treasurer cannot direct the Auditor).
+--   General Marshal -> SAILS Marshals -> Class Marshals. The Auditor is independent (the Treasurer cannot direct the Auditor).
 -- Run once in the Supabase SQL editor. Safe to run again.
 
 -- 1. A Class Secretary role (keeps the class records; answers to the SAILS Secretary)
@@ -22,7 +22,7 @@ language sql immutable set search_path = '' as $$
     else false end
 $$;
 
--- 3. The directive functions: the SAILS Secretary may issue, the President is named for every officer under him, "Grand Marshal", and the app name in the phone alert
+-- 3. The directive functions: the SAILS Secretary may issue, the President is named for every officer under him, and the app name in the phone alert
 do $do$
 declare f record; src text; old text;
 begin
@@ -31,7 +31,6 @@ begin
     src := replace(src, '''mayor'', ''sails_president'', ''vp_internal'', ''vp_external'', ''general_marshal'', ''treasurer'', ''dept_marshal''', '''mayor'', ''sails_president'', ''vp_internal'', ''vp_external'', ''general_marshal'', ''treasurer'', ''secretary'', ''dept_marshal''');
     src := replace(src, 'a.role in (''vp_internal'', ''vp_external'', ''general_marshal'') then ''the President''', 'a.role in (''vp_internal'', ''vp_external'', ''secretary'', ''treasurer'', ''auditor'', ''pio'', ''general_marshal'') then ''the President''');
     src := replace(src, 'when r = ''treasurer'' then ''the SAILS Treasurer''', 'when r = ''treasurer'' then ''the SAILS Treasurer'' when r = ''secretary'' then ''the SAILS Secretary''');
-    src := replace(src, '''the General Marshal''', '''the Grand Marshal''');
     if src <> old then execute src; end if;
   end loop;
   -- every server message that still says Alpha ’28

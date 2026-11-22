@@ -1,7 +1,7 @@
 import { sb, db, watch, esc, toast, modal, skeleton, fmtDate, todayISO, confirmDialog } from '../core.js';
 
-/* The Marshal line: the SAILS Grand Marshal and SAILS Marshals 1-4 have their own desk.
-   President -> SAILS Grand Marshal -> SAILS Marshals. A SAILS Marshal never orders a class officer: they ask the section's Class Mayor,
+/* The Marshal line: the SAILS General Marshal and SAILS Marshals 1-4 have their own desk.
+   President -> SAILS General Marshal -> SAILS Marshals. A SAILS Marshal never orders a class officer: they ask the section's Class Mayor,
    who accepts (directives go to the class Marshals) or declines. Class incident files stay with the class. */
 const INC = { filed: ['Filed', 'warn'], reviewed: ['Reviewed', ''], referred: ['Referred', 'bad'], closed: ['Closed', 'ok'] };
 const MREQ = { open: ['Waiting for the Mayor', 'warn'], accepted: ['Accepted', 'ok'], declined: ['Declined', 'bad'] };
@@ -44,14 +44,14 @@ export async function mountMarshal(el, ctx) {
   }
   function myBlock() {
     const b = X.blocks[0];
-    return `${setupNote()}${b ? `<p class="muted" style="margin:0 2px 8px">You cover <b>Block ${esc(b.letter)}</b>. You report to the SAILS Grand Marshal. You can see who leads each section, but you never order a class officer: ask the Class Mayor.</p><div class="card">${sections(b)}</div>` : '<p class="empty">The SAILS Grand Marshal has not assigned your block yet.</p>'}`;
+    return `${setupNote()}${b ? `<p class="muted" style="margin:0 2px 8px">You cover <b>Block ${esc(b.letter)}</b>. You report to the SAILS General Marshal. You can see who leads each section, but you never order a class officer: ask the Class Mayor.</p><div class="card">${sections(b)}</div>` : '<p class="empty">The SAILS General Marshal has not assigned your block yet.</p>'}`;
   }
   function incidents() {
     const list = X.inc;
-    return `${setupNote()}${gm ? '<p class="muted" style="margin:0 2px 8px">Reports filed by the SAILS Marshals during department events. Class incident files stay with each class. You can refer a serious report to the President or the adviser.</p>' : '<p class="muted" style="margin:0 2px 8px">File a report for something that happened during a department event or your section duty. Write facts only. Do not name or shame a student; the SAILS Grand Marshal decides whether it goes higher.</p>'}
+    return `${setupNote()}${gm ? '<p class="muted" style="margin:0 2px 8px">Reports filed by the SAILS Marshals during department events. Class incident files stay with each class. You can refer a serious report to the President or the adviser.</p>' : '<p class="muted" style="margin:0 2px 8px">File a report for something that happened during a department event or your section duty. Write facts only. Do not name or shame a student; the SAILS General Marshal decides whether it goes higher.</p>'}
       <div class="bar"><button class="btn gold" id="ni">+ File a report</button></div>
       ${list.length ? `<div class="card">${list.map(i => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px"><div class="m"><b>${esc(i.event || 'Department duty')}</b><small>${fmtDate(i.occurred_on + 'T00:00:00+08:00')}${i.section ? ' · ' + esc(i.section) : ''}${gm ? ' · ' + esc(i.reporter_name || '') : ''}</small></div>${tag(INC, i.status)}</div>
-        <p style="margin:6px 0 0;white-space:pre-wrap">${esc(i.summary)}</p>${i.action_taken ? `<small class="muted">Action taken: ${esc(i.action_taken)}</small>` : ''}${i.president_note ? `<p style="margin:6px 0 0"><b>President:</b> ${esc(i.president_note)}</p>` : ''}${i.gm_note ? `<p class="muted" style="margin:6px 0 0">${i.referred_to ? 'Referred to the ' + esc(i.referred_to) + ': ' : 'SAILS Grand Marshal: '}${esc(i.gm_note)}</p>` : ''}
+        <p style="margin:6px 0 0;white-space:pre-wrap">${esc(i.summary)}</p>${i.action_taken ? `<small class="muted">Action taken: ${esc(i.action_taken)}</small>` : ''}${i.president_note ? `<p style="margin:6px 0 0"><b>President:</b> ${esc(i.president_note)}</p>` : ''}${i.gm_note ? `<p class="muted" style="margin:6px 0 0">${i.referred_to ? 'Referred to the ' + esc(i.referred_to) + ': ' : 'SAILS General Marshal: '}${esc(i.gm_note)}</p>` : ''}
         ${gm && i.status !== 'closed' ? `<div class="acts" style="margin-top:8px">${i.status === 'filed' ? `<button class="btn ghost sm" data-ir="review" data-i="${i.id}">Mark reviewed</button>` : ''}${i.status !== 'referred' ? `<button class="btn gold sm" data-ir="refer_president" data-i="${i.id}">Refer to the President</button><button class="btn ghost sm" data-ir="refer_adviser" data-i="${i.id}">Refer to the adviser</button>` : ''}<button class="btn ghost sm" data-ir="close" data-i="${i.id}">Close</button></div>` : ''}</div>`).join('')}</div>` : '<p class="empty">No reports yet.</p>'}`;
   }
   function ask() {
@@ -81,7 +81,7 @@ export async function mountMarshal(el, ctx) {
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">File report</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       m.querySelector('#f').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
-        try { await db(sb.rpc('v2_incident_file', { p_section: f.get('s'), p_event: f.get('e'), p_on: f.get('d'), p_summary: f.get('m'), p_action: f.get('a') })); toast(gm ? 'Report filed' : 'Report sent to the SAILS Grand Marshal'); close(); load(); }
+        try { await db(sb.rpc('v2_incident_file', { p_section: f.get('s'), p_event: f.get('e'), p_on: f.get('d'), p_summary: f.get('m'), p_action: f.get('a') })); toast(gm ? 'Report filed' : 'Report sent to the SAILS General Marshal'); close(); load(); }
         catch (x) { m.querySelector('#er').textContent = x.message; } };
     });
   }

@@ -118,7 +118,7 @@ export async function renderStaff(root, tabId) {
   // Mode: 'pres' (President account), 'class' (Class Mayor while a President account exists), 'acting' (Mayor acting as President until one exists)
   const mode = realPres ? 'pres' : p.role === 'mayor' ? 'class' : null;
 
-  // A Vice President or the SAILS Grand Marshal named as the President's deputy gets the President Desk while the deputy period is active.
+  // A Vice President or the SAILS General Marshal named as the President's deputy gets the President Desk while the deputy period is active.
   const deputy = ['vp_internal', 'vp_external', 'general_marshal'].includes(p.role) ? await sb.rpc('v2_deputy_status').then(r => !!(r.data && r.data.me && r.data.active_now), () => false) : false;
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor')) || (p.role === 'class_treasurer' && r.includes('treasurer'));
   const ctx = { profile: p, mode, collects: p.role === 'class_treasurer', can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['secretary', 'pio'].includes(x))), section: null };
