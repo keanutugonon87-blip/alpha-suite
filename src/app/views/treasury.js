@@ -7,7 +7,10 @@ const CATS_IN = ['Class Dues', 'Contribution', 'Fines', 'Fundraising', 'Donation
 const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
 
 export async function mountTreasury(el, ctx) {
-  const canWrite = !!ctx.collects, isMayor = ctx.can('mayor'), isSailsT = ctx.profile.role === 'treasurer';   // the Class Treasurer records; the SAILS Treasurer counts and confirms; the Class Mayor supervises
+  const canWrite = !!ctx.collects, isMayor = ctx.can('mayor'), isSailsT = ctx.profile.role === 'treasurer';
+  const isGlobal = ctx.profile.real === 'sails_president' || ['vp_internal', 'vp_external', 'secretary', 'treasurer', 'auditor', 'pio', 'general_marshal'].includes(ctx.profile.role);   // SAILS officers pick the class they look at
+  let units = [], unitSel = (() => { try { return sessionStorage.getItem('sails-unit') || ''; } catch { return ''; } })();
+  const U = q => isGlobal && unitSel ? q.eq('unit_id', unitSel) : q;   // the Class Treasurer records; the SAILS Treasurer counts and confirms; the Class Mayor supervises
   let reqs = [], curPeriod = null, qtext = '', view = 'current', filter = (() => { try { const f = localStorage.getItem('alpha-f-tre'); return ['collection', 'expense'].includes(f) ? f : 'all'; } catch { return 'all'; } })(), openPast = null, members = [], charges = [], allEntries = [], limit = 500;
   el.innerHTML = skeleton(5);
 
@@ -18,15 +21,18 @@ export async function mountTreasury(el, ctx) {
   const basis = e => e.kind !== 'expense' ? '' : e.request_id ? ` · Request ${esc(reqs.find(r => r.id === e.request_id)?.req_no || '')}` : e.approval_ref ? ` · Approval: ${esc(e.approval_ref)}` : '';
 
   async function draw() {
+    if (isGlobal && !units.length) { units = await db(sb.from('v2_units').select('id,name').eq('kind', 'section').order('name')).catch(() => []); if (!units.some(u => u.id === unitSel)) unitSel = (units.find(u => u.name === '1-Alpha') || units[0] || {}).id || ''; }
     const [mem, chg, periods, raw, flags, closes, lim] = await Promise.all([
-      db(sb.from('v2_members').select('id,full_name,student_no').order('full_name')),
-      db(sb.from('v2_charges').select('*').order('created_at')),
-      db(sb.from('v2_periods').select('*').order('opened_at', { ascending: false })),
-      db(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,fund,recorded_by,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false })),
-      db(sb.from('v2_entries').select('id').not('receipt_image', 'is', null)),
-      sb.from('v2_month_close').select('*').then(r => r.data || [], () => []),   // empty until the month-close SQL is run
+      db(U(sb.from('v2_members').select('id,full_name,student_no').order('full_name'))),
+      db(U(sb.from('v2_charges').select('*').order('created_at'))),
+      db(U(sb.from('v2_periods').select('*').order('opened_at', { ascending: false }))),
+      db(U(sb.from('v2_entries').select('id,period_id,kind,category,member_id,payer_name,amount,method,gcash_ref,receipt_no,purpose,note,occurred_at,status,source,charge_id,fund,recorded_by,recorded_by_name,approved_by_name,void_reason').order('occurred_at', { ascending: false }))),
+      db(U(sb.from('v2_entries').select('id').not('receipt_image', 'is', null))),
+      U(sb.from('v2_month_close').select('*')).then(r => r.data || [], () => []),   // empty until the month-close SQL is run
       sb.from('v2_settings').select('value').eq('key', 'expense_second_approval').maybeSingle().then(r => r.data?.value, () => null),
     ]);
+    const unitPicker = () => `<div class="seg" style="margin-bottom:10px"><label style="display:flex;gap:8px;align-items:center"><small class="muted">Class</small><select id="unitsel" style="width:auto">${units.map(u => `<option value="${u.id}"${u.id === unitSel ? ' selected' : ''}>${esc(u.name)}</option>`).join('')}</select></label></div>`;
+    const wirePicker = () => { const s = el.querySelector('#unitsel'); if (s) s.onchange = () => { unitSel = s.value; try { sessionStorage.setItem('sails-unit', unitSel); } catch { /* private window */ } draw().catch(() => {}); }; };
     limit = lim != null && lim !== '' && !isNaN(+lim) ? +lim : 500; const lockedMonths = new Set(closes.filter(c => c.status === 'closed').map(c => c.month));
     reqs = await db(sb.from('v2_budget_requests').select('id,req_no,title,fund,category,total').in('status', ['approved', 'filed']).order('created_at', { ascending: false })).catch(() => []);   // empty until the v24 SQL is run
     members = mem; charges = chg; const hasImg = new Set(flags.map(r => r.id));
@@ -34,7 +40,8 @@ export async function mountTreasury(el, ctx) {
     const nameOf = id => members.find(m => m.id === id)?.full_name;
     const entries = raw.map(e => ({ ...e, ...(xtra.get(e.id) || {}), who: nameOf(e.member_id) || e.payer_name || '—', hasImg: hasImg.has(e.id), charge: charges.find(c => c.id === e.charge_id)?.title, fundK: e.fund || charges.find(c => c.id === e.charge_id)?.fund || '', locked: lockedMonths.has(ymManila(e.occurred_at)) }));
     allEntries = entries;
-    const cur = periods.find(p => p.status === 'open'); curPeriod = cur; const past = periods.filter(p => p.status === 'closed');
+    const cur = periods.find(p => p.status === 'open'); curPeriod = cur;
+    if (!cur) { el.innerHTML = `${isGlobal ? unitPicker() : ''}<div class="empty"><b>No open period for this class</b>Ask the Class Mayor to open one.</div>`; wirePicker(); return; } const past = periods.filter(p => p.status === 'closed');
     const curE = entries.filter(e => e.period_id === cur.id), ok = curE.filter(e => e.status === 'approved');
     const coll = ok.filter(e => e.kind === 'collection').reduce((s, e) => s + +e.amount, 0), exp = ok.filter(e => e.kind === 'expense').reduce((s, e) => s + +e.amount, 0);
     const bal = +cur.opening_balance + coll - exp, pendingN = curE.filter(e => e.status === 'pending').length;
@@ -75,7 +82,7 @@ export async function mountTreasury(el, ctx) {
           ${openPast === p.id ? `<div style="margin-top:8px">${rows(pe, false)}${Object.keys(p.liquidation_notes || {}).length ? `<h4 style="margin:12px 0 4px">Liquidation notes</h4>${Object.entries(p.liquidation_notes).map(([k, v]) => `<p class="muted" style="margin:2px 0"><b>${esc(k)}</b>: ${esc(v)}</p>`).join('')}` : ''}
           <div class="bar" style="margin-top:10px"><button class="btn ghost sm" data-rep="${p.id}">Print report</button></div></div>` : ''}</div>`; }).join('') : '<p class="empty">No past periods yet.</p>';
     }
-    el.innerHTML = `<div class="seg"><button data-v="current" class="${view === 'current' ? 'on' : ''}">Current period</button><button data-v="past" class="${view === 'past' ? 'on' : ''}">Past periods (${past.length})</button></div>${body}
+    el.innerHTML = `${isGlobal ? unitPicker() : ''}<div class="seg"><button data-v="current" class="${view === 'current' ? 'on' : ''}">Current period</button><button data-v="past" class="${view === 'past' ? 'on' : ''}">Past periods (${past.length})</button></div>${body}
       ${canWrite && view === 'current' ? '<button class="btn gold fab" id="fab">+ Collection</button>' : ''}`;
 
     const $ = s => el.querySelector(s);
@@ -115,6 +122,7 @@ export async function mountTreasury(el, ctx) {
           { label: 'Spent', get: p => p.status === 'closed' ? p.expenses_total : entries.filter(e => e.period_id === p.id && e.kind === 'expense' && e.status === 'approved').reduce((a, e) => a + +e.amount, 0), type: 'money', total: true }, { label: 'Closing balance', get: p => p.status === 'closed' ? p.closing_balance : bal, type: 'money' }], rows: periods }] }); toast('Excel ready'); }
       catch (e) { toast(e.message, true); } });
     $('#rep')?.addEventListener('click', () => report(cur, curE.filter(e => e.status === 'approved'), bal));
+    wirePicker();
     $('#mrep')?.addEventListener('click', () => monthly(entries, periods, closes));
     $('#mclose')?.addEventListener('click', () => monthClose(entries, periods, closes));
     el.querySelectorAll('[data-rep]').forEach(b => b.onclick = () => { const p = periods.find(x => x.id === b.dataset.rep); report(p, entries.filter(e => e.period_id === p.id && e.status === 'approved'), p.closing_balance); });
@@ -184,14 +192,14 @@ export async function mountTreasury(el, ctx) {
           <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save count</button><button type="button" class="btn ghost" id="vx">Cancel</button></div><div class="err" id="er2"></div></form>`, (m2, close2) => {
           m2.querySelector('#vx').onclick = close2;
           m2.querySelector('#vf').onsubmit = async ev => { ev.preventDefault(); const f = new FormData(ev.target);
-            try { const r = await db(sb.rpc('v2_verify_month', { p_month: k, p_cash: +f.get('c'), p_note: f.get('n') || '' })); toast(+r.diff ? `Saved. Off by ${peso(r.diff)}` : 'Saved. It matches the records.'); close2(); draw().catch(() => {}); }
+            try { const r = await db(sb.rpc('v2_verify_month', { p_month: k, p_cash: +f.get('c'), p_note: f.get('n') || '', p_unit: isGlobal ? unitSel || null : null })); toast(+r.diff ? `Saved. Off by ${peso(r.diff)}` : 'Saved. It matches the records.'); close2(); draw().catch(() => {}); }
             catch (e) { m2.querySelector('#er2').textContent = /function|schema cache/i.test(e.message) ? 'Month close is not switched on in the database yet. Run the v4 SQL.' : e.message; } };
         }); });
       m.querySelectorAll('[data-mc]').forEach(c => c.onchange = () => { try { c.checked ? localStorage.setItem('alpha-mc-' + c.dataset.mc, '1') : localStorage.removeItem('alpha-mc-' + c.dataset.mc); } catch { /* ignore */ } });
       m.querySelectorAll('[data-c]').forEach(b => b.onclick = async () => { const k = b.dataset.c, np = entries.filter(e => ymManila(e.occurred_at) === k && e.status === 'pending').length;
         if (np && !await confirmDialog(`${np} entr${np === 1 ? 'y is' : 'ies are'} still waiting for approval in this month. Closing locks the month, so decide them first or they cannot be approved later.`, { ok: 'Close anyway', danger: true, title: 'Close with entries waiting?' })) return;
-        run(() => db(sb.rpc('v2_close_month', { p_month: k })), 'Month closed and locked'); });
-      m.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const why = await askText('Reopen this month', 'Reason', { ok: 'Reopen' }); if (!why) return; run(() => db(sb.rpc('v2_reopen_month', { p_month: b.dataset.r, p_reason: why })), 'Month reopened'); });
+        run(() => db(sb.rpc('v2_close_month', { p_month: k, p_unit: isGlobal ? unitSel || null : null })), 'Month closed and locked'); });
+      m.querySelectorAll('[data-r]').forEach(b => b.onclick = async () => { const why = await askText('Reopen this month', 'Reason', { ok: 'Reopen' }); if (!why) return; run(() => db(sb.rpc('v2_reopen_month', { p_month: b.dataset.r, p_reason: why, p_unit: isGlobal ? unitSel || null : null })), 'Month reopened'); });
     });
   }
 
@@ -293,7 +301,7 @@ export async function mountTreasury(el, ctx) {
         const nn = m.querySelector('#nn').value.trim();
         if (!nn) return void (m.querySelector('#er').textContent = 'Name the next period.');
         if (m.querySelector('#cn').value.trim().toLowerCase() !== ctx.profile.full_name.toLowerCase()) return void (m.querySelector('#er').textContent = 'Name does not match.');
-        try { await db(sb.rpc('v2_close_period', { p_next_name: nn })); toast('Period closed'); close(); view = 'past'; draw(); } catch (e) { m.querySelector('#er').textContent = e.message; }
+        try { await db(sb.rpc('v2_close_period', { p_next_name: nn, p_unit: isGlobal ? unitSel || null : null })); toast('Period closed'); close(); view = 'past'; draw(); } catch (e) { m.querySelector('#er').textContent = e.message; }
       };
     });
   }

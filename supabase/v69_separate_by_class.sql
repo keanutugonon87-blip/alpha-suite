@@ -76,13 +76,13 @@ create index if not exists v2_members_unit_idx on public.v2_members(unit_id);
 -- 4. New records pick up their class on their own (a student's class, a charge's class, else the signed-in person's class)
 create or replace function public.v2__fill_unit() returns trigger
 language plpgsql security definer set search_path = '' as $$
-declare u uuid := new.unit_id; mine uuid := public.v2__my_unit();
+declare u uuid := new.unit_id; mine uuid := public.v2__my_unit(); j jsonb := to_jsonb(new); mid uuid := nullif(j->>'member_id', '')::uuid; cid uuid := nullif(j->>'charge_id', '')::uuid;
 begin
-  if u is null and tg_table_name in ('v2_entries', 'v2_violations', 'v2_promises') and new.member_id is not null then
-    select m.unit_id into u from public.v2_members m where m.id = new.member_id;
+  if u is null and mid is not null then
+    select m.unit_id into u from public.v2_members m where m.id = mid;
   end if;
-  if u is null and tg_table_name in ('v2_entries', 'v2_waivers') and new.charge_id is not null then
-    select c.unit_id into u from public.v2_charges c where c.id = new.charge_id;
+  if u is null and cid is not null then
+    select c.unit_id into u from public.v2_charges c where c.id = cid;
   end if;
   new.unit_id := coalesce(u, mine, public.v2__alpha_unit());
   return new;
