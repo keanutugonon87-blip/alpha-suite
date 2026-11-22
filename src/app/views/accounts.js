@@ -10,6 +10,7 @@ const ROLE_INFO = {
   auditor: 'Checks the money and the audit log. Does not record entries.',
   marshall: 'Class Marshal. Watches the class, inspects with the QR scan while inspection is open, reports violations.',
   class_treasurer: 'Class Treasurer. Collects the class funds and contributions. The Class Mayor supervises.',
+  class_secretary: 'Class Secretary. Keeps the class records and attendance and answers to the SAILS Secretary.',
   pio: 'Posts notices and keeps officer profiles up to date.',
 };
 const ago = d => { const s = (Date.now() - new Date(d)) / 1000; if (s < 90) return 'just now'; if (s < 3600) return Math.round(s / 60) + ' min ago'; if (s < 86400) return Math.round(s / 3600) + ' h ago'; return Math.round(s / 86400) + ' d ago'; };
@@ -27,7 +28,7 @@ function describe(a) {
 const store = { get: k => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } } };
 
 export async function mountAccounts(el, ctx) {
-  const ALLOWED = ctx.mode === 'class' ? ['secretary', 'treasurer', 'class_treasurer', 'auditor', 'marshall', 'pio'] : ROLES.filter(r => r !== 'sails_president');   // a Class Mayor manages only his class officers
+  const ALLOWED = ctx.mode === 'class' ? ['class_secretary', 'class_treasurer', 'marshall'] : ROLES.filter(r => r !== 'sails_president');   // a Class Mayor manages only his class officers
   const isMayor = ctx.can('mayor'), canAlert = ctx.can('mayor', 'vice_mayor');
   let tab = 'people', pstate = 'unsupported', af = { who: '', table: '', from: '', to: '', page: 0 };
   if (canAlert) pstate = await pushState();

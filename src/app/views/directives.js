@@ -1,15 +1,15 @@
 import { sb, db, watch, esc, toast, modal, skeleton, todayISO, fmtDate, fmtDateTime } from '../core.js';
 import { ROLE_LABEL } from '../core.js';
 
-/* Directives: the chain of command. The President directs every officer; SAILS VP Internal directs the SAILS Secretary, Marshals and PIOs; SAILS VP External directs the PIOs.
+/* Directives: the chain of command. The President directs the VPs, Secretary, Treasurer, Auditor, PIO and Grand Marshal; VP Internal directs the Class Mayors; the Secretary, Treasurer and Grand Marshal direct their own class and marshal line.
    Whoever issues a directive confirms, returns or cancels it. One directive can go to several officers at once. The officer is alerted on the phone; the officer is alerted on the phone and answers inside the app.
    Flow: sent → received → working → done → confirmed. An officer who cannot do it asks to be released; the Mayor decides. */
 const STATUS = { sent: ['Sent', 'warn'], received: ['Received', ''], working: ['Working', ''], done: ['Done · to confirm', 'warn'], confirmed: ['Confirmed', 'ok'], revoke_asked: ['Release asked', 'bad'], revoked: ['Closed', ''] };
 const PRI = { urgent: ['Urgent', 'bad'], normal: ['Normal', ''], low: ['Low', ''] };
 const CLASS_OFFICERS = ['secretary', 'treasurer', 'auditor', 'marshall', 'pio'];
 const chainFor = ctx => ({
-  mayor: ctx.mode === 'pres' ? ['vp_internal', 'vp_external', 'general_marshal'] : [],   // a Class Mayor only receives directives; the class officers have no system access
-  vp_internal: ['mayor'], vp_external: ['mayor'], general_marshal: ['dept_marshal'],
+  mayor: ctx.mode === 'pres' ? ['vp_internal', 'vp_external', 'secretary', 'treasurer', 'auditor', 'pio', 'general_marshal'] : [],   // a Class Mayor only receives directives; the class officers have no system access
+  vp_internal: ['mayor'], secretary: ['class_secretary'], general_marshal: ['dept_marshal'],
   treasurer: ['class_treasurer'], dept_marshal: ['marshall'] });   // the SAILS Treasurer directs the Class Treasurer; a SAILS Marshal directs the Class Marshal of his block
 const OPEN = ['sent', 'received', 'working', 'done', 'revoke_asked'];
 
@@ -99,7 +99,7 @@ export async function mountDirectives(el, ctx) {
       <label>Due date (optional)</label><input name="u" type="date" min="${todayISO()}">
       <label>Priority</label><select name="p"><option value="normal">Normal</option><option value="urgent">Urgent</option><option value="low">Low</option></select>
       <label>Related to (optional)</label><input name="l" placeholder="Event, budget request or document">
-      <p class="muted" style="font-size:.85em;margin:8px 0 0">${role === 'mayor' ? (ctx.mode === 'pres' ? 'You direct the Vice Presidents and the SAILS General Marshal.' : ctx.mode === 'class' ? 'You delegate to your class officers. They report to you.' : 'You direct every officer.') : role === 'vp_internal' ? 'You direct the SAILS Secretary, Marshals and PIOs.' : role === 'general_marshal' ? 'You direct the SAILS Marshals.' : role === 'treasurer' ? 'You direct the Class Treasurer to collect, then count and confirm what is handed over.' : role === 'dept_marshal' ? 'You direct the Class Marshal of your block.' : 'You direct the PIOs.'} Each officer gets their own copy, a phone alert right away if their device is linked, and answers it themselves.</p>
+      <p class="muted" style="font-size:.85em;margin:8px 0 0">${role === 'mayor' ? (ctx.mode === 'pres' ? 'You direct the Vice Presidents, the Secretary, the Treasurer, the Auditor, the PIO and the Grand Marshal.' : ctx.mode === 'class' ? 'You delegate to your class officers. They report to you.' : 'You direct every officer.') : role === 'vp_internal' ? 'You direct the Class Mayors.' : role === 'secretary' ? 'You direct the Class Secretaries.' : role === 'general_marshal' ? 'You direct the SAILS Marshals.' : role === 'treasurer' ? 'You direct the Class Treasurer to collect, then count and confirm what is handed over.' : role === 'dept_marshal' ? 'You direct the Class Marshal of your block.' : 'You direct the PIOs.'} Each officer gets their own copy, a phone alert right away if their device is linked, and answers it themselves.</p>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Send directive</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       const boxes = [...m.querySelectorAll('input[name=a]')], count = () => { m.querySelector('#cnt').textContent = boxes.filter(b => b.checked).length + ' chosen'; };

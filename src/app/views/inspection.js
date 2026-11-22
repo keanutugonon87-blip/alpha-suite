@@ -1,7 +1,7 @@
 import { sb, db, watch, esc, fmtDate, skeleton, toast } from '../core.js';
 
 /* Inspection monitor for the SAILS President and the Class Mayor (also shown as a sub-tab of Watch).
-   Notifications: every time the SAILS General Marshal opens or closes inspection.
+   Notifications: every time the SAILS Grand Marshal opens or closes inspection.
    Current violators, history, and total fines by classroom and by individual.
    Needs v58 (inspections). Everything else comes from the Watch ledger. */
 const FINE = 25;   // fine for the 2nd and later offence of a standard that has no fine of its own (as in Watch)
@@ -80,7 +80,7 @@ export async function mountInspection(el, ctx) {
 
   function notes() {
     const seen = readSeen(uid), open = D.insp.find(i => i.status === 'open');
-    return `${open ? `<div class="card pad" style="margin-bottom:14px"><b>Inspection is open</b><br><small class="muted">${esc(open.note)} · opened by ${esc(open.opened_by_name || '')} · ${ago(open.opened_at)}</small></div>` : '<div class="card pad" style="margin-bottom:14px"><b>Inspection is closed</b><br><small class="muted">The SAILS General Marshal opens it.</small></div>'}
+    return `${open ? `<div class="card pad" style="margin-bottom:14px"><b>Inspection is open</b><br><small class="muted">${esc(open.note)} · opened by ${esc(open.opened_by_name || '')} · ${ago(open.opened_at)}</small></div>` : '<div class="card pad" style="margin-bottom:14px"><b>Inspection is closed</b><br><small class="muted">The SAILS Grand Marshal opens it.</small></div>'}
       <div class="card">${D.ev.map(e => `<div class="row"><div class="m"><b>Inspection ${e.kind}</b><small>${esc(e.note)} · ${esc(e.by || '')} · ${ago(e.at)}</small></div>${String(e.at) > seen ? '<span class="tag warn">new</span>' : ''}</div>`).join('') || '<p class="empty">No inspection has been opened yet.</p>'}</div>`;
   }
   function now() {

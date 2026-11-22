@@ -1,7 +1,7 @@
 import { sb, db, esc, toast, modal, fmtDate, fmtDateTime, peso, printHTML, letterhead, ROLE_LABEL, todayISO } from '../core.js';
 
 /* The President's supervision panes: scorecards, funds overview, and records (deputy, role log, access map, monthly report). Read only except the deputy. */
-const RG = { vp_internal: 'SAILS VP Internal', vp_external: 'SAILS VP External', general_marshal: 'SAILS General Marshal', dept_marshal: 'SAILS Marshal', mayor: 'Class Mayor' };
+const RG = { vp_internal: 'SAILS VP Internal', vp_external: 'SAILS VP External', general_marshal: 'SAILS Grand Marshal', dept_marshal: 'SAILS Marshal', mayor: 'Class Mayor' };
 const NOTE = '<div class="card"><p class="empty">Run the v49 SQL in Supabase to turn this on.</p></div>';
 const rpc = (n, a) => sb.rpc(n, a || {}).then(r => (r.error ? null : r.data), () => null);
 
@@ -37,7 +37,7 @@ async function funds(el) {
 
 const ACCESS = [
   ['Own directives inbox', '✓', '✓', '✓', '✓', '✓'],
-  ['Issue directives', 'VPs, SAILS General Marshal', 'Class officers', 'Class Mayors', 'Dept. Marshals (SAILS General Marshal)', '—'],
+  ['Issue directives', 'VPs, Secretary, Treasurer, Auditor, PIO, Grand Marshal', 'Class officers', 'Class Mayors (VP Internal only)', 'SAILS Marshals (Grand Marshal)', '—'],
   ['Accounts and roles', 'All except the President role', 'Own class officers', '—', '—', '—'],
   ['VP meetings, partners, activities', 'Approve', '—', 'Own work', '—', '—'],
   ['Calendar', 'Decide', 'Own drafts', 'Own drafts', '—', '—'],
@@ -54,7 +54,7 @@ async function records(el, ctx) {
   el.innerHTML = `
     <h3 style="margin:0 2px 8px">Deputy while you are away</h3>
     <div class="card" style="margin-bottom:14px">${dep ? `<div class="row"><div class="m"><b>${esc(dep.user_name)}</b><small>Acts for the President from ${fmtDate(dep.from_on + 'T00:00:00+08:00')} to ${fmtDate(dep.to_on + 'T00:00:00+08:00')}${dep.active_now ? ' · active now' : ''}. Decisions are marked “acting for the President”. Roles stay with you.</small></div>${dep.me ? '' : '<button class="btn ghost sm" id="dr">End</button>'}</div>`
-      : '<p class="muted" style="margin:0 0 8px">Nobody is named. If you are away, name a Vice President or the SAILS General Marshal for up to 14 days.</p>'}
+      : '<p class="muted" style="margin:0 0 8px">Nobody is named. If you are away, name a Vice President or the SAILS Grand Marshal for up to 14 days.</p>'}
       ${real ? '<div class="acts" style="margin-top:8px"><button class="btn gold sm" id="dn">Name a deputy</button></div>' : ''}</div>
     <h3 style="margin:0 2px 8px">Monthly report for the adviser</h3>
     <div class="card" style="margin-bottom:14px"><div class="row"><div class="m"><b>SAILS monthly report</b><small>Approvals, directives, reports from Class Mayors, incidents, funds and the activities of the month. Opens a page you can print or save as PDF.</small></div><div style="display:flex;gap:6px"><input type="month" id="mm" value="${tonight.slice(0, 7)}" style="width:auto"><button class="btn gold sm" id="mp">Open</button></div></div></div>

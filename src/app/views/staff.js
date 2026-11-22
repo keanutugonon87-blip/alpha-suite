@@ -25,9 +25,9 @@ const ICON = {
 };
 ICON.inspection = ICON.watch || ICON.home; ICON['pd-today'] = ICON.home; ICON['pd-approvals'] = ICON.office || ICON.home; ICON['pd-people'] = ICON.officers || ICON.home; ICON['pd-more'] = ICON.roles || ICON.home; ICON.report = ICON.docs || ICON.notices || ICON.home; ICON.classup = ICON.officers || ICON.home; ICON.receipts = '<path d="M4 13l2-8h12l2 8"/><path d="M4 13v6h16v-6h-5a3 3 0 0 1-6 0z"/>'; ICON.marshal = ICON.watch || ICON.home; ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
 const TABS = [
-  { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio'] },
+  { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'class_secretary', 'marshall', 'sails', 'pio'] },
   { id: 'marshal', label: 'Marshal Desk', load: () => import('./marshal.js').then(m => m.mountMarshal), roles: ['general_marshal', 'dept_marshal'] },
-  { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'marshall', 'sails', 'pio', 'general_marshal', 'dept_marshal'] },
+  { id: 'directives', label: 'Directives', load: () => import('./directives.js').then(m => m.mountDirectives), roles: ['mayor', 'vice_mayor', 'vp_internal', 'vp_external', 'treasurer', 'auditor', 'secretary', 'class_secretary', 'marshall', 'sails', 'pio', 'general_marshal', 'dept_marshal'] },
   { id: 'report', label: 'Report up', load: () => import('./classreport.js').then(m => m.mountClassReport), roles: ['mayor'] },
   { id: 'receipts', label: 'Received', load: () => import('./receipts.js').then(m => m.mountReceipts), roles: ['secretary', 'vp_internal'] },
   { id: 'classup', label: 'Class Mayors', load: () => import('./classup.js').then(m => m.mountClassUp), roles: ['vp_internal'] },
@@ -118,7 +118,7 @@ export async function renderStaff(root, tabId) {
   // Mode: 'pres' (President account), 'class' (Class Mayor while a President account exists), 'acting' (Mayor acting as President until one exists)
   const mode = realPres ? 'pres' : p.role === 'mayor' ? 'class' : null;
 
-  // A Vice President or the SAILS General Marshal named as the President's deputy gets the President Desk while the deputy period is active.
+  // A Vice President or the SAILS Grand Marshal named as the President's deputy gets the President Desk while the deputy period is active.
   const deputy = ['vp_internal', 'vp_external', 'general_marshal'].includes(p.role) ? await sb.rpc('v2_deputy_status').then(r => !!(r.data && r.data.me && r.data.active_now), () => false) : false;
   const isVp = ['vp_internal', 'vp_external'].includes(p.role), has = r => r.includes(p.role) || (isVp && r.includes('vice_mayor')) || (p.role === 'class_treasurer' && r.includes('treasurer'));
   const ctx = { profile: p, mode, collects: p.role === 'class_treasurer', can: (...r) => has(r) || (p.role === 'mayor' && mode !== 'pres' && r.some(x => ['secretary', 'pio'].includes(x))), section: null };
