@@ -37,7 +37,7 @@ async function funds(el) {
 
 const ACCESS = [
   ['Own directives inbox', '✓', '✓', '✓', '✓', '✓'],
-  ['Issue directives', 'VPs, Secretary, Treasurer, Auditor, PIO, General Marshal', 'Class officers', 'Class Mayors (VP Internal only)', 'SAILS Marshals (General Marshal)', '—'],
+  ['Issue directives', 'VPs, Secretary, Treasurer, Auditor, PIO, General Marshal', '— (answers to the VP Internal)', 'Class Mayors (VP Internal only)', 'SAILS Marshals (General Marshal)', '—'],
   ['Accounts and roles', 'All except the President role', 'Own class officers', '—', '—', '—'],
   ['VP meetings, partners, activities', 'Approve', '—', 'Own work', '—', '—'],
   ['Calendar', 'Decide', 'Own drafts', 'Own drafts', '—', '—'],
@@ -45,6 +45,7 @@ const ACCESS = [
   ['Marshal blocks and incident reports', 'Read, act on referrals', '—', '—', 'Run it', '—'],
   ['Class Mayors’ reports and requests', 'Read all', 'Own', 'Decide (SAILS VP Internal)', '—', '—'],
   ['Role log, scorecards', 'Read', '—', '—', '—', '—'],
+  ['Which sections they see', 'All 12', 'Own section', 'All 12', 'Own letter (General Marshal: all)', 'Own section'],
 ];
 
 async function records(el, ctx) {
