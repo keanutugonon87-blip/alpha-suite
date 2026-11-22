@@ -45,6 +45,7 @@ const ACCESS = [
   ['Marshal blocks and incident reports', 'Read, act on referrals', '—', '—', 'Run it', '—'],
   ['Class Mayors’ reports and requests', 'Read all', 'Own', 'Decide (SAILS VP Internal)', '—', '—'],
   ['Role log, scorecards', 'Read', '—', '—', '—', '—'],
+  ['Procurement updates (Siglakas, Nameplate, other items)', 'Read', 'Read', 'VP Internal sends; VP External reads', '—', '—'],
   ['Which sections they see', 'All 12', 'Own section', 'All 12', 'Own letter (General Marshal: all)', 'Own section'],
 ];
 

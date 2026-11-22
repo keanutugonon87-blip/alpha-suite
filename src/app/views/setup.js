@@ -43,6 +43,7 @@ export const STEPS = [
   { v: 'v67', file: 'v67_line_of_authority.sql', does: 'SAILS Line of Authority step 1: Class Secretary role, who directs whom, General Marshal, Auditor independent', check: mark('v67') },
   { v: 'v68', file: 'v68_class_secretary_seats.sql', does: 'Line of Authority step 2: the Class Secretary takes attendance; the seat list matches the chart', check: mark('v68') },
   { v: 'v69', file: 'v69_separate_by_class.sql', does: 'Line of Authority step 3a: every class keeps its own money, students, charges, events and violations; SAILS officers see all classes', check: mark('v69') },
+  { v: 'v71', file: 'v71_procurement_updates.sql', does: 'The SAILS VP Internal sends the procurement updates (Siglakas shirt, Nameplate, other SAILS items); Class Mayors and SAILS officers read them', check: mark('v71') },
   { v: 'v70', file: 'v70_periods_by_class.sql', does: 'Line of Authority step 3b: every class has its own period and month close; students see their own class only', check: mark('v70') },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the SAILS Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },
