@@ -55,13 +55,14 @@ const FETCH = { meet: 'v2_vp_meetings', com: 'v2_vp_tasks', res: 'v2_vp_resoluti
 export async function mountVp(el, ctx) {
   const role = ctx.profile.role, isMayor = ctx.can('mayor'), both = !['vp_internal', 'vp_external'].includes(role);
   const sides = role === 'vp_internal' ? ['int'] : role === 'vp_external' ? ['ext'] : ['int', 'ext'];
-  let side = (() => { try { const s = localStorage.getItem(SK); return sides.includes(s) ? s : sides[0]; } catch { return sides[0]; } })(), pane = 'over', d = null, snap = null, missing = false, recs = [];
+  let side = (() => { try { const s = localStorage.getItem(SK); return sides.includes(s) ? s : sides[0]; } catch { return sides[0]; } })(), pane = 'over', d = null, snap = null, evs = [], missing = false, recs = [];
   async function load() {
     try {
       const out = await Promise.all(Object.entries(FETCH).map(([k, t]) => db(sb.from(t).select('*').order(CFG[k] ? CFG[k].order[0] : 'created_at', { ascending: CFG[k] ? CFG[k].order[1] : false }).limit(500)).then(r => [k, r])));
       d = Object.fromEntries(out); missing = false;
     } catch (e) { if (/does not exist|schema cache|relation/i.test(e.message || '')) { missing = true; d = null; } else throw e; }
     recs = await db(sb.from('v2_office_records').select('*').in('kind', ['minutes', 'resolution', 'letter_in', 'letter_out']).not('flow', 'is', null).order('on_date', { ascending: false }).limit(300)).catch(() => []);   // empty until the v29 and v30 SQL are run
+    evs = await db(sb.from('v2_events').select('id,status,finalized_at,report_sent_at').limit(300)).catch(() => []);
     try {   // how the class is turning out, from the latest event
       const [ev] = await db(sb.from('v2_events').select('id,title,event_date').order('event_date', { ascending: false }).limit(1));
       if (ev) { const [sc, mem] = await Promise.all([db(sb.from('v2_event_scans').select('member_id').eq('event_id', ev.id).eq('kind', 'in')), db(sb.from('v2_members').select('id').eq('status', 'active'))]); snap = { ev, in: new Set(sc.map(x => x.member_id)).size, all: mem.length }; } else snap = null;
@@ -88,6 +89,12 @@ export async function mountVp(el, ctx) {
       const late = d.com.filter(x => x.status !== 'done' && x.due_on && x.due_on < today).length; if (late) add(`${late} committee task(s) past the due date`, 'int', 'com');
       const stale = d.res.filter(x => x.status !== 'done' && (!x.reported_on || (new Date(today) - new Date(x.reported_on)) / dayMs > 14)).length; if (stale) add(`${stale} resolution(s) with no progress report in 14 days`, 'int', 'res');
     }
+    if (role === 'vp_external' || isMayor) {
+      const open = evs.filter(e => e.status === 'open').length, tc = evs.filter(e => e.status === 'closed' && !e.finalized_at).length, ts = evs.filter(e => e.finalized_at && !e.report_sent_at).length;
+      if (open) add(`${open} event(s) open for scanning`, 'ext', 'go:attendance');
+      if (tc) add(`${tc} closed event(s) where the absences are not compiled yet`, 'ext', 'go:attendance');
+      if (ts) add(`${ts} attendance fines report(s) compiled but not sent yet`, 'ext', 'go:attendance');
+    }
     if (side === 'ext' || both) {
       const ret = d.act.filter(x => x.status === 'returned').length + d.par.filter(x => x.status === 'returned').length; if (ret && !isMayor) add(`${ret} partner or activity proposal(s) returned by the Mayor`, 'ext', 'act');
       const noAdv = d.act.filter(x => ['proposed', 'returned'].includes(x.status) && x.adviser_status !== 'endorsed').length; if (noAdv) add(`${noAdv} proposal(s) the adviser has not endorsed yet`, 'ext', 'act');
@@ -104,7 +111,7 @@ export async function mountVp(el, ctx) {
       : stat('Active partners', d.par.filter(x => x.status === 'active').length, 'gold') + stat('Activities in progress', d.act.filter(x => ['approved', 'ongoing'].includes(x.status)).length) + stat('Waiting for the Mayor', d.par.concat(d.act).filter(x => x.status === 'proposed').length) + stat('Representations this month', d.rep.filter(x => (x.held_on || '').startsWith(mo)).length);
     const nd = needs();
     return `<div class="grid">${stats}</div>
-      ${side === 'int' && snap ? `<div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between"><b>Latest attendance</b><small class="muted">${esc(snap.ev.title)} · ${fmtDate(snap.ev.event_date)}</small></div><div class="prog" style="margin-top:8px"><i style="width:${snap.all ? Math.min(100, snap.in / snap.all * 100) : 0}%"></i></div><small class="muted">${snap.in} of ${snap.all} students scanned in${snap.all ? ' (' + Math.round(snap.in / snap.all * 100) + '%)' : ''}</small></div>` : ''}
+      ${(side === 'ext' || both) && snap ? `<div class="card pad" style="margin:12px 0"><div style="display:flex;justify-content:space-between"><b>Latest attendance</b><small class="muted">${esc(snap.ev.title)} · ${fmtDate(snap.ev.event_date)}</small></div><div class="prog" style="margin-top:8px"><i style="width:${snap.all ? Math.min(100, snap.in / snap.all * 100) : 0}%"></i></div><small class="muted">${snap.in} of ${snap.all} students scanned in${snap.all ? ' (' + Math.round(snap.in / snap.all * 100) + '%)' : ''}</small> <button class="btn ghost sm" data-goatt style="margin-left:8px">Open attendance</button></div>` : ''}
       <h3 style="margin:16px 2px 8px">Needs you</h3>
       <div class="card">${nd.length ? nd.map((x, i) => `<div class="row" data-n="${i}" style="cursor:pointer"><div class="m"><b>${esc(x.t)}</b></div><span class="muted">›</span></div>`).join('') : '<p class="empty">Nothing is waiting. Everything is up to date.</p>'}</div>
       <p class="muted" style="margin:12px 2px 0;font-size:.85rem">${side === 'int'
@@ -153,7 +160,7 @@ export async function mountVp(el, ctx) {
       <div id="pb">${pane === 'over' ? overview() : pane === 'reg' ? register() : pane === 'docs' ? docsList() : list(pane)}</div>`;
     el.querySelectorAll('[data-side]').forEach(b => b.onclick = () => { side = b.dataset.side; pane = 'over'; try { localStorage.setItem(SK, side); } catch { /* ignore */ } draw(); });
     el.querySelectorAll('[data-pane]').forEach(b => b.onclick = () => { pane = b.dataset.pane; draw(); });
-    if (pane === 'over') { const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const x = nd[+r.dataset.n]; side = x.s; pane = x.p; draw(); }); return; }
+    if (pane === 'over') { el.querySelectorAll('[data-goatt]').forEach(b => b.onclick = () => { location.hash = '#/staff/attendance'; }); const nd = needs(); el.querySelectorAll('[data-n]').forEach(r => r.onclick = () => { const x = nd[+r.dataset.n]; if (x.p === 'go:attendance') { location.hash = '#/staff/attendance'; return; } side = x.s; pane = x.p; draw(); }); return; }
     if (pane === 'docs') { el.querySelectorAll('[data-di]').forEach(r => r.onclick = () => docView(recs.find(x => x.id === r.dataset.di))); return; }
     if (pane === 'reg') { el.querySelectorAll('[data-reg]').forEach(r => r.onclick = () => view('act', d.act.find(x => x.id === r.dataset.reg))); return; }
     el.querySelector('#add')?.addEventListener('click', () => form(pane, null));

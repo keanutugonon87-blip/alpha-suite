@@ -32,12 +32,12 @@ const KIND = {
   incident: { l: 'Safety log', t: 'What happened', p: 'Where', b: 'Details and who was told', st: [['open', 'Open'], ['resolved', 'Resolved']] },
 };
 const OFFICES = {
-  secretary: { title: 'Secretary (Second Mate)', blurb: 'Maintain minutes, attendance records, resolutions, notices, membership records and official correspondence; safeguard records; give members reasonable access to non-confidential documents.',
-    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests'], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices'], ['attendance', 'Attendance']] },
+  secretary: { title: 'Secretary (Second Mate)', blurb: 'Maintain minutes, resolutions, notices, membership records and official correspondence; safeguard records; give members reasonable access to non-confidential documents.',
+    panes: [['over', 'Overview'], ['minutes', 'Minutes', ['minutes']], ['resolutions', 'Resolutions', ['resolution']], ['letters', 'Letters', ['letter_in', 'letter_out']], ['requests', 'Member requests'], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['docs', 'Documents'], ['students', 'Students'], ['notices', 'Notices']] },
   auditor: { title: 'Auditor (Third Mate)', blurb: 'Independently examine financial records, verify receipts and disbursements, report discrepancies to the Executive Board and adviser, and present findings to the General Assembly. The SAILS Auditor does not approve or carry out the transactions being audited.',
     panes: [['over', 'Overview'], ['classify', 'Classify files'], ['findings', 'Findings', ['finding']], ['report', 'GA report']], go: [['treasury', 'Treasury'], ['balances', 'Balances'], ['requests', 'Budget']] },
   pio: { title: 'Public Information Officer (OIC)', blurb: 'Manage official announcements, publications, documentation and media, following the PIT communication, privacy and branding rules.',
-    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['pubs', 'Publications', ['post'], ['publication']], ['media', 'Photos and media', ['post'], ['documentation', 'media']], ['publish', 'Post files']], go: [['notices', 'Notices'], ['attendance', 'Attendance']] },
+    panes: [['over', 'Overview'], ['announce', 'Announcements', ['post'], ['announcement']], ['pubs', 'Publications', ['post'], ['publication']], ['media', 'Photos and media', ['post'], ['documentation', 'media']], ['publish', 'Post files']], go: [['notices', 'Notices']] },
   mayor: { title: 'President’s desk', blurb: 'The President approves what is sent up the line: the Vice Presidents’ proposals, the SAILS Secretary’s records and the SAILS PIO’s announcements. You decide here. You do not work inside the officers’ own desks.',
     panes: [['over', 'Needs you'], ['secs', 'Sections'], ['score', 'Scorecards'], ['funds', 'Funds'], ['vpa', 'VP approvals'], ['hist', 'History'], ['marsh', 'Marshal referrals'], ['rec', 'Records'], ['srec', 'Secretary records'], ['announce', 'Announcements', ['post'], ['announcement']], ['coa', 'Calendar'], ['faq', 'FAQ'], ['trash', 'Trash']], go: [['attendance', 'Attendance'], ['notices', 'Notices']] },
   marshall: { title: 'Marshal (Bosun)', blurb: 'Help keep order, logistics, attendance support and safety during authorized activities. Marshals report and assist. They do not use coercive or disciplinary powers.',
@@ -107,7 +107,6 @@ export async function mountOffice(el, ctx) {
     const today = todayISO(), n = [], add = (t, p, u) => n.push({ t, p, u });
     const c = (a, label, p, u) => { if (a) add(`${a} ${label}`, p, u); };
     if (role === 'secretary') {
-      c(X.events.filter(e => e.status === 'closed' && !e.report_sent_at).length, 'closed event(s) where the absences are not compiled and sent yet', 'go:attendance');
       c((X.rreq || []).filter(r => r.status === 'open').length, 'record request(s) from members waiting for an answer', 'requests'); c((X.rreq || []).filter(r => r.status === 'open' && Date.now() - new Date(r.created_at) > 7 * dayMs).length, 'of them waiting more than 7 days', 'requests');
       c((X.fbr || []).length, 'approved budget request(s) to file', 'go:requests'); c((X.liq || []).length, 'audited liquidation report(s) to file', 'go:requests');
       c((X.docs || []).filter(d => d.due_on && d.due_on <= new Date(Date.now() + 3 * dayMs).toISOString().slice(0, 10)).length, 'document(s) due within 3 days or late', 'go:docs');
