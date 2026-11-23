@@ -2,7 +2,7 @@ import { sb, db, watch, esc, fmtDate, fmtDateTime, toast, modal, uuid, todayISO,
 import { scanLoop } from '../qr.js';
 
 /* Attendance: log in and log out by QR card.
-   Only the President (Mayor) and the Vice Mayor (Internal and External) set an event and its category.
+   Only the SAILS VP External sets an event, its category and who scans.
    The Marshals scan the students' cards and confirm each scan.
    The SAILS VP External compiles who was missed (excused students unticked), then sends the fines report to the Class Mayor, Marshals and Treasurer.
    The SAILS PIO sends the report to the students through the app. */
@@ -26,8 +26,8 @@ export async function mountAttendance(el, ctx) {
 }
 
 async function draw(host, ctx, members, standards, redraw) {
-  const manage = ctx.can('mayor', 'vp_external'), scanRoles = ctx.can('mayor', 'vp_internal', 'vp_external', 'class_secretary', 'marshall', 'sails', 'general_marshal', 'dept_marshal'), isMayor = ctx.can('mayor'), uid = ctx.profile.user_id, canCompile = ctx.can('mayor', 'vp_external'), canNotify = ctx.can('mayor', 'pio');
-  const sees = ctx.can('mayor', 'vp_external', 'marshall', 'treasurer', 'class_secretary', 'pio', 'auditor', 'general_marshal', 'dept_marshal'), collects = !!ctx.collects;
+  const manage = ctx.can('vp_external'), scanRoles = ctx.can('mayor', 'vp_internal', 'vp_external', 'class_secretary', 'marshall', 'sails', 'general_marshal', 'dept_marshal'), isMayor = ctx.can('mayor'), uid = ctx.profile.user_id, canCompile = ctx.can('vp_external'), canNotify = ctx.can('mayor', 'pio');
+  const sees = ctx.can('mayor', 'vp_external', 'marshall', 'treasurer', 'secretary', 'class_secretary', 'pio', 'auditor', 'general_marshal', 'dept_marshal'), collects = !!ctx.collects;
   const act = members.filter(x => x.status === 'active'), mname = id => members.find(m => m.id === id)?.full_name || '?';
   let events, scans, viol = [], paid = new Set(), posts = [];
   try {
@@ -41,7 +41,7 @@ async function draw(host, ctx, members, standards, redraw) {
     paid = new Set(await db(sb.from('v2_entries').select('violation_id').not('violation_id', 'is', null).neq('status', 'voided')).then(r => r.map(x => x.violation_id)).catch(() => []));
   }
   if (sees) posts = await db(sb.from('v2_office_records').select('id,title,status,flags,event_id').eq('kind', 'post').not('event_id', 'is', null)).catch(() => []);
-  /* Line of authority: the Mayor orders the event and names who scans (v35). Before v35 is installed the old rule applies. */
+  /* Line of authority: the SAILS VP External orders the event and names who scans (v35). Before v35 is installed the old rule applies. */
   const ordersOn = events.some(e => 'ordered_at' in e), waiting = e => ordersOn && !e.ordered_at && !e.legacy_open;
   const assigned = e => !ordersOn ? scanRoles : e.ordered_at ? (e.scanner_ids || []).includes(uid) : !!(e.legacy_open && scanRoles);
   const std = id => standards.find(s => s.id === id);
@@ -49,7 +49,7 @@ async function draw(host, ctx, members, standards, redraw) {
     const c = cnt(e.id), who = [...new Set(scans.filter(x => x.event_id === e.id && x.scanned_by_name).map(x => x.scanned_by_name))], on = x => x ? fmtDateTime(x) : '';
     const sent = ann.find(p => fl(p).notice), okd = ann.find(p => p.status === 'approved'), rev = ann.find(p => p.status === 'review');
     return [
-      [e.ordered_at ? 'ok' : waiting(e) ? 'warn' : '', 'Ordered by the Mayor', e.ordered_at ? `${e.ordered_by_name || 'Mayor'} · ${on(e.ordered_at)}` : waiting(e) ? 'Waiting for the Mayor’s order' : 'Set before orders were required'],
+      [e.ordered_at ? 'ok' : waiting(e) ? 'warn' : '', 'Scanning activated by the SAILS VP External', e.ordered_at ? `${e.ordered_by_name || 'VP External'} · ${on(e.ordered_at)}` : waiting(e) ? 'Waiting for the SAILS VP External’s order' : 'Set before orders were required'],
       [(e.scanner_names || []).length ? 'ok' : '', 'Scanners assigned', (e.scanner_names || []).join(', ') || (e.legacy_open ? 'Any scanning officer' : '—')],
       [sent ? 'ok' : okd || rev ? 'warn' : '', 'Announced by the SAILS PIO', sent ? 'Sent as a notice' : okd ? `Approved by ${fl(okd).approved_by || 'the Mayor'}, ready to send` : rev ? 'Waiting for the Mayor’s approval' : ann.length ? 'Draft' : 'Not drafted yet'],
       [c.in.size ? 'ok' : '', 'Attendance scanned', `In ${c.in.size} of ${act.length}${who.length ? ' · by ' + who.join(', ') : ''}`],
@@ -69,12 +69,12 @@ async function draw(host, ctx, members, standards, redraw) {
       <small>${KINDS[e.kind] || e.kind} · ${fmtDate(e.event_date)}${e.created_by_name ? ` · set by ${esc(e.created_by_name)}` : ''}<br>In ${c.in.size} of ${act.length}${e.needs_out ? ` · Out ${c.out.size} of ${act.length}` : ''}${waiting(e) ? '<br><b>Waiting for the Mayor’s order. Nobody can scan yet.</b>' : (e.scanner_names || []).length ? `<br>Scanners: ${esc(e.scanner_names.join(', '))}` : ''}</small>${report}
       <details style="margin-top:8px"><summary>Chain of command</summary>${chain(e).map(([k, l, d]) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:4px 0;border-top:1px solid var(--line)"><span>${k === 'ok' ? '✓' : k === 'warn' ? '…' : '○'} ${l}</span><small class="muted" style="text-align:right">${esc(d)}</small></div>`).join('')}</details></div>
       <div class="acts">${open && assigned(e) ? `<button class="btn gold sm" data-sc="${e.id}">📷 Scan attendance</button>` : ''}
-      ${isMayor && open && ordersOn ? `<button class="btn ${e.ordered_at ? 'ghost' : 'gold'} sm" data-od="${e.id}">${e.ordered_at ? 'Change scanners' : 'Order scanners'}</button>` : ''}
+      ${manage && open && ordersOn ? `<button class="btn ${e.ordered_at ? 'ghost' : 'gold'} sm" data-od="${e.id}">${e.ordered_at ? 'Change scanners' : 'Order scanners'}</button>` : ''}
       ${canCompile && !e.finalized_at ? `<button class="btn ${open ? 'ghost' : 'gold'} sm" data-rv="${e.id}">Compile attendance</button>` : ''}
       ${canCompile && e.finalized_at && !e.report_sent_at ? `<button class="btn gold sm" data-sr="${e.id}">Send fines report</button>` : ''}
       ${canNotify && e.report_sent_at && !e.notified_at ? `<button class="btn gold sm" data-nt="${e.id}">Send to students</button>` : ''}
       ${manage ? `<button class="btn ghost sm" data-cl="${e.id}">${open ? 'Close' : 'Reopen'}</button><button class="btn ghost sm" data-dl="${e.id}">Delete</button>` : ''}</div></div>`; };
-  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The President sets the event and names the officers who scan. The SAILS VP External compiles, the SAILS PIO tells the students.</p>'}
+  host.innerHTML = `${manage ? '<div class="bar"><button class="btn gold" id="ne">+ New event</button></div>' : '<p class="swipe-hint">The SAILS VP External sets the event and names the officers who scan. Scanning starts only after that. The SAILS VP External compiles, the SAILS PIO tells the students.</p>'}
     <div class="card">${events.map(card).join('') || '<p class="empty">No events yet.</p>'}</div>`;
   const ev = id => events.find(e => e.id === id);
   host.querySelector('#ne')?.addEventListener('click', () => newEvent());
@@ -109,11 +109,11 @@ async function draw(host, ctx, members, standards, redraw) {
         try { await db(sb.from('v2_events').insert({ id: uuid(), title: x.t.value.trim(), kind: x.k.value, event_date: x.d.value, needs_out: x.k.value === 'event' && x.o.checked, standard_id: defStd(x.k.value, standards) || null }));
           const row = await db(sb.from('v2_events').select('*').eq('title', x.t.value.trim()).eq('event_date', x.d.value).order('created_at', { ascending: false }).limit(1)).then(r => r[0], () => null);
           close(); redraw();
-          if (row && 'ordered_at' in row) { if (isMayor) { toast('Event created. Now name the officers who scan.'); orderEvent(row); } else toast('Event created. It waits for the Mayor’s order before anyone can scan.'); } else toast('Event is open. Officers can scan now.'); } catch (er) { m.querySelector('#er').textContent = needV2(er); } };
+          if (row && 'ordered_at' in row) { if (manage) { toast('Event created. Now name the officers who scan.'); orderEvent(row); } else toast('Event created. It waits for the SAILS VP External’s order before anyone can scan.'); } else toast('Event is open. Officers can scan now.'); } catch (er) { m.querySelector('#er').textContent = needV2(er); } };
     });
   }
 
-  /* The Mayor's order: who is assigned to scan this event */
+  /* The VP External's order: who is assigned to scan this event */
   async function orderEvent(e) {
     if (!e) return;
     const off = await db(sb.from('v2_profiles').select('user_id,full_name,role').in('role', ['mayor', 'vp_internal', 'vp_external', 'class_secretary', 'class_treasurer', 'marshall', 'sails', 'general_marshal', 'dept_marshal']).order('full_name')).catch(() => []), cur = new Set(e.scanner_ids || []);
@@ -148,7 +148,7 @@ async function draw(host, ctx, members, standards, redraw) {
   /* VP External: send the fines report to the officers who collect. */
   function sendReport(e) {
     const fl = finesOf(e.id), tot = fl.reduce((t, v) => t + (+std(v.standard_id)?.fine || 0), 0);
-    modal(`<h3>Send fines report</h3><p class="muted" style="margin:0 0 8px">${esc(e.title)} · goes to the President, Vice Mayor, Marshals and Treasurer.</p>
+    modal(`<h3>Send fines report</h3><p class="muted" style="margin:0 0 8px">${esc(e.title)} · goes to the Class Mayors, Marshals and Treasurer, and to the SAILS Secretary for the records.</p>
       <div class="card pad"><b>${fl.length} student${fl.length === 1 ? '' : 's'} · ${peso(tot)} in fines</b>${fl.map(v => `<div class="fr"><span>${esc(mname(v.member_id))}</span><b>${peso(std(v.standard_id)?.fine)}</b></div>`).join('')}</div>
       <label>Note (optional)</label><textarea id="nt" rows="2" maxlength="500" placeholder="Please collect these fines this week."></textarea>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="go" style="flex:2">Send report</button><button class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div>`, (m, close) => {
