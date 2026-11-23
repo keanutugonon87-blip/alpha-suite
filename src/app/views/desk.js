@@ -125,7 +125,7 @@ export async function mountDesk(el, ctx) {
           if (dup && !(await confirmDialog(`${peso(dup.amount)} for ${row.m.full_name} was already recorded a few minutes ago. Record again?`, { ok: 'Record anyway', title: 'Possible duplicate' }))) { m.querySelector('#go').disabled = false; return; }
           for (const { i, amt } of items) {
             const id = uuid(); ids.push(id);
-            await safeWrite('v2_entries', { id, period_id: cur.id, kind: 'collection', category: i.kind === 'fine' ? 'Fines' : 'Class Dues', member_id: row.m.id, charge_id: i.charge || null,
+            await safeWrite('v2_entries', { id, period_id: cur.id, kind: 'collection', category: i.kind === 'fine' ? 'Fines' : 'Contribution', member_id: row.m.id, charge_id: i.charge || null,
               ...(i.violation ? { violation_id: i.violation, fund: 'sails' } : { fund: data.charges.find(c => c.id === i.charge)?.fund || null }), amount: amt, method, gcash_ref: gref || null,
               purpose: i.label, recorded_by_name: ctx.profile.full_name, status: 'approved', approved_by_name: isMayor ? ctx.profile.full_name : 'No approval needed', source: 'manual' });
             done++;

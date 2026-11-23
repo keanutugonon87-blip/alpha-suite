@@ -75,11 +75,11 @@ export async function mountBalances(el, ctx) {
 
   function newCharge() {
     modal(`<h3>New charge</h3><p class="muted">Applies to every active student.</p><form id="cf"><label>Title</label><input name="t" required placeholder="e.g. Foundation Week shirt">
-      <label>Amount per student (₱)</label><input name="a" type="number" min="1" step="0.01" required inputmode="decimal"><label>Fund</label><select name="fu">${fundOptions('')}</select><label>Due date (optional)</label><input name="d" type="date">
+      <label>Amount per student (₱)</label><input name="a" type="number" min="1" step="0.01" required inputmode="decimal"><label>Category</label><select name="cg"><option>Contribution</option><option>Event or activity fund</option><option>Donation</option><option>Fines</option></select><label>Fund</label><select name="fu">${fundOptions('')}</select><label>Due date (optional)</label><input name="d" type="date">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Create</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       m.querySelector('#cf').onsubmit = async e => { e.preventDefault(); const f = new FormData(e.target);
-        try { await db(sb.from('v2_charges').insert({ id: uuid(), title: f.get('t').trim(), amount: +f.get('a'), due_on: f.get('d') || null, fund: f.get('fu') || null, created_by_name: ctx.profile.full_name })); toast('Charge created'); close(); }
+        try { await db(sb.from('v2_charges').insert({ id: uuid(), title: f.get('t').trim(), amount: +f.get('a'), due_on: f.get('d') || null, fund: f.get('fu') || null, category: f.get('cg') || 'Contribution', created_by_name: ctx.profile.full_name })); toast('Charge created'); close(); }
         catch (x) { m.querySelector('#er').textContent = x.message; } };
     });
   }

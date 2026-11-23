@@ -23,7 +23,7 @@ const ICON = {
   roles: '<rect x="4" y="5" width="16" height="14" rx="2"/><path d="M4 10h16M10 10v9"/>',
   system: '<circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/>',
 };
-ICON.inspection = ICON.watch || ICON.home; ICON['pd-today'] = ICON.home; ICON['pd-approvals'] = ICON.office || ICON.home; ICON['pd-people'] = ICON.officers || ICON.home; ICON['pd-more'] = ICON.roles || ICON.home; ICON.report = ICON.docs || ICON.notices || ICON.home; ICON.classup = ICON.officers || ICON.home; ICON.receipts = '<path d="M4 13l2-8h12l2 8"/><path d="M4 13v6h16v-6h-5a3 3 0 0 1-6 0z"/>'; ICON.marshal = ICON.watch || ICON.home; ICON.procurement = ICON.receipts; ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
+ICON.inspection = ICON.watch || ICON.home; ICON['pd-today'] = ICON.home; ICON['pd-approvals'] = ICON.office || ICON.home; ICON['pd-people'] = ICON.officers || ICON.home; ICON['pd-more'] = ICON.roles || ICON.home; ICON.report = ICON.docs || ICON.notices || ICON.home; ICON.classup = ICON.officers || ICON.home; ICON.receipts = '<path d="M4 13l2-8h12l2 8"/><path d="M4 13v6h16v-6h-5a3 3 0 0 1-6 0z"/>'; ICON.marshal = ICON.watch || ICON.home; ICON.procurement = ICON.receipts; ICON.batches = ICON.receipts || ICON.treasury; ICON.statements = ICON.pack || ICON.docs || ICON.receipts; ICON.money = ICON.treasury; ICON.class = ICON.watch; ICON.admin = ICON.roles;   // icons for the grouped entries
 const TABS = [
   { id: 'home', label: 'Today', load: () => import('./home.js').then(m => m.mountHome), roles: ['mayor', 'vice_mayor', 'treasurer', 'auditor', 'secretary', 'class_secretary', 'marshall', 'sails', 'pio'] },
   { id: 'marshal', label: 'Marshal Desk', load: () => import('./marshal.js').then(m => m.mountMarshal), roles: ['general_marshal', 'dept_marshal'] },
@@ -31,6 +31,8 @@ const TABS = [
   { id: 'report', label: 'Report up', load: () => import('./classreport.js').then(m => m.mountClassReport), roles: ['mayor'] },
   { id: 'receipts', label: 'Received', load: () => import('./receipts.js').then(m => m.mountReceipts), roles: ['secretary', 'vp_internal'] },
   { id: 'procurement', label: 'Procurement', load: () => import('./procurement.js').then(m => m.mountProcurement), roles: ['vp_internal', 'vp_external', 'secretary', 'treasurer', 'mayor'] },
+  { id: 'batches', label: 'Cash batches', load: () => import('./batches.js').then(m => m.mountBatches), roles: ['class_treasurer', 'treasurer', 'vp_internal', 'auditor', 'mayor'] },
+  { id: 'statements', label: 'Statements', load: () => import('./statements.js').then(m => m.mountStatements), roles: ['class_treasurer', 'treasurer', 'vp_internal', 'vp_external', 'auditor', 'mayor'] },
   { id: 'classup', label: 'Class Mayors', load: () => import('./classup.js').then(m => m.mountClassUp), roles: ['vp_internal'] },
   { id: 'vp', label: 'VP Desk', load: () => import('./vp.js').then(m => m.mountVp), roles: ['vp_internal', 'vp_external', 'vice_mayor'] },
   { id: 'office', label: 'Desk', load: () => import('./office.js').then(m => m.mountOffice), roles: ['secretary', 'auditor', 'pio', 'marshall', 'mayor'] },
@@ -145,7 +147,7 @@ export async function renderStaff(root, tabId) {
   }
   // Related screens share one menu entry (Money, Class, Admin) with buttons to switch between them. Old links to a single screen still land in the right place.
   if (mode === 'class') tabs = tabs.filter(t => !['docs', 'duties', 'accounts', 'roles', 'system'].includes(t.id));   // Admin belongs to the SAILS President
-  const HUBS = [['money', 'Money', ['treasury', 'desk', 'balances', 'procurement', 'requests', 'pack']], ['class', 'Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['admin', 'Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  const HUBS = [['money', 'Money', ['treasury', 'desk', 'balances', 'batches', 'statements', 'procurement', 'requests', 'pack']], ['class', 'Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['admin', 'Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   for (const [hid, hlabel, ids] of HUBS) {
     const members = tabs.filter(t => ids.includes(t.id)); if (members.length < 2) continue;
     if (members.some(m => m.id === tabId)) { ctx.section = tabId; tabId = hid; }
@@ -158,7 +160,7 @@ export async function renderStaff(root, tabId) {
   const PRIMARY = 4, extra = tabs.length > PRIMARY + 1 ? tabs.slice(PRIMARY) : [], inMore = extra.some(t => t.id === cur.id);
   const icon = id => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[id]}</svg>`;
   // The side menu (wide screens) is grouped, each group folds away, and the whole menu can shrink to icons. Both choices are remembered.
-  const GROUPS = [['Overview', ['home', 'pd-today', 'inspection', 'pd-approvals', 'pd-people', 'pd-more', 'marshal', 'directives', 'report', 'classup', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'procurement', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
+  const GROUPS = [['Overview', ['home', 'pd-today', 'inspection', 'pd-approvals', 'pd-people', 'pd-more', 'marshal', 'directives', 'report', 'classup', 'vp', 'office', 'money', 'class', 'admin']], ['Money', ['treasury', 'desk', 'balances', 'batches', 'statements', 'procurement', 'requests', 'pack']], ['Class', ['watch', 'attendance', 'students', 'officers', 'notices']], ['Admin', ['docs', 'duties', 'accounts', 'roles', 'system']]];
   const NK = 'alpha-nav-collapsed', GK = 'alpha-nav-groups', rd = k => { try { return localStorage.getItem(k); } catch { return null; } }, wr = (k, v) => { try { localStorage.setItem(k, v); } catch { /* ignore */ } };
   let navCollapsed = rd(NK) === '1', shut = new Set((() => { try { return JSON.parse(rd(GK) || '[]'); } catch { return []; } })());
   const btn = t0 => `<button data-t="${t0.id}" title="${esc(tabLabel(t0))}" class="${t0.id === cur.id ? 'on' : ''}${extra.includes(t0) ? ' xtra' : ''}" ${t0.id === cur.id ? 'aria-current="page"' : ''}>${icon(t0.id)}<span>${tabLabel(t0)}</span>${t0.id === 'treasury' || t0.id === 'money' ? '<i class="badge" id="bdg" hidden></i>' : t0.id === 'home' ? '<i class="badge" id="bdh" hidden></i>' : ''}</button>`;

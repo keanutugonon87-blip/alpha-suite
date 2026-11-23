@@ -3,7 +3,7 @@ import { ymManila, net as netOf, balanceAt, needsSecond, findDuplicate } from '.
 import { exportXLSX } from '../xlsx.js';
 import { scanMember, showMemberCards, showReceipt } from '../qr.js';
 
-const CATS_IN = ['Class Dues', 'Contribution', 'Fines', 'Fundraising', 'Donation', 'Other'];
+const CATS_IN = ['Contribution', 'Fines', 'Event or activity fund', 'Donation'];
 const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
 
 export async function mountTreasury(el, ctx) {
@@ -173,7 +173,7 @@ export async function mountTreasury(el, ctx) {
       const steps = st === 'closed' ? [] : [
         [!nPend, nPend ? `${nPend} entr${nPend === 1 ? 'y is' : 'ies are'} still waiting for approval` : 'Every entry this month is decided', nPend ? 'bad' : 'ok'],
         [!noRcpt, noRcpt ? `${noRcpt} expense${noRcpt === 1 ? ' has' : 's have'} no receipt photo (add one if you have it)` : 'Every expense has a receipt photo', noRcpt ? 'warn' : 'ok'],
-        [st === 'checked', st === 'checked' ? 'Money counted' : 'Count the cash and GCash', st === 'checked' ? 'ok' : 'bad'],
+        [st === 'checked', st === 'checked' ? 'Money counted' : 'Count the cash', st === 'checked' ? 'ok' : 'bad'],
         [st === 'checked' && !+(c.diff || 0), st === 'checked' ? (+(c.diff || 0) ? `The count is off by ${peso(c.diff)}. Explain it in the note` : 'The count matches the records') : 'The count should match the records', st === 'checked' ? (+(c.diff || 0) ? 'warn' : 'ok') : 'bad'],
         [ticked, 'Monthly report reviewed (tick below)', ticked ? 'ok' : 'bad'],
       ];
@@ -182,12 +182,12 @@ export async function mountTreasury(el, ctx) {
       return `<div class="row stk"><div class="m"><b>${label(k)} ${tag}</b><small>Fund balance at month end: ${peso(bal)}</small>${info}${chk}</div>
         <div class="acts">${canCount && st !== 'closed' ? `<button class="btn ghost sm" data-v="${k}">${st === 'checked' ? 'Count again' : 'Count the money'}</button>` : ''}${isMayor && st === 'checked' ? `<button class="btn gold sm" data-c="${k}">Close month</button>` : ''}${isMayor && st === 'closed' ? `<button class="btn ghost sm" data-r="${k}">Reopen</button>` : ''}</div></div>`;
     };
-    modal(`<h3>Month close</h3><p class="muted" style="margin:0 0 8px">Count the cash and GCash on hand and compare it with the records. After a different officer closes the month, its entries are locked. Only the Mayor can reopen it.</p>
+    modal(`<h3>Month close</h3><p class="muted" style="margin:0 0 8px">Count the cash on hand and compare it with the records. After a different officer closes the month, its entries are locked. Only the Mayor can reopen it.</p>
       <div class="card" style="max-height:52vh;overflow:auto">${months.map(rowFor).join('')}</div><button class="btn ghost" id="mx" style="width:100%;margin-top:12px">Close</button><div class="err" id="er"></div>`, (m, close) => {
       m.querySelector('#mx').onclick = close;
       const run = async (fn, ok) => { try { await fn(); toast(ok); close(); draw().catch(() => {}); } catch (e) { m.querySelector('#er').textContent = /function|schema cache/i.test(e.message) ? 'Month close is not switched on in the database yet. Run the v4 SQL.' : e.message; } };
       m.querySelectorAll('[data-v]').forEach(b => b.onclick = () => { const k = b.dataset.v, expect = balanceAt(entries, periods, k); close();
-        modal(`<h3>Count the money · ${label(k)}</h3><p class="muted">The records say the fund should hold <b>${peso(expect)}</b>. Count the cash and the GCash balance together and enter the total.</p>
+        modal(`<h3>Count the money · ${label(k)}</h3><p class="muted">The records say the fund should hold <b>${peso(expect)}</b>. Count the cash and enter the total.</p>
           <form id="vf"><label>Money counted (₱)</label><input name="c" type="number" step="0.01" min="0" required inputmode="decimal"><label>Note (needed if it does not match)</label><input name="n" maxlength="200">
           <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save count</button><button type="button" class="btn ghost" id="vx">Cancel</button></div><div class="err" id="er2"></div></form>`, (m2, close2) => {
           m2.querySelector('#vx').onclick = close2;
@@ -252,14 +252,14 @@ export async function mountTreasury(el, ctx) {
       <label>Amount (₱)</label><input name="amt" type="number" step="0.01" min="0.01" required inputmode="decimal" value="${pre.amount || ''}">
       ${kind === 'expense' ? `<label>Approval reference${limit > 0 ? ` (needed when there is no budget request and the amount is ${peso(limit)} or more)` : ''}</label><input name="aref" maxlength="120" placeholder="Adviser memo, PIT approval no.…">` : ''}
       <label>Purpose / note</label><input name="purpose" value="${esc(pre.purpose || '')}">
-      ${kind === 'collection' ? `<label>Payment method</label><div class="segpay" role="radiogroup"><label><input type="radio" name="method" value="cash" checked><span>💵 Cash</span></label><label><input type="radio" name="method" value="gcash"><span>📱 GCash</span></label></div><div id="gc" style="display:none"><label>GCash reference no.</label><input name="gref"></div>` : ''}
+      ${kind === 'collection' ? `<label>Payment method</label><div class="segpay" role="radiogroup"><label><input type="radio" name="method" value="cash" checked><span>💵 Cash</span></label></div>` : ''}
       <label>Receipt photo${kind === 'expense' && limit > 0 ? ` (required for expenses of ${peso(limit)} or more)` : ' (optional)'}</label><input name="img" type="file" accept="image/*">
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div><div class="err" id="er"></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
       studentSearch(m.querySelector('[name=member]'), members);
       m.querySelector('[name=request]')?.addEventListener('change', e => { const o = e.target.selectedOptions[0], f = m.querySelector('#ef'); if (o?.dataset.fund) { f.elements.fund.value = o.dataset.fund; if (o.dataset.cat) f.elements.cat.value = o.dataset.cat; } });
       m.querySelectorAll('[data-rx]').forEach(b => b.onclick = () => { const r = recentOut()[+b.dataset.rx], f = m.querySelector('#ef'); f.elements.payer.value = r.payer; f.elements.cat.value = r.cat; if (r.fund !== undefined) f.elements.fund.value = r.fund || ''; if (r.purpose) f.elements.purpose.value = r.purpose; f.elements.amt.focus(); });
-      m.querySelectorAll('[name=method]').forEach(r => r.onchange = () => { m.querySelector('#gc').style.display = m.querySelector('[name=method]:checked')?.value === 'gcash' ? 'block' : 'none'; });
+      
       const chSel = m.querySelector('[name=charge]'), amt = m.querySelector('[name=amt]');
       const fw = m.querySelector('#fw');
       const syncFund = () => { if (chSel && chSel.value) { fw.style.display = 'none'; } else fw.style.display = ''; };

@@ -61,9 +61,19 @@ async function statement(token) {
   modal(`<h3>${t('stmtTitle')}</h3><p class="muted" style="margin:0 0 8px">${esc(d.name)}${d.student_no && !/^PENDING/.test(d.student_no) ? ' · ' + esc(d.student_no) : ''}</p>
     <div class="grid"><div class="stat gold"><small>${t('stmtPaid')}</small><b>${peso(paid)}</b></div><div class="stat"><small>${t('stmtOwe')}</small><b>${peso(owe)}</b></div></div>
     <div class="card" style="margin-top:10px;max-height:44vh;overflow:auto">${rows}</div>${owing ? `<div class="card">${owing}</div>` : ''}
+    <div style="display:flex;gap:8px;margin-top:10px;align-items:center"><select id="sy" style="width:auto">${[0, 1, 2].map(i => { const y = new Date().getFullYear() - i; return `<option>${y}</option>`; }).join('')}</select><button class="btn ghost" id="sya">Yearly statement</button></div>
     <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="sp" style="flex:1">${t('stmtPrint')}</button><button class="btn ghost" id="sc">${t('stmtClose')}</button></div>`,
     (m, close) => {
       m.querySelector('#sc').onclick = close;
+      m.querySelector('#sya').onclick = async () => {
+        try {
+          const { data: y, error } = await sb.rpc('v2_self_year', { p_token: token, p_year: +m.querySelector('#sy').value }); if (error) throw error;
+          const cats = Object.entries(y.by_category || {}), total = cats.reduce((a, [, v]) => a + +v, 0);
+          printHTML('Yearly statement - ' + y.name, `${letterhead('Yearly statement of contributions ' + y.year, y.name + ' · PIT-COMED · Batch 28')}<div class="sum"><div>Paid in ${y.year}<b>${peso(total)}</b></div></div>
+            <h2>By category</h2><table><thead><tr><th>Category</th><th class="r">Amount</th></tr></thead><tbody>${cats.map(([k, v]) => `<tr><td>${esc(k)}</td><td class="r">${peso(v)}</td></tr>`).join('') || '<tr><td colspan="2">No payments this year</td></tr>'}</tbody></table>
+            <h2>Payments</h2><table><thead><tr><th>Date</th><th>For</th><th>Receipt no.</th><th class="r">Amount</th></tr></thead><tbody>${(y.payments || []).map(p => `<tr><td>${fmtDate(p.at)}</td><td>${esc(p.for)}</td><td>${esc(p.receipt_no || '')}</td><td class="r">${peso(p.amount)}</td></tr>`).join('')}</tbody></table>`);
+        } catch (e) { toast(/function|schema cache/i.test(e.message) ? 'The yearly statement is not switched on yet. Ask the Mayor.' : e.message, true); }
+      };
       m.querySelector('#sp').onclick = () => {
         const tbl = `<table><thead><tr><th>Date</th><th>For</th><th>Receipt no.</th><th>Verify code</th><th class="r">Amount</th></tr></thead><tbody>${d.payments.map(p => `<tr><td>${fmtDate(p.at)}</td><td>${esc(p.for)}${p.fund ? ' · ' + esc(fundLabel(p.fund)) : ''}</td><td>${esc(p.receipt_no || '—')}${p.status === 'pending' ? ' (awaiting approval)' : ''}</td><td>${esc(p.code || '—')}</td><td class="r">${peso(p.amount)}</td></tr>`).join('') || '<tr><td colspan="5">No payments yet</td></tr>'}</tbody></table>`;
         const ow = d.balances.filter(b => +b.owed > 0 && !b.closed);
