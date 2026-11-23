@@ -47,6 +47,7 @@ const ACCESS = [
   ['Role log, scorecards', 'Read', '—', '—', '—', '—'],
   ['Attendance, events and fines reports', 'Read', 'Own section (set events, compile)', 'VP External runs it', 'Scan', '—'],
   ['Cash batches (count, verify, countersign)', 'Read', 'Read (own section)', 'VP Internal countersigns; SAILS Treasurer verifies; Class Treasurer submits', '—', '—'],
+  ['QR scanning and masterlist (requests to the SAILS Treasurer)', 'Read', 'Read (own section)', 'SAILS Treasurer grants; Class Treasurer asks', '—', '—'],
   ['Financial statements (monthly, yearly)', 'Read all sections', 'Own section', 'VP Internal, VP External, Treasurer, Auditor read all', '—', 'Own yearly statement'],
   ['Procurement updates (Siglakas, Nameplate, other items)', 'Read', 'Read', 'VP Internal sends; VP External reads', '—', '—'],
   ['Which sections they see', 'All 12', 'Own section', 'All 12', 'Own letter (General Marshal: all)', 'Own section'],

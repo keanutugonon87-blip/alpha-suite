@@ -14,6 +14,8 @@ const readPane = () => { try { return localStorage.getItem(PK) === 'collect' ? '
 const readGoal = () => { try { return +localStorage.getItem(GK) || 0; } catch { return 0; } };
 
 export async function mountDesk(el, ctx) {
+  const scanReady = ctx.profile.role === 'class_treasurer' ? sb.rpc('v2_my_scan_ok').then(r => r.error ? true : !!r.data, () => true) : Promise.resolve(true);   // a Class Treasurer scans only when the SAILS Treasurer allows it (v75)
+  const scanBlocked = async () => { if (await scanReady) return false; toast('QR scanning is not switched on for you. Ask the SAILS Treasurer in Requests to the Treasurer.', true); location.hash = '#/staff/treqs'; return true; };
   const isMayor = !ctx.collects;   // everyone but the Class Treasurer gets the overview only
   let q = '', only = 'owing', data = null, pane = isMayor ? 'overview' : readPane();   // the Mayor gets the overview only; collecting is the Class Treasurer's work
   el.innerHTML = skeleton(4);
@@ -80,7 +82,7 @@ export async function mountDesk(el, ctx) {
     el.querySelector('#gl').onclick = () => modal(`<h3>Weekly goal</h3><form id="gf"><label>Amount to collect each week (₱)</label><input name="g" type="number" min="0" step="50" inputmode="numeric" value="${goal || ''}" required>
       <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" style="flex:1">Save</button><button type="button" class="btn ghost" id="cx">Cancel</button></div></form>`, (m, close) => {
       m.querySelector('#cx').onclick = close; m.querySelector('#gf').onsubmit = e => { e.preventDefault(); try { localStorage.setItem(GK, String(+new FormData(e.target).get('g') || 0)); } catch { /* ignore */ } close(); draw(); }; });
-    el.querySelector('#sc').onclick = async () => { const r = await scanMember(); if (!r) return; const row = rows.find(x => x.m.id === r.id); if (!row) return toast('That student is not on the active list.', true); toast('Scanned: ' + r.name); collect(row); };
+    el.querySelector('#sc').onclick = async () => { if (await scanBlocked()) return; const r = await scanMember(); if (!r) return; const row = rows.find(x => x.m.id === r.id); if (!row) return toast('That student is not on the active list.', true); toast('Scanned: ' + r.name); collect(row); };
     el.querySelectorAll('[data-pk]').forEach(b => b.onclick = e => { e.stopPropagation(); const x = data.promises.find(y => y.id === b.dataset.pk); collect(rows.find(r => r.m.id === x.member_id)); });
     el.querySelectorAll('[data-pb]').forEach(b => b.onclick = async e => { e.stopPropagation(); try { await db(sb.from('v2_promises').update({ status: 'broken' }).eq('id', b.dataset.pb)); toast('Marked as broken'); load(); } catch (x) { toast(x.message, true); } });
     el.querySelectorAll('[data-m]').forEach(b => b.onclick = () => collect(rows.find(x => x.m.id === b.dataset.m)));

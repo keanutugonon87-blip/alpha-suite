@@ -8,6 +8,8 @@ const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'S
 
 export async function mountTreasury(el, ctx) {
   const canWrite = !!ctx.collects, isMayor = ctx.can('mayor'), isSailsT = ctx.profile.role === 'treasurer';
+  const scanReady = ctx.profile.role === 'class_treasurer' ? sb.rpc('v2_my_scan_ok').then(r => r.error ? true : !!r.data, () => true) : Promise.resolve(true);   // a Class Treasurer scans only when the SAILS Treasurer allows it (v75)
+  const scanBlocked = async () => { if (await scanReady) return false; toast('QR scanning is not switched on for you. Ask the SAILS Treasurer in Requests to the Treasurer.', true); location.hash = '#/staff/treqs'; return true; };
   const isGlobal = ctx.profile.real === 'sails_president' || ['vp_internal', 'vp_external', 'secretary', 'treasurer', 'auditor', 'pio', 'general_marshal'].includes(ctx.profile.role);   // SAILS officers pick the class they look at
   let units = [], unitSel = (() => { try { return sessionStorage.getItem('sails-unit') || ''; } catch { return ''; } })();
   const U = q => isGlobal && unitSel ? q.eq('unit_id', unitSel) : q;   // the Class Treasurer records; the SAILS Treasurer counts and confirms; the Class Mayor supervises
@@ -108,7 +110,7 @@ export async function mountTreasury(el, ctx) {
       m.querySelector('#go').onclick = async () => { const go = m.querySelector('#go'); go.disabled = true; try { const n = await db(sb.rpc('v2_confirm_collections', { p_ids: sel().map(b => b.value) })); toast(`${n} collection${n === 1 ? '' : 's'} confirmed`); close(); draw().catch(() => {}); } catch (x) { m.querySelector('#er').textContent = x.message; go.disabled = false; } };
     }));
     $('#addOut')?.addEventListener('click', () => entryForm('expense', cur));
-    $('#scan')?.addEventListener('click', async () => { const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, { member: r.id }); } });
+    $('#scan')?.addEventListener('click', async () => { if (await scanBlocked()) return; const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, { member: r.id }); } });
     $('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
     $('#close')?.addEventListener('click', () => closeForm(cur, bal, pendingN));
     $('#csv')?.addEventListener('click', async () => {
