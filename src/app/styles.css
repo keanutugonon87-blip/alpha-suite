@@ -437,17 +437,18 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .insp-foot{display:flex;gap:10px;margin-top:16px;position:sticky;bottom:0;padding-top:10px}
 @media(min-width:560px){.insp-fields{grid-template-columns:2fr 1fr}}
 
-/* New loading screen: SAILS '28 wordmark */
-.splash{background:linear-gradient(180deg,#f4faf2,#e3f1e0);gap:16px}
-.splash .wm{width:min(70vw,300px);height:auto;animation:breathe 2.4s ease-in-out infinite;filter:drop-shadow(0 4px 8px rgba(20,83,45,.25))}
-.splash .bar{display:block;width:min(44vw,170px);height:4px;border-radius:4px;background:rgba(28,122,53,.18);position:relative;overflow:hidden}
-.splash .bar:after{content:"";position:absolute;inset:0 auto 0 0;width:40%;border-radius:4px;background:linear-gradient(90deg,#1c7a35,#f2c200);animation:sbar 1.3s ease-in-out infinite}
-.splash .word{font-size:.72rem;letter-spacing:.22em;color:#1c7a35;font-weight:700}
-@keyframes sbar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
-@media(prefers-reduced-motion:reduce){.splash .wm,.splash .bar:after{animation:none}}
-
-.splash{overflow:hidden}
-.splash .bgc{position:absolute;left:50%;top:50%;width:min(92vw,420px);height:auto;transform:translate(-50%,-50%);opacity:.14;pointer-events:none;animation:bgc 6s ease-in-out infinite}
-.splash .wm,.splash .bar,.splash .word{position:relative}
-@keyframes bgc{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.04)}}
-@media(prefers-reduced-motion:reduce){.splash .bgc{animation:none}}
+/* Loading screen: crest, SAILS '28 rises letter by letter, then COMED wipes in */
+.ld{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;color:#fff;position:relative;overflow:hidden;font-family:system-ui,'Segoe UI',Inter,sans-serif;
+background:radial-gradient(120% 70% at 50% 0%,rgba(242,194,0,.16),transparent 55%),radial-gradient(90% 60% at 50% 105%,rgba(40,160,80,.35),transparent 60%),linear-gradient(180deg,#0f3d22,#082a18)}
+.ld .ldr{width:128px;height:128px;border-radius:50%;display:grid;place-items:center;border:2px solid rgba(255,255,255,.14)}
+.ld .ldr img{width:104px;height:104px;border-radius:50%;background:#fff;padding:4px;box-shadow:0 10px 30px rgba(0,0,0,.4)}
+.ld .ldt{font-family:system-ui,'Segoe UI',Inter,sans-serif;line-height:1.2;margin:26px 0 0;font-weight:600;font-size:clamp(26px,8vw,34px);letter-spacing:.3em;padding-left:.3em;display:flex;color:#fff}
+.ld .ldt span{opacity:0;animation:ldrise 3.6s infinite both;animation-delay:calc(var(--i)*.07s)}
+.ld .ldt .y{color:#f2c200;animation-delay:calc(.35s + var(--i)*.07s)}.ld .ldt .sp{width:.5em;animation:none;opacity:0}
+.ld .ldw{margin-top:16px;font-size:.66rem;letter-spacing:.3em;font-weight:500;text-transform:uppercase;color:rgba(255,255,255,.78);animation:ldwipe 3.6s infinite both}
+.ld .ldl{display:block;width:150px;height:2px;margin-top:10px;background:#f2c200;transform-origin:left;animation:ldline 3.6s infinite both}
+.ld .ldf{position:absolute;bottom:max(24px,env(safe-area-inset-bottom));left:0;right:0;font-size:.56rem;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);padding:0 12px}
+@keyframes ldrise{0%,4%{opacity:0;transform:translateY(16px)}18%,86%{opacity:1;transform:none}96%,100%{opacity:0;transform:translateY(-6px)}}
+@keyframes ldwipe{0%,30%{clip-path:inset(0 100% 0 0)}52%,86%{clip-path:inset(0 0 0 0);opacity:1}96%,100%{clip-path:inset(0 0 0 0);opacity:0}}
+@keyframes ldline{0%,30%{transform:scaleX(0)}52%,86%{transform:scaleX(1);opacity:1}96%,100%{transform:scaleX(1);opacity:0}}
+@media(prefers-reduced-motion:reduce){.ld .ldt span,.ld .ldw,.ld .ldl{animation:none;opacity:1;clip-path:none;transform:none}}
