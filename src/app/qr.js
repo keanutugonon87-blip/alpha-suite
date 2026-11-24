@@ -121,7 +121,16 @@ const CARD_CSS = `@page{margin:8mm}.qg,.qg *{-webkit-print-color-adjust:exact;pr
 .qc-l>*:not(.qc-wm),.qc-r>*:not(.qc-wm){position:relative}
 .qc-id{position:absolute;top:0;right:0;background:#f2c200;color:#14532d;font:700 1.7mm Georgia,serif;letter-spacing:.2em;padding:.8mm 2mm .8mm 2.4mm;border-bottom-left-radius:2mm}
 .qc-ft{position:absolute;left:0;right:0;bottom:0;height:1.4mm;background:linear-gradient(90deg,#14532d,#1c7a35 60%,#f2c200)}
-.qc-r code{position:relative;margin-top:1mm;font:1.5mm/1.3 ui-monospace,Menlo,monospace;color:#5a6b5e;text-align:center;word-break:break-all;max-width:100%}`;
+.qc-r code{position:relative;margin-top:1mm;font:1.5mm/1.3 ui-monospace,Menlo,monospace;color:#5a6b5e;text-align:center;word-break:break-all;max-width:100%}
+.qc{background:var(--ship) center/cover #0b2e4a}
+.qc-l{width:42mm;padding-right:2.5mm;background:linear-gradient(90deg,rgba(8,48,28,.7) 0%,rgba(8,48,28,.4) 70%,rgba(8,48,28,.1) 100%)}
+.qc-t small{font-size:1.7mm;letter-spacing:.08em}.qc-nm b{font-size:3.8mm}.qc-q img{width:25mm;height:25mm}
+.qc-r{background:linear-gradient(180deg,rgba(6,38,22,0),rgba(6,38,22,.5) 75%)}
+.qc-l .qc-wm,.qc-r .qc-wm{display:none}
+.qc-s{color:#f2c200;text-shadow:0 .2mm .8mm rgba(0,0,0,.6)}.qc-r code{color:#e6f2e6;text-shadow:0 .2mm .8mm rgba(0,0,0,.6)}
+.qc-q{box-shadow:0 .6mm 2mm rgba(0,0,0,.45)}
+.qc-nm b,.qc-t b,.qc-nm span{text-shadow:0 .2mm 1mm rgba(0,0,0,.55)}
+.qc-ft{background:linear-gradient(90deg,#14532d,#f2c200)}`;
 const cardHTML = (c, crest) => `<div class="qc"><div class="qc-l"><img class="qc-wm" src="${crest}" alt=""><div class="qc-top"><img src="${crest}" alt=""><div class="qc-t"><b>SAILS ’28</b><small>PIT-COMED · BATCH 28</small></div></div>
   <div class="qc-nm"><b>${esc(c.mem.full_name)}</b><span>${esc(c.mem.student_no)}</span></div><div class="qc-mo">UNITY AND STRENGTH<br>TOWARDS A COMMON GOAL</div></div>
   <div class="qc-r"><img class="qc-wm" src="${crest}" alt=""><span class="qc-id">STUDENT ID</span><div class="qc-q"><img src="${c.img}" alt="QR"></div><div class="qc-s">Scan · Pay · Inspection</div><code>${esc(c.code)}</code><i class="qc-ft"></i></div></div>`;
@@ -129,7 +138,7 @@ export async function showMemberCards() {
   const members = (await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active'))).sort((a, b) => surnameKey(a.full_name).localeCompare(surnameKey(b.full_name)));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
   const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
-  const crest = await toUrl('assets/wolf-crest.png');
+  const crest = await toUrl('assets/wolf-crest.png'), ship = await toUrl('assets/ship-bg.png');
   const cards = [];
   for (const mem of members) {
     try { const code = await db(sb.rpc('v2_member_token', { p_member: mem.id })); cards.push({ mem, code, img: await brandedQR(code, 320, crest) }); } catch (e) { toast(e.message, true); break; }
@@ -137,8 +146,8 @@ export async function showMemberCards() {
   }
   const html = cards.map(c => cardHTML(c, crest)).join('');
   m.querySelector('#pg').textContent = `${cards.length} cards ready, in alphabetical order by last name. Each code is private to that student — keep the printout safe.`;
-  m.querySelector('#g').innerHTML = `<button class="btn gold" id="pr" style="width:100%;margin-bottom:12px">Print / save as PDF</button><style>${CARD_CSS}.qg{grid-template-columns:repeat(auto-fill,85.6mm);justify-content:start}</style><div class="qg">${html}</div>`;
-  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="qg">${html}</div>`, { plain: true });
+  m.querySelector('#g').innerHTML = `<button class="btn gold" id="pr" style="width:100%;margin-bottom:12px">Print / save as PDF</button><style>${CARD_CSS}.qg{grid-template-columns:repeat(auto-fill,85.6mm);justify-content:start}</style><div class="qg" style="--ship:url(${ship})">${html}</div>`;
+  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="qg" style="--ship:url(${ship})">${html}</div>`, { plain: true });
 }
 
 export async function showReceipt(entryId) {
@@ -194,7 +203,7 @@ export function makeQRCodes({ guard = false } = {}) {
       const byNo = new Map(have.map(h => [h.student_no.toLowerCase(), h]));
       const pins = guard ? new Set(await sb.rpc('v2_pin_members').then(r => (r.data || []).map(x => x.member_id), () => [])) : new Set();
       const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
-      const crest = await toUrl('assets/wolf-crest.png');
+      const crest = await toUrl('assets/wolf-crest.png'), ship = await toUrl('assets/ship-bg.png');
       const cards = []; let added = 0;
       for (const [i, r] of list.entries()) {
         btn.textContent = `Making ${i + 1}/${list.length}…`;
@@ -210,8 +219,8 @@ export function makeQRCodes({ guard = false } = {}) {
       const html = cards.map(c => cardHTML(c, crest)).join('');
       m.querySelector('#out').innerHTML = `<p class="muted" style="margin-top:12px">${cards.length} card${cards.length === 1 ? '' : 's'} ready${added ? ` · ${added} new student${added === 1 ? '' : 's'} added to the roster` : ''}. Each code is private to that student — hand it over, don't post it.</p>
         ${note.length ? `<ul class="muted" style="font-size:.85em">${note.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-        ${cards.length ? `<button class="btn gold" id="pr" style="width:100%;margin:8px 0">Print / save as PDF</button><style>${CARD_CSS}.qg{grid-template-columns:repeat(auto-fill,85.6mm);justify-content:start}</style><div class="qg">${html}</div>` : ''}`;
-      m.querySelector('#pr')?.addEventListener('click', () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="qg">${html}</div>`, { plain: true }));
+        ${cards.length ? `<button class="btn gold" id="pr" style="width:100%;margin:8px 0">Print / save as PDF</button><style>${CARD_CSS}.qg{grid-template-columns:repeat(auto-fill,85.6mm);justify-content:start}</style><div class="qg" style="--ship:url(${ship})">${html}</div>` : ''}`;
+      m.querySelector('#pr')?.addEventListener('click', () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="qg" style="--ship:url(${ship})">${html}</div>`, { plain: true }));
     } catch (e) { er.textContent = /duplicate/i.test(e.message) ? 'A Student ID in your list clashes with one already on the roster.' : e.message; }
     btn.disabled = false; btn.textContent = 'Make QR codes';
   };
