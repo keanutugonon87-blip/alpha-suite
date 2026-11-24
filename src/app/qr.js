@@ -103,26 +103,29 @@ export function surnameKey(full) {
 }
 const CARD_CSS = `@page{margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.c{break-inside:avoid;border:2px solid #0c1f5c;border-radius:14px;overflow:hidden;text-align:center;background:#fff;font-family:Atkinson Hyperlegible,Inter,sans-serif}
-.h{background:#fff;padding:7px 10px 5px;border-bottom:3px solid #d9a63c}
-.h img{width:100%;display:block;height:auto}
-.h small{display:block;font-size:7.5px;letter-spacing:.14em;color:#2a7fb0;margin-top:1px}
-.q{padding:9px 10px 4px;background:linear-gradient(#fff,#f2f9fb)}.q img{width:100%;display:block}
-.n{padding:2px 8px 3px;background:#f2f9fb}.n b{display:block;font-size:12px;color:#0c1f5c;line-height:1.2}.n small{font-size:10px;color:#2a7fb0}
-.k{padding:3px 8px 6px;background:#f2f9fb}.k span{display:block;font:700 6px Atkinson Hyperlegible,sans-serif;letter-spacing:.16em;color:#9a6f12}
-.k code{display:block;font:5.6px/1.35 ui-monospace,Menlo,Consolas,monospace;color:#14233f;word-break:break-all}
-.f{font-size:7.5px;letter-spacing:.14em;color:#fff;background:#0c1f5c;padding:4px;text-transform:uppercase}`;
+.c{break-inside:avoid;border:2px solid #1c7a35;outline:1px solid #f2c200;outline-offset:-5px;border-radius:12px;overflow:hidden;text-align:center;background:#fff;font-family:Georgia,'Times New Roman',serif}
+.h{padding:8px 10px 5px;border-bottom:3px double #1c7a35;background:#fff}
+.h img{width:30px;height:30px;object-fit:contain;display:block;margin:0 auto 2px}
+.h .a{font:700 5px Georgia,serif;letter-spacing:.14em;color:#8a6d00;line-height:1.35}
+.h .b{font:700 12px Georgia,serif;color:#1c7a35;letter-spacing:.04em;margin-top:1px}
+.h small{display:block;font-size:7px;letter-spacing:.12em;color:#4a5a4e}
+.q{padding:9px 10px 4px;background:linear-gradient(#fff,#f4f9f2)}.q img{width:100%;display:block}
+.n{padding:2px 8px 3px;background:#f4f9f2}.n b{display:block;font-size:12px;color:#14532d;line-height:1.2}.n small{font-size:10px;color:#5a6b5e}
+.k{padding:3px 8px 6px;background:#f4f9f2}.k span{display:block;font:700 6px Georgia,serif;letter-spacing:.16em;color:#8a6d00}
+.k code{display:block;font:5.6px/1.35 ui-monospace,Menlo,Consolas,monospace;color:#1a2a1f;word-break:break-all}
+.f{font:700 7.5px Georgia,serif;letter-spacing:.16em;color:#f2c200;background:#1c7a35;padding:4px;text-transform:uppercase}`;
+const cardHead = crest => `<div class="h"><img src="${crest}" alt=""><div class="a">SEEKERS OF LOVE ADVENTURE<br>INSPIRED BY THE LOVE OF THE SEA</div><div class="b">SAILS ’28</div><small>PIT-COMED · BATCH 28</small></div>`;
 export async function showMemberCards() {
   const members = (await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active'))).sort((a, b) => surnameKey(a.full_name).localeCompare(surnameKey(b.full_name)));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
   const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
-  const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/sails-wordmark.jpg')]);
+  const crest = await toUrl('assets/wolf-crest.png');
   const cards = [];
   for (const mem of members) {
     try { const code = await db(sb.rpc('v2_member_token', { p_member: mem.id })); cards.push({ mem, code, img: await brandedQR(code, 320, crest) }); } catch (e) { toast(e.message, true); break; }
     m.querySelector('#pg').textContent = `Generating ${cards.length}/${members.length}…`;
   }
-  const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="SAILS ’28"><small>PIT-COMED · BATCH 28</small></div>
+  const html = cards.map(c => `<div class="c">${cardHead(crest)}
     <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div>
     <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
   m.querySelector('#pg').textContent = `${cards.length} cards ready, in alphabetical order by last name. Each code is private to that student — keep the printout safe.`;
@@ -183,7 +186,7 @@ export function makeQRCodes({ guard = false } = {}) {
       const byNo = new Map(have.map(h => [h.student_no.toLowerCase(), h]));
       const pins = guard ? new Set(await sb.rpc('v2_pin_members').then(r => (r.data || []).map(x => x.member_id), () => [])) : new Set();
       const toUrl = async u => blobToDataUrl(await (await fetch(u)).blob());
-      const [crest, word] = await Promise.all([toUrl('assets/wolf-crest.png'), toUrl('assets/sails-wordmark.jpg')]);
+      const crest = await toUrl('assets/wolf-crest.png');
       const cards = []; let added = 0;
       for (const [i, r] of list.entries()) {
         btn.textContent = `Making ${i + 1}/${list.length}…`;
@@ -196,7 +199,7 @@ export function makeQRCodes({ guard = false } = {}) {
         cards.push({ mem, code, img: await brandedQR(code, 320, crest) });
       }
       cards.sort((a, b) => surnameKey(a.mem.full_name).localeCompare(surnameKey(b.mem.full_name)));
-      const html = cards.map(c => `<div class="c"><div class="h"><img src="${word}" alt="SAILS ’28"><small>PIT-COMED · BATCH 28</small></div>
+      const html = cards.map(c => `<div class="c">${cardHead(crest)}
         <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}${c.mem.section ? ' · ' + esc(c.mem.section) : ''}</small></div>
         <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
       m.querySelector('#out').innerHTML = `<p class="muted" style="margin-top:12px">${cards.length} card${cards.length === 1 ? '' : 's'} ready${added ? ` · ${added} new student${added === 1 ? '' : 's'} added to the roster` : ''}. Each code is private to that student — hand it over, don't post it.</p>
