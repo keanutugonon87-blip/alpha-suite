@@ -104,7 +104,7 @@ export function surnameKey(full) {
 const CARD_CSS = `@page{margin:8mm}.qg,.qg *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
 .qg{display:grid;grid-template-columns:repeat(2,85.6mm);gap:3mm 4mm;justify-content:center;font-family:Georgia,'Times New Roman',serif}
 .qc{width:85.6mm;height:54mm;display:flex;border-radius:3.5mm;overflow:hidden;border:.4mm solid #1c7a35;break-inside:avoid;background:#fff}
-.qc-l{width:49mm;background:linear-gradient(160deg,#14532d,#1c7a35);color:#fff;padding:4mm 4mm 3mm;display:flex;flex-direction:column;border-right:1.2mm solid #f2c200}
+.qc-l{position:relative;overflow:hidden;width:49mm;background:linear-gradient(160deg,#14532d,#1c7a35);color:#fff;padding:4mm 4mm 3mm;display:flex;flex-direction:column;border-right:1.2mm solid #f2c200}
 .qc-top{display:flex;gap:2.2mm;align-items:center}
 .qc-top img{width:11mm;height:11mm;object-fit:contain;background:#fff;border-radius:50%;padding:.6mm;border:.5mm solid #f2c200}
 .qc-t b{display:block;font:700 4.2mm Georgia,serif;letter-spacing:.04em;color:#f2c200;line-height:1}
@@ -112,13 +112,19 @@ const CARD_CSS = `@page{margin:8mm}.qg,.qg *{-webkit-print-color-adjust:exact;pr
 .qc-nm{margin-top:auto}.qc-nm b{display:block;font:700 4.3mm/1.15 Georgia,serif;color:#fff}
 .qc-nm span{display:block;margin-top:1mm;font:700 3mm Georgia,serif;letter-spacing:.08em;color:#f2c200}
 .qc-mo{margin-top:2.4mm;padding-top:1.6mm;border-top:.3mm solid rgba(242,194,0,.6);font:700 1.7mm/1.4 Georgia,serif;letter-spacing:.13em;color:#cfe6cf}
-.qc-r{flex:1;min-width:0;background:#f7fbf5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3mm}
+.qc-r{position:relative;overflow:hidden;flex:1;min-width:0;background:#f7fbf5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3mm}
 .qc-q{background:#fff;border:.5mm solid #f2c200;border-radius:2mm;padding:1.4mm}.qc-q img{width:27mm;height:27mm;display:block}
-.qc-s{margin-top:2.2mm;font:700 2.2mm Georgia,serif;letter-spacing:.18em;color:#1c7a35;text-transform:uppercase}
-.qc-r code{margin-top:1mm;font:1.5mm/1.3 ui-monospace,Menlo,monospace;color:#5a6b5e;text-align:center;word-break:break-all;max-width:100%}`;
-const cardHTML = (c, crest) => `<div class="qc"><div class="qc-l"><div class="qc-top"><img src="${crest}" alt=""><div class="qc-t"><b>SAILS ’28</b><small>PIT-COMED · BATCH 28</small></div></div>
-  <div class="qc-nm"><b>${esc(c.mem.full_name)}</b><span>${esc(c.mem.student_no)}</span></div><div class="qc-mo">SEEKERS OF LOVE ADVENTURE<br>INSPIRED BY THE LOVE OF THE SEA</div></div>
-  <div class="qc-r"><div class="qc-q"><img src="${c.img}" alt="QR"></div><div class="qc-s">Scan · Pay · Verify</div><code>${esc(c.code)}</code></div></div>`;
+.qc-s{margin-top:2.2mm;white-space:nowrap;font:700 2mm Georgia,serif;letter-spacing:.1em;color:#1c7a35;text-transform:uppercase}
+.qc-wm{position:absolute;pointer-events:none;object-fit:contain}
+.qc-l .qc-wm{width:44mm;height:44mm;right:-12mm;bottom:-10mm;opacity:.16}
+.qc-r .qc-wm{width:40mm;height:40mm;left:50%;top:50%;transform:translate(-50%,-50%);opacity:.07}
+.qc-l>*:not(.qc-wm),.qc-r>*:not(.qc-wm){position:relative}
+.qc-id{position:absolute;top:0;right:0;background:#f2c200;color:#14532d;font:700 1.7mm Georgia,serif;letter-spacing:.2em;padding:.8mm 2mm .8mm 2.4mm;border-bottom-left-radius:2mm}
+.qc-ft{position:absolute;left:0;right:0;bottom:0;height:1.4mm;background:linear-gradient(90deg,#14532d,#1c7a35 60%,#f2c200)}
+.qc-r code{position:relative;margin-top:1mm;font:1.5mm/1.3 ui-monospace,Menlo,monospace;color:#5a6b5e;text-align:center;word-break:break-all;max-width:100%}`;
+const cardHTML = (c, crest) => `<div class="qc"><div class="qc-l"><img class="qc-wm" src="${crest}" alt=""><div class="qc-top"><img src="${crest}" alt=""><div class="qc-t"><b>SAILS ’28</b><small>PIT-COMED · BATCH 28</small></div></div>
+  <div class="qc-nm"><b>${esc(c.mem.full_name)}</b><span>${esc(c.mem.student_no)}</span></div><div class="qc-mo">UNITY AND STRENGTH<br>TOWARDS A COMMON GOAL</div></div>
+  <div class="qc-r"><img class="qc-wm" src="${crest}" alt=""><span class="qc-id">STUDENT ID</span><div class="qc-q"><img src="${c.img}" alt="QR"></div><div class="qc-s">Scan · Pay · Inspection</div><code>${esc(c.code)}</code><i class="qc-ft"></i></div></div>`;
 export async function showMemberCards() {
   const members = (await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active'))).sort((a, b) => surnameKey(a.full_name).localeCompare(surnameKey(b.full_name)));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
