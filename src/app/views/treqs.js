@@ -100,8 +100,13 @@ export async function mountTreqs(el, ctx) {
       <div class="card" style="max-height:50vh;overflow:auto">${(s.students || []).map((x, i) => `<div class="row"><div class="m"><b>${i + 1}. ${esc(x.name)}</b><small>${esc(x.student_no || '')}</small></div></div>`).join('')}</div>
       <div style="display:flex;gap:8px;margin-top:12px"><button class="btn gold" id="pr" style="flex:1">Print / PDF</button><button class="btn ghost" id="cx">Close</button></div>`, (m, close) => {
       m.querySelector('#cx').onclick = close;
-      m.querySelector('#pr').onclick = () => printHTML('Masterlist - ' + (s.section || ''), `${letterhead('Masterlist', (s.section || '') + ' · issued by the SAILS Treasurer · ' + new Date(s.issued_at).toLocaleDateString('en-PH'))}
-        <table><thead><tr><th>#</th><th>Name</th><th>Student ID</th></tr></thead><tbody>${(s.students || []).map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.name)}</td><td>${esc(x.student_no || '')}</td></tr>`).join('')}</tbody></table>`);
+      m.querySelector('#pr').onclick = () => {
+        const sg = (title, name, role, at) => `<div style="flex:1;min-width:150px;border-top:1.5px solid #14233f;padding-top:4px;text-align:center"><div style="height:0"></div><b>${name ? esc(name) : '&nbsp;'}</b><br><small style="color:#58708a;font-size:11px">${esc(title)} · ${esc(role)}${at ? '<br>' + fmtDateTime(at) : ''}</small></div>`;
+        printHTML('Masterlist - ' + (s.section || ''), `${letterhead('Masterlist', (s.section || '') + ' · issued by the SAILS Treasurer · ' + new Date(s.issued_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'long', day: 'numeric' }))}
+          <div class="sum"><div>Section<b>${esc(s.section || '')}</b></div><div>Active students<b>${s.count}</b></div><div>Issued on<b>${new Date(s.issued_at).toLocaleDateString('en-PH', { year: 'numeric', month: 'short', day: 'numeric' })}</b></div></div>
+          <h2>Students</h2><table><thead><tr><th style="width:36px">#</th><th>Name</th><th>Student ID</th></tr></thead><tbody>${(s.students || []).map((x, i) => `<tr><td>${i + 1}</td><td>${esc(x.name)}</td><td>${esc(x.student_no || '')}</td></tr>`).join('')}</tbody></table>
+          <div style="display:flex;gap:60px 18px;flex-wrap:wrap;margin-top:54px">${sg('Requested by', r.requested_by_name, 'Class Treasurer', r.requested_at)}${sg('Issued by', r.decided_by_name, 'SAILS Treasurer', r.decided_at)}</div>`);
+      };
     });
   }
 
