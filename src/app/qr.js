@@ -122,15 +122,9 @@ const CARD_CSS = `@page{margin:8mm}.qg,.qg *{-webkit-print-color-adjust:exact;pr
 .qc-id{position:absolute;top:0;right:0;background:#f2c200;color:#14532d;font:700 1.7mm Georgia,serif;letter-spacing:.2em;padding:.8mm 2mm .8mm 2.4mm;border-bottom-left-radius:2mm}
 .qc-ft{position:absolute;left:0;right:0;bottom:0;height:1.4mm;background:linear-gradient(90deg,#14532d,#1c7a35 60%,#f2c200)}
 .qc-r code{position:relative;margin-top:1mm;font:1.5mm/1.3 ui-monospace,Menlo,monospace;color:#5a6b5e;text-align:center;word-break:break-all;max-width:100%}
-.qc{background:var(--ship) center/cover #0b2e4a}
-.qc-l{width:42mm;padding-right:2.5mm;background:linear-gradient(90deg,rgba(8,48,28,.7) 0%,rgba(8,48,28,.4) 70%,rgba(8,48,28,.1) 100%)}
-.qc-t small{font-size:1.7mm;letter-spacing:.08em}.qc-nm b{font-size:3.8mm}.qc-q img{width:25mm;height:25mm}
-.qc-r{background:linear-gradient(180deg,rgba(6,38,22,0),rgba(6,38,22,.5) 75%)}
-.qc-l .qc-wm,.qc-r .qc-wm{display:none}
-.qc-s{color:#f2c200;text-shadow:0 .2mm .8mm rgba(0,0,0,.6)}.qc-r code{color:#e6f2e6;text-shadow:0 .2mm .8mm rgba(0,0,0,.6)}
-.qc-q{box-shadow:0 .6mm 2mm rgba(0,0,0,.45)}
-.qc-nm b,.qc-t b,.qc-nm span{text-shadow:0 .2mm 1mm rgba(0,0,0,.55)}
-.qc-ft{background:linear-gradient(90deg,#14532d,#f2c200)}`;
+.qc-l{background:linear-gradient(180deg,rgba(8,48,28,.55),rgba(8,48,28,.78)),var(--ship) 85% center/cover #14532d}
+.qc-l .qc-wm{display:none}
+.qc-nm b,.qc-t b,.qc-nm span{text-shadow:0 .2mm 1mm rgba(0,0,0,.5)}`;
 const cardHTML = (c, crest) => `<div class="qc"><div class="qc-l"><img class="qc-wm" src="${crest}" alt=""><div class="qc-top"><img src="${crest}" alt=""><div class="qc-t"><b>SAILS ’28</b><small>PIT-COMED · BATCH 28</small></div></div>
   <div class="qc-nm"><b>${esc(c.mem.full_name)}</b><span>${esc(c.mem.student_no)}</span></div><div class="qc-mo">UNITY AND STRENGTH<br>TOWARDS A COMMON GOAL</div></div>
   <div class="qc-r"><img class="qc-wm" src="${crest}" alt=""><span class="qc-id">STUDENT ID</span><div class="qc-q"><img src="${c.img}" alt="QR"></div><div class="qc-s">Scan · Pay · Inspection</div><code>${esc(c.code)}</code><i class="qc-ft"></i></div></div>`;
