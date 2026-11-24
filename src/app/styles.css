@@ -445,3 +445,9 @@ html[data-theme=dark] img.hvid,html[data-theme=dark] video.hvid{filter:brightnes
 .splash .word{font-size:.72rem;letter-spacing:.22em;color:#1c7a35;font-weight:700}
 @keyframes sbar{0%{transform:translateX(-100%)}100%{transform:translateX(250%)}}
 @media(prefers-reduced-motion:reduce){.splash .wm,.splash .bar:after{animation:none}}
+
+.splash{overflow:hidden}
+.splash .bgc{position:absolute;left:50%;top:50%;width:min(92vw,420px);height:auto;transform:translate(-50%,-50%);opacity:.14;pointer-events:none;animation:bgc 6s ease-in-out infinite}
+.splash .wm,.splash .bar,.splash .word{position:relative}
+@keyframes bgc{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.04)}}
+@media(prefers-reduced-motion:reduce){.splash .bgc{animation:none}}
