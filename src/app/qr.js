@@ -101,20 +101,24 @@ export function surnameKey(full) {
   let i = w.length - 1; while (i > 1 && PARTS.has(w[i - 1].toLowerCase())) i--;
   return (w.slice(i).join(' ') + ', ' + w.slice(0, i).join(' ')).toLowerCase();
 }
-const CARD_CSS = `@page{margin:10mm}*{-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.g{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-.c{break-inside:avoid;border:2px solid #1c7a35;outline:1px solid #f2c200;outline-offset:-5px;border-radius:12px;overflow:hidden;text-align:center;background:#fff;font-family:Georgia,'Times New Roman',serif}
-.h{padding:8px 10px 5px;border-bottom:3px double #1c7a35;background:#fff}
-.h img{width:30px;height:30px;object-fit:contain;display:block;margin:0 auto 2px}
-.h .a{font:700 5px Georgia,serif;letter-spacing:.14em;color:#8a6d00;line-height:1.35}
-.h .b{font:700 12px Georgia,serif;color:#1c7a35;letter-spacing:.04em;margin-top:1px}
-.h small{display:block;font-size:7px;letter-spacing:.12em;color:#4a5a4e}
-.q{padding:9px 10px 4px;background:linear-gradient(#fff,#f4f9f2)}.q img{width:100%;display:block}
-.n{padding:2px 8px 3px;background:#f4f9f2}.n b{display:block;font-size:12px;color:#14532d;line-height:1.2}.n small{font-size:10px;color:#5a6b5e}
-.k{padding:3px 8px 6px;background:#f4f9f2}.k span{display:block;font:700 6px Georgia,serif;letter-spacing:.16em;color:#8a6d00}
-.k code{display:block;font:5.6px/1.35 ui-monospace,Menlo,Consolas,monospace;color:#1a2a1f;word-break:break-all}
-.f{font:700 7.5px Georgia,serif;letter-spacing:.16em;color:#f2c200;background:#1c7a35;padding:4px;text-transform:uppercase}`;
-const cardHead = crest => `<div class="h"><img src="${crest}" alt=""><div class="a">SEEKERS OF LOVE ADVENTURE<br>INSPIRED BY THE LOVE OF THE SEA</div><div class="b">SAILS ’28</div><small>PIT-COMED · BATCH 28</small></div>`;
+const CARD_CSS = `@page{margin:8mm}.qg,.qg *{-webkit-print-color-adjust:exact;print-color-adjust:exact;box-sizing:border-box}
+.qg{display:grid;grid-template-columns:repeat(2,85.6mm);gap:3mm 4mm;justify-content:center;font-family:Georgia,'Times New Roman',serif}
+.qc{width:85.6mm;height:54mm;display:flex;border-radius:3.5mm;overflow:hidden;border:.4mm solid #1c7a35;break-inside:avoid;background:#fff}
+.qc-l{width:49mm;background:linear-gradient(160deg,#14532d,#1c7a35);color:#fff;padding:4mm 4mm 3mm;display:flex;flex-direction:column;border-right:1.2mm solid #f2c200}
+.qc-top{display:flex;gap:2.2mm;align-items:center}
+.qc-top img{width:11mm;height:11mm;object-fit:contain;background:#fff;border-radius:50%;padding:.6mm;border:.5mm solid #f2c200}
+.qc-t b{display:block;font:700 4.2mm Georgia,serif;letter-spacing:.04em;color:#f2c200;line-height:1}
+.qc-t small{font-size:2mm;letter-spacing:.12em;color:#d8ecd8}
+.qc-nm{margin-top:auto}.qc-nm b{display:block;font:700 4.3mm/1.15 Georgia,serif;color:#fff}
+.qc-nm span{display:block;margin-top:1mm;font:700 3mm Georgia,serif;letter-spacing:.08em;color:#f2c200}
+.qc-mo{margin-top:2.4mm;padding-top:1.6mm;border-top:.3mm solid rgba(242,194,0,.6);font:700 1.7mm/1.4 Georgia,serif;letter-spacing:.13em;color:#cfe6cf}
+.qc-r{flex:1;min-width:0;background:#f7fbf5;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:3mm}
+.qc-q{background:#fff;border:.5mm solid #f2c200;border-radius:2mm;padding:1.4mm}.qc-q img{width:27mm;height:27mm;display:block}
+.qc-s{margin-top:2.2mm;font:700 2.2mm Georgia,serif;letter-spacing:.18em;color:#1c7a35;text-transform:uppercase}
+.qc-r code{margin-top:1mm;font:1.5mm/1.3 ui-monospace,Menlo,monospace;color:#5a6b5e;text-align:center;word-break:break-all;max-width:100%}`;
+const cardHTML = (c, crest) => `<div class="qc"><div class="qc-l"><div class="qc-top"><img src="${crest}" alt=""><div class="qc-t"><b>SAILS ’28</b><small>PIT-COMED · BATCH 28</small></div></div>
+  <div class="qc-nm"><b>${esc(c.mem.full_name)}</b><span>${esc(c.mem.student_no)}</span></div><div class="qc-mo">SEEKERS OF LOVE ADVENTURE<br>INSPIRED BY THE LOVE OF THE SEA</div></div>
+  <div class="qc-r"><div class="qc-q"><img src="${c.img}" alt="QR"></div><div class="qc-s">Scan · Pay · Verify</div><code>${esc(c.code)}</code></div></div>`;
 export async function showMemberCards() {
   const members = (await db(sb.from('v2_members').select('id,full_name,student_no').eq('status', 'active'))).sort((a, b) => surnameKey(a.full_name).localeCompare(surnameKey(b.full_name)));
   const m = modal(`<h3>Student QR cards</h3><p class="muted" id="pg">Generating ${members.length} codes…</p><div id="g"></div>`);
@@ -125,12 +129,10 @@ export async function showMemberCards() {
     try { const code = await db(sb.rpc('v2_member_token', { p_member: mem.id })); cards.push({ mem, code, img: await brandedQR(code, 320, crest) }); } catch (e) { toast(e.message, true); break; }
     m.querySelector('#pg').textContent = `Generating ${cards.length}/${members.length}…`;
   }
-  const html = cards.map(c => `<div class="c">${cardHead(crest)}
-    <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}</small></div>
-    <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
+  const html = cards.map(c => cardHTML(c, crest)).join('');
   m.querySelector('#pg').textContent = `${cards.length} cards ready, in alphabetical order by last name. Each code is private to that student — keep the printout safe.`;
-  m.querySelector('#g').innerHTML = `<button class="btn gold" id="pr" style="width:100%;margin-bottom:12px">Print / save as PDF</button><style>${CARD_CSS}.g{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}</style><div class="g">${html}</div>`;
-  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="g">${html}</div>`, { plain: true });
+  m.querySelector('#g').innerHTML = `<button class="btn gold" id="pr" style="width:100%;margin-bottom:12px">Print / save as PDF</button><style>${CARD_CSS}.qg{grid-template-columns:repeat(auto-fill,85.6mm);justify-content:start}</style><div class="qg">${html}</div>`;
+  m.querySelector('#pr').onclick = () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="qg">${html}</div>`, { plain: true });
 }
 
 export async function showReceipt(entryId) {
@@ -199,13 +201,11 @@ export function makeQRCodes({ guard = false } = {}) {
         cards.push({ mem, code, img: await brandedQR(code, 320, crest) });
       }
       cards.sort((a, b) => surnameKey(a.mem.full_name).localeCompare(surnameKey(b.mem.full_name)));
-      const html = cards.map(c => `<div class="c">${cardHead(crest)}
-        <div class="q"><img src="${c.img}" alt="QR"></div><div class="n"><b>${esc(c.mem.full_name)}</b><small>${esc(c.mem.student_no)}${c.mem.section ? ' · ' + esc(c.mem.section) : ''}</small></div>
-        <div class="k"><span>ALPHA CODE</span><code>${esc(c.code)}</code></div><div class="f">Scan · Pay · Verify</div></div>`).join('');
+      const html = cards.map(c => cardHTML(c, crest)).join('');
       m.querySelector('#out').innerHTML = `<p class="muted" style="margin-top:12px">${cards.length} card${cards.length === 1 ? '' : 's'} ready${added ? ` · ${added} new student${added === 1 ? '' : 's'} added to the roster` : ''}. Each code is private to that student — hand it over, don't post it.</p>
         ${note.length ? `<ul class="muted" style="font-size:.85em">${note.map(x => `<li>${esc(x)}</li>`).join('')}</ul>` : ''}
-        ${cards.length ? `<button class="btn gold" id="pr" style="width:100%;margin:8px 0">Print / save as PDF</button><style>${CARD_CSS}.g{grid-template-columns:repeat(auto-fill,minmax(150px,1fr))}</style><div class="g">${html}</div>` : ''}`;
-      m.querySelector('#pr')?.addEventListener('click', () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="g">${html}</div>`, { plain: true }));
+        ${cards.length ? `<button class="btn gold" id="pr" style="width:100%;margin:8px 0">Print / save as PDF</button><style>${CARD_CSS}.qg{grid-template-columns:repeat(auto-fill,85.6mm);justify-content:start}</style><div class="qg">${html}</div>` : ''}`;
+      m.querySelector('#pr')?.addEventListener('click', () => printHTML('Student QR cards', `<style>${CARD_CSS}</style><div class="qg">${html}</div>`, { plain: true }));
     } catch (e) { er.textContent = /duplicate/i.test(e.message) ? 'A Student ID in your list clashes with one already on the roster.' : e.message; }
     btn.disabled = false; btn.textContent = 'Make QR codes';
   };
