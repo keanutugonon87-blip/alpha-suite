@@ -2,9 +2,8 @@ import { FUNDS, fundLabel, sb, db, esc, peso, fmtDate, onSync, skeleton, modal, 
 import { t, getLang, setLang } from '../i18n.js';
 import { getTheme, setTheme, getTextSize, setTextSize } from '../display.js';
 import { showOfficerProfile } from '../profile.js';
-import { heroScene, warmScenes, sceneMode, setSceneMode } from '../scenes.js';
 import { percentPaid } from '../money.js';
-import { calendarHTML, wireCalendar, newCalState } from '../coa.js';
+import { calendarHTML, wireCalendar, newCalState, todayYMD, catLabel } from '../coa.js';
 import { auth, loadAuth, callAuth, enter, signOutViewer } from '../auth.js';
 import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
@@ -201,11 +200,9 @@ export async function renderPublic(root) {
     let sceneChanged = false; const th = getTheme(), sz = getTextSize(), on = (c, v) => c === v ? ' on' : '';
     modal(`<h3>${t('display')}</h3><label>${t('textSize')}</label><div class="dispgrid" data-g="sz">${[[100, 'Aa'], [115, 'Aa+'], [130, 'Aa++']].map(([v, l]) => `<button class="btn ghost${on(sz, v)}" data-v="${v}" aria-pressed="${sz === v}">${l}</button>`).join('')}</div>
       <label>${t('theme')}</label><div class="dispgrid" data-g="th">${[['auto', t('themeAuto')], ['light', t('themeLight')], ['dark', t('themeDark')]].map(([v, l]) => `<button class="btn ghost${on(th, v)}" data-v="${v}" aria-pressed="${th === v}">${l}</button>`).join('')}</div>
-      <label>${t('scenery')}</label><div class="dispgrid" data-g="sc">${[['auto', t('themeAuto')], ['on', t('sceneOn')], ['off', t('sceneOff')]].map(([v, l]) => `<button class="btn ghost${on(sceneMode(), v)}" data-v="${v}" aria-pressed="${sceneMode() === v}">${l}</button>`).join('')}</div>
-      <p class="muted" style="margin:-6px 0 12px;font-size:.85rem">${t('sceneHint')}</p>
       <button class="btn ghost" id="dx" style="width:100%">${t('done')}</button>`, (m, close) => {
       m.querySelector('#dx').onclick = () => { close(); if (sceneChanged) renderPublic(root); };
-      m.querySelectorAll('[data-g] .btn').forEach(b => b.onclick = () => { const g = b.parentElement.dataset.g; if (g === 'sz') setTextSize(+b.dataset.v); else if (g === 'th') setTheme(b.dataset.v); else { setSceneMode(b.dataset.v); sceneChanged = true; }
+      m.querySelectorAll('[data-g] .btn').forEach(b => b.onclick = () => { const g = b.parentElement.dataset.g; if (g === 'sz') setTextSize(+b.dataset.v); else setTheme(b.dataset.v);
         b.parentElement.querySelectorAll('.btn').forEach(x => { x.classList.toggle('on', x === b); x.setAttribute('aria-pressed', x === b); }); });
     });
   };
@@ -284,6 +281,46 @@ export async function renderPublic(root) {
     const list = [...FUNDS, ...(by.none && (+by.none.collected || +by.none.spent) ? [{ k: 'none', label: 'Unassigned' }] : [])];
     return `<div class="fchips">${list.map(f => { const r = by[f.k] || {}; return `<span class="fchip f-${f.k}"><i></i>${esc(f.label)} <b>${peso((+r.collected || 0) - (+r.spent || 0))}</b></span>`; }).join('')}</div>`;
   };
+
+  /* ---- Home: slim brand card, my standing, next activity, quick tiles (replaces the balance hero) ---- */
+  const LL = (en, ceb) => getLang() === 'ceb' ? ceb : en;
+  const cachedMe = () => { try { const c = JSON.parse(localStorage.getItem('alpha-me-cache') || 'null'); return c && c.token === tok() ? c.data : null; } catch { return null; } };
+  const greet = () => { const h = +new Date().toLocaleString('en-GB', { hour: 'numeric', hour12: false, timeZone: 'Asia/Manila' }) % 24; return h < 12 ? LL('Good morning', 'Maayong buntag') : h < 18 ? LL('Good afternoon', 'Maayong hapon') : LL('Good evening', 'Maayong gabii'); };
+  function standingHTML(d) {
+    if (!d) return `<div class="hm-card hm-guest"><b>${LL('Sign in to see your standing', 'Mag-sign in aron makita ang imong kahimtang')}</b><span>${LL('Use your Student ID to view dues, QR and statements.', 'Gamita ang imong Student ID aron makita ang utang, QR ug statement.')}</span><button class="btn gold sm" data-go="me">${LL('Sign in', 'Mag-sign in')}</button></div>`;
+    const live = (d.balances || []).filter(b => !b.waived), due = live.reduce((x, b) => x + +b.due, 0), paid = live.reduce((x, b) => x + +b.paid, 0), owed = live.reduce((x, b) => x + +b.owed, 0);
+    const pct = due ? Math.min(100, Math.round(paid / due * 100)) : 100, tag = owed <= 0 ? LL('All clear', 'Tarong na') : pct >= 70 ? LL('Almost done', 'Hapit na') : LL('Payment due', 'Naay utang');
+    return `<div class="hm-card"><small>${LL('My standing', 'Akong kahimtang')}</small><div class="hm-st"><div class="hm-big">${owed > 0 ? peso(owed) : '✓'} <span>${owed > 0 ? LL('still due', 'nahabilin') : LL('nothing due', 'walay utang')}</span></div><span class="hm-pill ${owed > 0 ? '' : 'ok'}">${tag}</span></div>
+      <div class="hm-bar" role="img" aria-label="${pct}%"><i style="width:${pct}%"></i></div><div class="hm-meta"><span>${LL('Paid', 'Bayad')} ${peso(paid)} ${LL('of', 'sa')} ${peso(due)}</span><span>${pct}%</span></div>
+      <button class="btn gold" id="hm-stmt" style="width:100%;margin-top:12px">${LL('My statement', 'Akong statement')}</button></div>`;
+  }
+  function nextHTML() {
+    const today = todayYMD(), nx = (data.coa || []).filter(i => i.status === 'approved' && (i.ends_on || i.starts_on) >= today).sort((x, y) => x.starts_on < y.starts_on ? -1 : 1)[0];
+    if (!nx) return '';
+    const [y, mo, dd] = nx.starts_on.split('-').map(Number), diff = Math.round((Date.UTC(y, mo - 1, dd) - Date.parse(today + 'T00:00:00Z')) / 864e5);
+    const when = nx.starts_on <= today ? LL('Today', 'Karon') : diff === 1 ? LL('Tomorrow', 'Ugma') : LL(`in ${diff} days`, `sa ${diff} ka adlaw`), mon = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'][mo - 1];
+    return `<button type="button" class="hm-next" data-go="bulletin"><span class="hm-dt"><b>${nx.starts_on <= today ? new Date().getDate() : dd}</b><small>${mon}</small></span><span class="hm-nt"><b>${esc(nx.title)}</b><small>${esc([nx.time_note, nx.venue].filter(Boolean).join(' · ') || catLabel(nx.category))}</small></span><em>${when}</em></button>`;
+  }
+  function homeHTML() {
+    const me = cachedMe(), first = me?.name ? String(me.name).trim().split(/\s+/)[0] : '';
+    return `<div class="hm"><div class="hm-hd" style="background-image:linear-gradient(180deg,rgba(8,48,28,.55),rgba(8,48,28,.9)),url(assets/ship-bg.png)"><div class="hm-row"><span class="hm-cr"><img src="assets/wolf-crest.png" alt="SAILS crest"></span><div><b>SAILS ’28</b><small>PIT-COMED · BATCH 28</small></div></div>
+      <div class="hm-gr">${first ? `${greet()}, ${esc(first)}` : LL('Welcome to SAILS ’28', 'Maayong pag-abot sa SAILS ’28')}</div><div class="hm-mo">${LL('Unity and strength towards a common goal', 'Panag-uban ug kusog padulong sa komon nga tumong')}</div></div>
+      <div id="hm-standing">${standingHTML(me)}</div>${nextHTML()}
+      <div class="hm-g"><button type="button" class="hm-q hl" id="hm-req"><i>📄</i><span>${LL('Request fund records', 'Pangayo og rekord sa pondo')}<small>${LL('Fund transparency', 'Transparency sa pondo')}</small></span></button>
+        <button type="button" class="hm-q" data-go="me"><i>🪪</i><span>${LL('My status', 'Akong status')}</span></button>
+        <button type="button" class="hm-q" data-go="docs"><i>🗂️</i><span>${t('pubDocs')}</span></button>
+        <button type="button" class="hm-q" data-go="bulletin"><i>📅</i><span>${t('bulletin')}</span></button></div></div>`;
+  }
+  async function refreshStanding() {
+    const tk = tok(); if (!tk) return;
+    try { const { data: d, error } = await sb.rpc('v2_self_check', { p_token: tk }); if (error || !d) return; const box = m.querySelector('#hm-standing'); if (box && tab === shownTab) { box.innerHTML = standingHTML(d); wireHome(); } } catch { /* offline: the cached card stays */ }
+  }
+  let shownTab = '';
+  function wireHome() {
+    m.querySelectorAll('.hm [data-go]').forEach(b => b.onclick = () => { tab = b.dataset.go; paint(); });
+    m.querySelector('#hm-req')?.addEventListener('click', () => { if (!canAsk()) { tab = 'me'; paint(); return; } askRecord(LL('Fund transparency report', 'Report sa pondo'), LL('e.g. Where the Foundation Week fund went', 'pananglitan: Asa gigamit ang pondo sa Foundation Week')); });
+    m.querySelector('#hm-stmt')?.addEventListener('click', () => { const tk = tok(); if (tk) statement(tk); });
+  }
   function paint() {
     const { off: officers, tre } = data;
     const cur = tre.open ? (tre.entries || []).filter(e => e.period_id === tre.open.id) : [];
@@ -299,27 +336,10 @@ export async function renderPublic(root) {
           ${open === x.id ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body || '')}</div>${x.link ? `<p style="margin:8px 0 0"><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${t('pubDocsOpen')}</a></p>` : ''}` : ''}</div>`).join('') || `<div class="empty"><b>${t('pubDocsNone')}</b></div>`}</div>`; },
       bulletin: () => `${calendarHTML(data.coa || [], cal)}<p style="margin:10px 2px"><a href="https://www.facebook.com/profile.php?id=61593577524416" target="_blank" rel="noopener">${t('fbLink')}</a></p>`,
     };
-    const hs = heroScene(SCENE_OF[tab] || tab);
-    m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}<div class="hero ${hs.dark ? 'dk' : ''}" style="background:${hs.top}">
-        <div class="emblem">${'<div class="rose">' + ROSE + '</div>'}<span class="crest-ring"><img src="assets/wolf-crest.png" alt="SAILS crest"></span></div>
-        <div class="copy"><small>${t('balance')}</small><div class="big" id="bal">${peso(tre.balance)}</div>
-          <p>${esc(tre.open?.name || '')}</p>${fundChips()}</div>
-        ${hs.html}</div>
+    m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}${homeHTML()}
       <div class="seg" role="tablist">${[['archive', t('archive')], ['faq', t('faq')], ['privacy', t('privacy')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['docs', t('pubDocs')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
       <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
-    {
-      /* the compass answers the tap: swing to this tab's bearing, fade the scenery, ease the sky colour */
-      const rose = m.querySelector('.rose'), hero = m.querySelector('.hero'), hsc = m.querySelector('.hscene');
-      const prev = ang; ang += ((TABS.indexOf(tab) * 60 - ang + 540) % 360) - 180;
-      if (rose && !reduceMotion()) { rose.style.transform = `rotate(${prev}deg)`; requestAnimationFrame(() => requestAnimationFrame(() => { rose.style.transform = `rotate(${ang}deg)`; })); }
-      else if (rose) rose.style.transform = `rotate(${ang}deg)`;
-      if (hero && lastTop && lastTop !== hs.top && !reduceMotion()) { hero.style.background = lastTop; hero.style.transition = 'background .7s ease'; requestAnimationFrame(() => requestAnimationFrame(() => { hero.style.background = hs.top; })); }
-      if (hsc && lastTab && lastTab !== tab && !reduceMotion()) hsc.classList.add('swap');
-      hsc?.querySelectorAll('.hvid').forEach(v => v.addEventListener('error', () => hsc.classList.add('novid'), { once: true }));
-      warmScenes();
-      lastTab = tab; lastTop = hs.top;
-    }
-    if (!animated) { animated = true; countUp(m.querySelector('#bal'), +tre.balance || 0); }
+    wireHome(); shownTab = tab; if (tok()) refreshStanding();
     if (tab === 'learn') import('./learn.js').then(l => { if (tab === 'learn' && m.querySelector('#sec')) l.renderLearn(m.querySelector('#sec')); });
     if (tab === 'me') renderMe(m.querySelector('#sec'));
     m.querySelector('#pon')?.addEventListener('click', async e => { e.target.disabled = true; try { await enablePush(); toast('Alerts are on'); } catch (x) { toast(x.message, true); } pstate = await pushState(); paint(); });
