@@ -190,7 +190,7 @@ export async function renderPublic(root) {
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
   const off = onSync((s, d) => { const c = root.querySelector('#sync'); if (!c) return; c.className = 'chip ' + s;
     c.querySelector('span').textContent = { live: 'Live', syncing: 'Syncing…', offline: 'Offline', error: 'Sync error' }[s]; c.title = d || ''; });
-  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'archive', cal = newCalState(), data = null, animated = false, pdOpen = null;
+  let ang = 0, lastTab = '', lastTop = '', pstate = 'unsupported', tab = 'home', cal = newCalState(), data = null, animated = false, pdOpen = null;
   const ord = n => { const r = n % 100; if (r >= 11 && r <= 13) return n + 'th'; return n + (['th','st','nd','rd'][n % 10] || 'th'); };
   const isOpen = v => v.status !== 'resolved';
   const m = root.querySelector('#m');
@@ -317,14 +317,34 @@ export async function renderPublic(root) {
   }
   let shownTab = '';
   function wireHome() {
-    m.querySelectorAll('.hm [data-go]').forEach(b => b.onclick = () => { tab = b.dataset.go; paint(); });
+    m.querySelectorAll('.hm [data-go]').forEach(b => b.onclick = () => { tab = b.dataset.go; lastIn[groupOf(tab)[0]] = tab; paint(); window.scrollTo({ top: 0 }); });
     m.querySelector('#hm-req')?.addEventListener('click', () => { if (!canAsk()) { tab = 'me'; paint(); return; } askRecord(LL('Fund transparency report', 'Report sa pondo'), LL('e.g. Where the Foundation Week fund went', 'pananglitan: Asa gigamit ang pondo sa Foundation Week')); });
     m.querySelector('#hm-stmt')?.addEventListener('click', () => { const tk = tok(); if (tk) statement(tk); });
+  }
+
+  /* ---- Navigation: five bottom buttons; Records, Class and More open a small switcher for their pages ---- */
+  const GROUPS = [['home', LL('Home', 'Panid'), ['home'], '<path d="M3 11.5 12 4l9 7.5M5.5 10v9.5h13V10M10 19.5v-5h4v5"/>'],
+    ['records', LL('Records', 'Rekord'), ['archive', 'docs'], '<path d="M7 3h8l4 4v14H7zM15 3v4h4M10 12h6M10 16h6"/>'],
+    ['class', LL('Class', 'Klase'), ['officers', 'learn', 'bulletin'], '<circle cx="9" cy="8" r="3"/><path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6M16 5.2a3 3 0 0 1 0 5.6M18 14.3c1.8.7 3 2.4 3 4.7"/>'],
+    ['me', t('me'), ['me'], '<rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="9" cy="11" r="2"/><path d="M6 16c.5-1.6 1.7-2.4 3-2.4s2.5.8 3 2.4M15 10h3M15 14h3"/>'],
+    ['more', LL('More', 'Dugang'), ['faq', 'privacy'], '<circle cx="5.5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="18.5" cy="12" r="1.4"/>']];
+  const TABLABEL = { archive: t('archive'), docs: t('pubDocs'), officers: t('officers'), learn: t('learn'), bulletin: t('bulletin'), faq: t('faq'), privacy: t('privacy'), me: t('me') };
+  const shown = g => g[2].filter(k => !(auth.kind === 'guest' && GUEST_HIDE.includes(k)));
+  const groupOf = k => GROUPS.find(g => g[2].includes(k)) || GROUPS[0];
+  const lastIn = {};
+  function subNav() {
+    const g = groupOf(tab), ks = shown(g); if (ks.length < 2) return '';
+    return `<div class="seg" role="tablist">${ks.map(k => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${TABLABEL[k]}</button>`).join('')}</div>`;
+  }
+  function bottomNav() {
+    const cur = groupOf(tab)[0];
+    return `<nav class="bnav" aria-label="Main">${GROUPS.filter(g => shown(g).length).map(g => `<button type="button" data-g="${g[0]}" class="${cur === g[0] ? 'on' : ''}"${cur === g[0] ? ' aria-current="page"' : ''}><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${g[3]}</svg><span>${g[1]}</span></button>`).join('')}</nav>`;
   }
   function paint() {
     const { off: officers, tre } = data;
     const cur = tre.open ? (tre.entries || []).filter(e => e.period_id === tre.open.id) : [];
     const views = {
+      home: () => '',
       archive: () => archiveView(),
       faq: () => faqView(),
       privacy: () => privacyView(),
@@ -336,16 +356,16 @@ export async function renderPublic(root) {
           ${open === x.id ? `<div style="margin-top:8px;white-space:pre-wrap">${esc(x.body || '')}</div>${x.link ? `<p style="margin:8px 0 0"><a href="${esc(x.link)}" target="_blank" rel="noopener noreferrer">${t('pubDocsOpen')}</a></p>` : ''}` : ''}</div>`).join('') || `<div class="empty"><b>${t('pubDocsNone')}</b></div>`}</div>`; },
       bulletin: () => `${calendarHTML(data.coa || [], cal)}<p style="margin:10px 2px"><a href="https://www.facebook.com/profile.php?id=61593577524416" target="_blank" rel="noopener">${t('fbLink')}</a></p>`,
     };
-    m.innerHTML = `${(data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${alertBar()}${homeHTML()}
-      <div class="seg" role="tablist">${[['archive', t('archive')], ['faq', t('faq')], ['privacy', t('privacy')], ['me', t('me')], ['officers', t('officers')], ['learn', t('learn')], ['docs', t('pubDocs')], ['bulletin', t('bulletin')]].filter(([k]) => !(auth.kind === 'guest' && GUEST_HIDE.includes(k))).map(([k, l]) => `<button role="tab" data-t="${k}" class="${tab === k ? 'on' : ''}" aria-selected="${tab === k}">${l}</button>`).join('')}</div>
-      <section id="sec">${tab === 'learn' || tab === 'me' ? '' : views[tab]()}</section>`;
+    m.innerHTML = `${tab === 'home' && (data.ann || []).length ? `<div class="notices">${data.ann.map(a => `<div class="notice ${a.pinned ? 'pin' : ''}"><b>${a.pinned ? '📌 ' : '📣 '}${esc(a.title)}</b>${a.body ? `<p>${esc(a.body)}</p>` : ''}</div>`).join('')}</div>` : ''}${tab === 'home' ? alertBar() + homeHTML() : ''}
+      ${subNav()}<section id="sec">${tab === 'learn' || tab === 'me' || tab === 'home' ? '' : views[tab]()}</section>${bottomNav()}`;
     wireHome(); shownTab = tab; if (tok()) refreshStanding();
     if (tab === 'learn') import('./learn.js').then(l => { if (tab === 'learn' && m.querySelector('#sec')) l.renderLearn(m.querySelector('#sec')); });
     if (tab === 'me') renderMe(m.querySelector('#sec'));
     m.querySelector('#pon')?.addEventListener('click', async e => { e.target.disabled = true; try { await enablePush(); toast('Alerts are on'); } catch (x) { toast(x.message, true); } pstate = await pushState(); paint(); });
     m.querySelector('#poff')?.addEventListener('click', async () => { try { await disablePush(); } catch { /* ignore */ } pstate = await pushState(); paint(); });
     if (tab === 'bulletin') wireCalendar(m.querySelector('#sec'), cal, paint);
-    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; paint(); });
+    m.querySelectorAll('[data-t]').forEach(b => b.onclick = () => { tab = b.dataset.t; lastIn[groupOf(tab)[0]] = tab; paint(); window.scrollTo({ top: 0 }); });
+    m.querySelectorAll('.bnav [data-g]').forEach(b => b.onclick = () => { const g = GROUPS.find(x => x[0] === b.dataset.g); tab = lastIn[g[0]] && shown(g).includes(lastIn[g[0]]) ? lastIn[g[0]] : shown(g)[0]; paint(); window.scrollTo({ top: 0 }); });
     m.querySelectorAll('[data-dc]').forEach(b => b.onclick = e => { if (e.target.closest('a')) return; pdOpen = pdOpen === b.dataset.dc ? null : b.dataset.dc; paint(); });
     m.querySelectorAll('[data-rq]').forEach(b => b.onclick = () => askRecord(b.dataset.rq));
     m.querySelector('#rq-new')?.addEventListener('click', () => askRecord());

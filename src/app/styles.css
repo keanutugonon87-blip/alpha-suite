@@ -476,3 +476,11 @@ background:radial-gradient(120% 70% at 50% 0%,rgba(242,194,0,.16),transparent 55
 .hm-q small{display:block;font-weight:500;font-size:.64rem;color:var(--soft)}
 .hm-q.hl{background:#fff9dc;border-color:#f2d24d;color:#3b2f00}.hm-q.hl i{background:#f9e58a}.hm-q.hl small{color:#7a6410}
 .hm-q:focus-visible,.hm-next:focus-visible{outline:3px solid var(--sea);outline-offset:2px}
+
+/* Bottom navigation */
+.bnav{position:fixed;left:0;right:0;bottom:0;z-index:40;display:flex;justify-content:center;gap:2px;padding:6px 8px max(8px,env(safe-area-inset-bottom));background:var(--card-glass);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--line);box-shadow:0 -6px 20px -12px rgba(12,31,92,.25)}
+.bnav button{all:unset;box-sizing:border-box;cursor:pointer;flex:1;max-width:96px;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;border-radius:12px;color:var(--soft);font-size:.66rem;font-weight:700;position:relative;-webkit-tap-highlight-color:transparent}
+.bnav svg{width:23px;height:23px}
+.bnav button.on{color:var(--ok)}.bnav button.on:before{content:"";position:absolute;top:-7px;left:26%;right:26%;height:3px;border-radius:3px;background:#f2c200}
+.bnav button:focus-visible{outline:3px solid var(--sea);outline-offset:-2px}
+main#m{padding-bottom:calc(92px + env(safe-area-inset-bottom))!important}
