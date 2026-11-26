@@ -1,7 +1,7 @@
 import { studentSearch, fundLabel, fundOptions, FUNDS, sb, db, watch, esc, peso, fmtDate, fmtDateTime, toast, toastUndo, modal, skeleton, resizeImage, safeWrite, uuid, printHTML, letterhead, askText, confirmDialog, initials, dayLabel } from '../core.js';
 import { ymManila, net as netOf, balanceAt, needsSecond, findDuplicate } from '../money.js';
 import { exportXLSX } from '../xlsx.js';
-import { scanMember, showMemberCards, showReceipt } from '../qr.js';
+import { scanMember, showReceipt } from '../qr.js';
 
 const CATS_IN = ['Contribution', 'Fines', 'Event or activity fund', 'Donation'];
 const CATS_OUT = ['Supplies', 'Printing', 'Event Expenses', 'Transportation', 'Snacks / Food', 'Other'];
@@ -73,7 +73,7 @@ export async function mountTreasury(el, ctx) {
       const todo = [pendingN ? ['pending', `${pendingN} waiting for approval`] : null, soon ? ['due', `${soon} charge${soon > 1 ? 's' : ''} due within a week or late`] : null, prevOpen ? ['month', 'Last month is not closed yet'] : null].filter(Boolean);
       body = `${rrqBox}${confBanner}${todo.length ? `<div class="todo" role="list" aria-label="To do">${todo.map(([k, t]) => `<button class="btn ghost sm" role="listitem" data-todo="${k}">${esc(t)}</button>`).join('')}</div>` : ''}<div class="grid"><div class="stat gold"><small>Balance</small><b>${peso(bal)}</b></div><div class="stat"><small>Opening</small><b>${peso(cur.opening_balance)}</b></div>
         <div class="stat"><small>Collected</small><b>${peso(coll)}</b></div><div class="stat"><small>Spent</small><b>${peso(exp)}</b></div></div>
-        <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button><button class="btn ghost" id="cards">QR cards</button>` : ''}
+        <div class="bar" style="margin-top:14px">${canWrite ? `<button class="btn gold" id="addIn">+ Collection</button><button class="btn" id="scan">Scan QR</button><button class="btn" id="addOut">+ Expense</button>` : ''}
           <input id="q" type="search" placeholder="Search name, receipt, purpose" aria-label="Search entries" value="${esc(qtext)}" style="flex:1 1 150px;min-width:0"><select id="flt" style="width:auto"><option value="all">All</option><option value="collection">Collections</option><option value="expense">Expenses</option><option value="pending">Pending${pendingN ? ` (${pendingN})` : ''}</option></select></div>
         <div class="card"><h3 style="font-size:1rem;margin-bottom:6px">${esc(cur.name)}</h3>${rows(shown, true)}</div>
         <div class="bar"><button class="btn ghost" id="csv">Export ledger (Excel)</button><button class="btn ghost" id="rep">Period report</button><button class="btn ghost" id="mrep">Monthly report</button><button class="btn ghost" id="mclose">Month close${lockedMonths.size ? ` (${lockedMonths.size} 🔒)` : ''}</button>${isMayor ? '<button class="btn danger" id="close" style="margin-left:auto">Close period…</button>' : ''}</div>`;
@@ -111,7 +111,6 @@ export async function mountTreasury(el, ctx) {
     }));
     $('#addOut')?.addEventListener('click', () => entryForm('expense', cur));
     $('#scan')?.addEventListener('click', async () => { if (await scanBlocked()) return; const r = await scanMember(); if (r) { toast('Scanned: ' + r.name); entryForm('collection', cur, { member: r.id }); } });
-    $('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
     $('#close')?.addEventListener('click', () => closeForm(cur, bal, pendingN));
     $('#csv')?.addEventListener('click', async () => {
       const ok = entries.filter(e => e.status !== 'voided'), sum = k => ok.filter(e => e.kind === k && e.status === 'approved').reduce((a, e) => a + +e.amount, 0);

@@ -3,7 +3,7 @@ import { exportXLSX } from '../xlsx.js';
 import { showMemberCards, makeQRCodes } from '../qr.js';
 
 export async function mountStudents(el, ctx) {
-  const canEdit = ctx.can('mayor', 'vice_mayor', 'secretary'), canQR = !!ctx.collects, canMake = ctx.can('mayor', 'treasurer', 'vice_mayor', 'secretary');
+  const canEdit = ctx.can('mayor', 'vice_mayor', 'secretary'), canQR = ctx.profile.real === 'sails_president' || ['vp_internal', 'vp_external', 'secretary', 'treasurer'].includes(ctx.profile.role), canMake = canQR;   // only the SAILS President, VP Internal, VP External, Secretary and Treasurer (enforced in the database too, v76)
   const canCollect = !!ctx.collects;
   let q = '', rows = [], pins = new Map(), owes = new Map();
   el.innerHTML = skeleton(6);
@@ -18,7 +18,7 @@ export async function mountStudents(el, ctx) {
         <div style="display:flex;gap:4px">${owes.has(r.id) ? `<span class="tag bad" title="Total still owed">owes ${peso(owes.get(r.id).total)}</span>` : ''}${canCollect && owes.has(r.id) ? `<button class="btn gold sm" data-col="${r.id}">Collect</button>` : ''}${canEdit ? `<button class="btn ghost sm" data-e="${r.id}">Edit</button>` : ''}</div></div>`).join('') || '<p class="empty">No students found.</p>'}</div>`;
     const qi = el.querySelector('#q'); qi.oninput = () => { q = qi.value; const p = qi.selectionStart; paint(); const n = el.querySelector('#q'); n.focus(); n.setSelectionRange(p, p); };
     el.querySelector('#add')?.addEventListener('click', () => form(null));
-    el.querySelector('#mk')?.addEventListener('click', () => makeQRCodes({ guard: !canQR }));
+    el.querySelector('#mk')?.addEventListener('click', () => makeQRCodes());
     el.querySelector('#cards')?.addEventListener('click', () => showMemberCards().catch(e => toast(e.message, true)));
     el.querySelector('#csv').onclick = async () => {
       try { toast('Preparing Excel…'); await exportXLSX({ filename: 'Alpha-Student-Roster.xlsx', by: ctx.profile.full_name, sheets: [
