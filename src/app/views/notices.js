@@ -10,11 +10,11 @@ export async function mountNotices(el, ctx) {
       <p class="muted" style="margin:0 0 10px">Shown at the top of the public page until they expire. Each new notice also sends a phone alert to everyone who turned alerts on${subs && typeof subs.count === 'number' ? ` (${subs.count} device${subs.count === 1 ? '' : 's'} now)` : ''}.</p>
       <div class="card">${rows.map(a => `<div class="row"><div class="m"><b>${a.pinned ? '📌 ' : ''}${esc(a.title)}</b><small>${esc(a.body || '')}${a.expires_on ? ` · until ${fmtDate(a.expires_on)}` : ''}</small></div>${can ? `<div class="acts"><button class="btn ghost sm" data-d="${a.id}">Delete</button></div>` : ''}</div>`).join('') || '<p class="empty">No notices yet.</p>'}</div>
       <h3 style="margin:18px 2px 8px">Privacy</h3>
-      <div class="card pad"><b>Names on the public violation list</b><p class="muted" style="margin:4px 0 10px">${ctx.can('mayor') ? 'Choose how classmates appear to anyone who opens the page.' : 'Only the Mayor can change this.'}</p>
+      <div class="card pad"><b>Names on the public violation list</b><p class="muted" style="margin:4px 0 10px">${ctx.can('mayor') ? 'Choose how classmates appear to anyone who opens the page.' : 'Only the SAILS Secretary, PIO or President can change this.'}</p>
         <div class="seg" id="nm">${[['full', 'Full names'], ['initials', 'Initials only']].map(([k, l]) => `<button data-n="${k}" class="${names === k ? 'on' : ''}" ${ctx.can('mayor') ? '' : 'disabled'}>${l}</button>`).join('')}</div></div>`;
     el.querySelector('#add')?.addEventListener('click', form);
     el.querySelectorAll('[data-d]').forEach(b => b.onclick = async () => { if (await confirmDialog('This notice disappears from the public page.', { ok: 'Delete', danger: true })) db(sb.from('v2_announcements').delete().eq('id', b.dataset.d)).then(draw).catch(e => toast(e.message, true)); });
-    el.querySelectorAll('[data-n]').forEach(b => b.onclick = () => db(sb.from('v2_settings').upsert({ key: 'public_names', value: b.dataset.n })).then(() => { toast('Saved'); draw(); }).catch(e => toast(e.message, true)));
+    el.querySelectorAll('[data-n]').forEach(b => b.onclick = () => db(sb.rpc('v2_set_setting', { p_key: 'public_names', p_value: b.dataset.n })).then(() => { toast('Saved'); draw(); }).catch(e => toast(e.message, true)));
   }
   function form() {
     modal(`<h3>New notice</h3><form id="f"><label>Title</label><input name="t" required maxlength="120" placeholder="Siglakas due Friday">

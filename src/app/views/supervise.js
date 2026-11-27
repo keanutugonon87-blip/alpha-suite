@@ -38,7 +38,7 @@ async function funds(el) {
 const ACCESS = [
   ['Own directives inbox', '✓', '✓', '✓', '✓', '✓'],
   ['Issue directives', 'VPs, Secretary, Treasurer, Auditor, PIO, General Marshal', '— (answers to the VP Internal)', 'Class Mayors (VP Internal only)', 'SAILS Marshals (General Marshal)', '—'],
-  ['Accounts and roles', 'All except the President role', 'Own class officers', '—', '—', '—'],
+  ['Accounts and roles', 'Gives and changes roles (not the President role)', 'Links own class officers to students of own class', 'VP Internal can link officers', '—', '—'],
   ['VP meetings, partners, activities', 'Approve', '—', 'Own work', '—', '—'],
   ['Calendar', 'Decide', 'Own drafts', 'Own drafts', '—', '—'],
   ['Class money, Watch, documents', 'Read', 'Run it', 'Read', '—', '—'],
@@ -48,6 +48,8 @@ const ACCESS = [
   ['Attendance, events and fines reports', 'Read', 'Own section (set events, compile)', 'VP External runs it', 'Scan', '—'],
   ['Cash batches (count, verify, countersign)', 'Read', 'Read (own section)', 'VP Internal countersigns; SAILS Treasurer verifies; Class Treasurer submits', '—', '—'],
   ['QR scanning and masterlist (requests to the SAILS Treasurer)', 'Read', 'Read (own section)', 'SAILS Treasurer grants; Class Treasurer asks', '—', '—'],
+  ['Approve budget requests and liquidations', 'Decides', 'No', 'SAILS Treasurer prepares, SAILS Auditor audits, SAILS Secretary files', '—', '—'],
+  ['School-wide settings, guest codes, alert key', 'Yes', 'No', 'No (SAILS Treasurer: payment note and expense rule)', '—', '—'],
   ['Make and print student QR cards', 'Yes', 'No', 'SAILS President, VP Internal, VP External, Secretary, Treasurer only', '—', '—'],
   ['Fund transparency requests (students ask to see the funds)', 'Read', 'No', 'SAILS Treasurer answers, SAILS Auditor verifies, then the student sees it; Secretary and VP Internal witness', '—', 'Asks, then reads the released answer'],
   ['Financial statements (monthly, yearly)', 'Read all sections', 'Own section', 'VP Internal, VP External, Treasurer, Auditor read all', '—', 'Own yearly statement'],
