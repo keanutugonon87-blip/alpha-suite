@@ -49,6 +49,7 @@ export const STEPS = [
   { v: 'v74', file: 'v74_budget_close_statements.sql', does: 'Treasury step 2: budget against spending, a month cannot close with cash not deposited, monthly and yearly statements, and each student’s yearly statement', check: mark('v74') },
   { v: 'v75', file: 'v75_treasurer_requests.sql', does: 'A Class Treasurer asks the SAILS Treasurer for QR scanning (time-limited) or the section masterlist', check: mark('v75') },
   { v: 'v76', file: 'v76_qr_cards_officers.sql', does: 'Only the SAILS President, VP Internal, VP External, Secretary and Treasurer can make or print student QR cards', check: mark('v76') },
+  { v: 'v77', file: 'v77_fund_transparency.sql', does: 'Fund transparency requests: the SAILS Treasurer answers, the SAILS Auditor verifies, then the student sees it; the Secretary and VP Internal sign as witnesses', check: mark('v77') },
   { v: 'v70', file: 'v70_periods_by_class.sql', does: 'Line of Authority step 3b: every class has its own period and month close; students see their own class only', check: mark('v70') },
   { v: 'v43', file: 'v43_line_of_authority.sql', does: 'The President decides on what the VPs and Secretary send up, and no longer works inside the VP desks', check: null },
   { v: 'v42', file: 'v42_coa.sql', does: 'Calendar of Activities: the SAILS Secretary drafts from council minutes, the SAILS President approves, students see a live calendar', check: table('v2_coa') },

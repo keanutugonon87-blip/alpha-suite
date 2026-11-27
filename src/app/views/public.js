@@ -231,6 +231,20 @@ export async function renderPublic(root) {
       };
     });
   }
+  function askFund() {
+    modal(`<h3>${LL('Fund transparency request', 'Hangyo sa pagkabutang sa pondo')}</h3><p class="muted" style="margin:0 0 8px">${LL('The SAILS Treasurer answers and the SAILS Auditor verifies it before you see it. The Secretary and VP Internal sign as witnesses.', 'Motubag ang SAILS Treasurer ug i-verify sa SAILS Auditor una nimo makita. Mopirma ang Secretary ug VP Internal isip saksi.')}</p>
+      <label>${LL('What do you want to see?', 'Unsay gusto nimong makita?')}</label><input id="fq-t" maxlength="120" placeholder="${esc(LL('e.g. Where the Foundation Week fund went', 'pananglitan: Asa gigamit ang pondo sa Foundation Week'))}">
+      <label>${t('whyNeeded')}</label><textarea id="fq-n" rows="3" maxlength="500"></textarea>
+      <div style="display:flex;gap:8px;margin-top:14px"><button class="btn gold" id="fq-go" style="flex:1">${t('sendRequest')}</button><button class="btn ghost" id="fq-x">${t('cancel')}</button></div>`, (el, close) => {
+      el.querySelector('#fq-x').onclick = close;
+      el.querySelector('#fq-go').onclick = async e => {
+        const ttl = el.querySelector('#fq-t').value.trim(); if (ttl.length < 3) return toast(LL('Say what you want to see', 'Isulti unsay gusto nimong makita'), true);
+        e.target.disabled = true;
+        try { await db(sb.rpc('v2_fund_request', { p_title: ttl, p_note: el.querySelector('#fq-n').value.trim() || null, p_token: tok() })); close(); toast(t('requestSent')); await load(); }
+        catch (x) { e.target.disabled = false; toast(/function|schema cache|does not exist/i.test(x.message || '') ? t('requestNotReady') : x.message, true); }
+      };
+    });
+  }
   /* FAQ: questions the SAILS Secretary keeps up to date; tap one to open its answer */
   function faqView() {
     const items = data.faq || [];
@@ -246,7 +260,9 @@ export async function renderPublic(root) {
     const st = { open: ['warn', t('reqOpen')], granted: ['ok', t('reqGranted')], declined: ['bad', t('reqDeclined')] };
     return `<p class="muted" style="margin:0 2px 8px">${t('archiveNote')}</p>
       <div class="card">${CATS.map(row).join('')}</div>
-      ${ask ? `<button class="btn gold" id="rq-new" style="width:100%;margin:10px 0 6px">${t('askRecord')}</button><button class="btn ghost" id="rq-rcpt" style="width:100%;margin:0 0 10px">${t('askReceipt')}</button>` : `<p class="muted" style="margin:10px 2px">${t('signInToAsk')}</p>`}
+      ${ask ? `<button class="btn gold" id="rq-new" style="width:100%;margin:10px 0 6px">${t('askRecord')}</button><button class="btn ghost" id="rq-fund" style="width:100%;margin:0 0 6px">${LL('Request fund transparency', 'Mangayo og pondo transparency')}</button><button class="btn ghost" id="rq-rcpt" style="width:100%;margin:0 0 10px">${t('askReceipt')}</button>` : `<p class="muted" style="margin:10px 2px">${t('signInToAsk')}</p>`}
+      ${(data.fund || []).length ? `<h3 style="margin:16px 2px 8px">${LL('My fund transparency requests', 'Akong mga hangyo sa pondo')}</h3><div class="card">${data.fund.map(r => { const done = ['granted', 'declined'].includes(r.status), tg = done ? [r.status === 'granted' ? 'ok' : 'bad', r.status === 'granted' ? t('reqGranted') : t('reqDeclined')] : ['warn', r.status === 'review' ? LL('with the Auditor', 'gi-verify sa Auditor') : t('reqOpen')];
+        return `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(r.title)}</b><small>${fmtDate(r.created_at)}</small></div><span class="tag ${tg[0]}">${tg[1]}</span></div>${done && r.answer_note ? `<p style="margin:6px 0 0;white-space:pre-wrap">${esc(r.answer_note)}</p><small class="muted">${LL('Answered by', 'Gitubag ni')} ${esc(r.answered_by_name || '')} · ${LL('verified by', 'gi-verify ni')} ${esc(r.audited_by_name || '')}<br>${LL('Witnessed by', 'Mga saksi')}: ${[r.sec_witness_name && `${esc(r.sec_witness_name)} (Secretary)`, r.vpi_witness_name && `${esc(r.vpi_witness_name)} (VP Internal)`].filter(Boolean).join(', ') || LL('waiting for witnesses', 'naghulat og saksi')}</small>` : ''}</div>`; }).join('')}</div>` : ''}
       ${mine.length ? `<h3 style="margin:16px 2px 8px">${t('myRequests')}</h3><div class="card">${mine.map(r => `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><div class="m"><b>${esc(r.title)}</b><small>${fmtDate(r.created_at)}${r.status === 'open' ? ` · ${age(r.created_at)} ${t('daysAgo')}` : ''}</small></div><span class="tag ${st[r.status][0]}">${st[r.status][1]}</span></div>${r.answer_note ? `<p style="margin:6px 0 0">${esc(r.answer_note)}</p>` : ''}</div>`).join('')}</div>` : ''}`;
   }
   function privacyView() {
@@ -318,7 +334,7 @@ export async function renderPublic(root) {
   let shownTab = '';
   function wireHome() {
     m.querySelectorAll('.hm [data-go]').forEach(b => b.onclick = () => { tab = b.dataset.go; lastIn[groupOf(tab)[0]] = tab; paint(); window.scrollTo({ top: 0 }); });
-    m.querySelector('#hm-req')?.addEventListener('click', () => { if (!canAsk()) { tab = 'me'; paint(); return; } askRecord(LL('Fund transparency report', 'Report sa pondo'), LL('e.g. Where the Foundation Week fund went', 'pananglitan: Asa gigamit ang pondo sa Foundation Week')); });
+    m.querySelector('#hm-req')?.addEventListener('click', () => { if (!canAsk()) { tab = 'me'; paint(); return; } askFund(); });
     m.querySelector('#hm-stmt')?.addEventListener('click', () => { const tk = tok(); if (tk) statement(tk); });
   }
 
@@ -369,6 +385,7 @@ export async function renderPublic(root) {
     m.querySelectorAll('[data-dc]').forEach(b => b.onclick = e => { if (e.target.closest('a')) return; pdOpen = pdOpen === b.dataset.dc ? null : b.dataset.dc; paint(); });
     m.querySelectorAll('[data-rq]').forEach(b => b.onclick = () => askRecord(b.dataset.rq));
     m.querySelector('#rq-new')?.addEventListener('click', () => askRecord());
+    m.querySelector('#rq-fund')?.addEventListener('click', () => askFund());
     m.querySelector('#rq-rcpt')?.addEventListener('click', () => askRecord('', 'Receipt for the ₱… I paid on …', 'treasurer'));
     m.querySelector('#rq-fix')?.addEventListener('click', () => askRecord(t('prvFixTitle')));
     m.querySelectorAll('[data-o]').forEach(b => b.onclick = () => showOfficerProfile(officers[+b.dataset.o]));
@@ -376,8 +393,8 @@ export async function renderPublic(root) {
   async function load() {
     try {
       const opt = p => db(p).catch(() => []);
-      const [o, tr, ann, docs, mine, faq, coa] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() })), opt(sb.rpc('v2_public_faq')), opt(sb.rpc('v2_public_coa'))]);   // docs stay empty until the v30 SQL is run
-      const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [], faq: Array.isArray(faq) ? faq : [], coa: Array.isArray(coa) ? coa : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
+      const [o, tr, ann, docs, mine, faq, coa, fund] = await Promise.all([db(sb.rpc('v2_public_officers')), db(sb.rpc('v2_public_treasury')), opt(sb.rpc('v2_public_announcements')), opt(sb.rpc('v2_public_documents')), opt(sb.rpc('v2_my_record_requests', { p_token: tok() })), opt(sb.rpc('v2_public_faq')), opt(sb.rpc('v2_public_coa')), opt(sb.rpc('v2_my_fund_requests', { p_token: tok() }))]);   // docs stay empty until the v30 SQL is run
+      const first = !data; data = { off: o, tre: tr, ann, docs, mine: Array.isArray(mine) ? mine : [], faq: Array.isArray(faq) ? faq : [], coa: Array.isArray(coa) ? coa : [], fund: Array.isArray(fund) ? fund : [] }; announceNew(ann); if (first) pstate = await pushState(); if (first || (tab !== 'learn' && tab !== 'me')) paint();
     } catch (e) {
       if (!data) {   // no connection: still show the student's own saved status, if this phone has one
         m.innerHTML = `<div class="card pad"><b>Couldn't load the class page.</b><p class="muted">${esc(e.message)}</p><button class="btn" onclick="location.reload()">Try again</button></div><div id="offme"></div>`;
