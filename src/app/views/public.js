@@ -5,6 +5,7 @@ import { showOfficerProfile } from '../profile.js';
 import { percentPaid } from '../money.js';
 import { calendarHTML, wireCalendar, newCalState, todayYMD, catLabel } from '../coa.js';
 import { auth, loadAuth, callAuth, enter, signOutViewer } from '../auth.js';
+import { renderWelcome, rulesAccepted, RULES_VERSION } from './welcome.js';
 import { pushState, enablePush, disablePush, linkDevice } from '../push.js';
 
 const ROSE = (() => { let t = ''; for (let i = 0; i < 72; i++) t += `<line x1="0" y1="-${i % 6 ? 90 : 86}" x2="0" y2="-94" transform="rotate(${i * 5})" stroke="#2a7fb0" stroke-opacity="${i % 6 ? .3 : .6}" stroke-width="${i % 6 ? 1 : 1.6}"/>`; return `<svg viewBox="-100 -100 200 200" aria-hidden="true"><circle r="97" fill="none" stroke="#2a7fb0" stroke-opacity=".4" stroke-width="1.5"/><circle r="72" fill="none" stroke="#2a7fb0" stroke-opacity=".25" stroke-dasharray="2 5"/>${t}
@@ -21,6 +22,9 @@ function countUp(el, to) {
 }
 
 const ME = 'alpha-me';
+const PEND = 'alpha-pending-qr';   // the QR card a student scanned while waiting for approval
+const Lx = (en, ceb) => getLang() === 'ceb' ? ceb : en;
+const RQ_WORD = { open: ['Waiting', 'Naghulat'], review: ['Being checked', 'Gi-check'], granted: ['Granted', 'Gi-aprobar'], declined: ['Declined', 'Gi-decline'] };
 /* "Add to home screen" nudge, shown once after sign-in on a phone that has not installed the app */
 let deferredInstall = null;
 addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferredInstall = e; });
@@ -90,6 +94,10 @@ function renderMe(host, opts = {}) {
   const cget = tk => { try { const c = JSON.parse(localStorage.getItem(CK) || 'null'); return c && c.token === tk ? c : null; } catch { return null; } };
   const cput = (token, data, note) => { try { localStorage.setItem(CK, JSON.stringify({ token, at: Date.now(), data, note })); } catch { /* ignore */ } };
   const netErr = e => !navigator.onLine || /failed to fetch|networkerror|load failed|network request/i.test(e?.message || '');
+  const myRequests = data => {
+    const rows = [...(data.fundq || []).map(r => ({ ...r, k: Lx('Fund records', 'Rekord sa pondo') })), ...(data.recq || []).map(r => ({ ...r, k: Lx('Record request', 'Hangyo sa rekord') }))].sort((a, b) => new Date(b.created_at) - new Date(a.created_at)).slice(0, 8);
+    return rows.length ? `<h3 class="sec">${Lx('My requests', 'Akong mga hangyo')}</h3><div class="card">${rows.map(r => `<div class="row"><div class="m"><b>${esc(r.title)}</b><small>${esc(r.k)} · ${fmtDate(r.created_at)}</small></div><span class="tag ${r.status === 'granted' ? 'ok' : r.status === 'declined' ? 'bad' : 'warn'}">${Lx(...(RQ_WORD[r.status] || [r.status, r.status]))}</span></div>`).join('')}</div>` : '';
+  };
   async function show(token) {
     host.innerHTML = skeleton(3);
     try {
@@ -98,6 +106,8 @@ function renderMe(host, opts = {}) {
         const { data: d, error } = await sb.rpc('v2_self_check', { p_token: token }); if (error) throw error; data = d;
         note = await sb.rpc('v2_public_pay_note').then(r => r.data || '', () => '');   // empty until the v4 SQL is run
         data.pay = await sb.rpc('v2_self_statement', { p_token: token }).then(r => (r.data?.payments || []).slice(0, 6), () => []);
+        data.fundq = await sb.rpc('v2_my_fund_requests', { p_token: token }).then(r => r.data || [], () => []);
+        data.recq = await sb.rpc('v2_my_record_requests', { p_token: token }).then(r => r.data || [], () => []);
         cput(token, data, note);
       } catch (e) { const c = cget(token); if (c && netErr(e)) { data = c.data; note = c.note || ''; stale = c.at; } else throw e; }
       put(token);
@@ -108,6 +118,7 @@ function renderMe(host, opts = {}) {
         <div class="card">${data.balances.map(b => `<div class="row"><div class="m"><b>${esc(b.charge)}</b><small>${b.waived ? t('excusedNote') : `${peso(b.paid)} / ${peso(b.due)}`}</small>${+b.paid > 0 && +b.owed > 0 ? `<div class="prog mini" role="img" aria-label="${percentPaid(b.paid, b.due)}%"><i style="width:${percentPaid(b.paid, b.due)}%"></i></div>` : ''}</div><span class="tag ${+b.owed ? 'bad' : 'ok'}">${+b.owed ? peso(b.owed) : b.waived ? t('excused') : t('paid')}</span></div>`).join('') || '<p class="empty">—</p>'}</div>
         ${(data.pay || []).length ? `<h3 class="sec">${t('myPays')}</h3><div class="card">${data.pay.map(p => `<div class="row"><div class="m"><b>${esc(p.for || '—')}</b><small>${fmtDate(p.at)}${p.receipt_no ? ' · ' + esc(p.receipt_no) : p.confirmed === false ? ' · ' + t('receiptSoon') : ''}${p.status === 'pending' ? ' · ' + t('pendingTag') : ''}</small></div><span class="tag ok">${peso(p.amount)}</span></div>`).join('')}</div>` : ''}
         <div class="card">${data.violations.map(v => `<div class="row"><div class="m"><b>${esc(v.standard)}</b><small>${fmtDate(v.date)} · ${sanctionText(v, ordn)}</small></div><span class="tag ${v.status === 'resolved' ? 'ok' : 'bad'}">${v.status === 'resolved' ? t('resolved') : t('outstanding')}</span></div>`).join('') || `<div class="empty"><b>${t('noviol')}</b></div>`}</div>
+        ${myRequests(data)}
         <div id="rm"></div>
         <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap"><button class="btn gold sm" id="st" ${stale ? 'disabled' : ''}>${t('stmt')}</button><button class="btn ghost sm" id="fg">${t('forget')}</button></p>`;
       installBar(host.querySelector('#inst'));
@@ -121,7 +132,7 @@ function renderMe(host, opts = {}) {
   const SID = 'alpha-sid', lastId = () => { try { return localStorage.getItem(SID) || ''; } catch { return ''; } };
   const rememberId = v => { try { localStorage.setItem(SID, v); } catch { /* ignore */ } };
   const missing = e => /function|schema cache|does not exist/i.test(e?.message || '');
-  const pinErr = d => d.error === 'locked' ? t('pinLocked').replace('{n}', d.wait_minutes).replace('{t}', new Date(Date.now() + d.wait_minutes * 60000).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })) : d.error === 'revoked' ? t('pinRevoked') : d.error === 'mismatch' ? t('pinMismatchId') : d.error === 'weak' ? t('pinWeak') : d.error === 'format' ? t('pinFormat') : t('pinBad');
+  const pinErr = d => d.error === 'locked' ? t('pinLocked').replace('{n}', d.wait_minutes).replace('{t}', new Date(Date.now() + d.wait_minutes * 60000).toLocaleTimeString('en-PH', { hour: 'numeric', minute: '2-digit', timeZone: 'Asia/Manila' })) : d.error === 'pending' ? Lx('Your access is still waiting for approval from the SAILS officers.', 'Naghulat pa ang imong access sa aprobal sa mga SAILS officer.') : d.error === 'revoked' ? t('pinRevoked') : d.error === 'mismatch' ? t('pinMismatchId') : d.error === 'weak' ? t('pinWeak') : d.error === 'format' ? t('pinFormat') : t('pinBad');
   const done = async tk => { await loadAuth().catch(() => {}); return opts.lock ? opts.onSignedIn() : show(tk); };
   const pin = (id, ac, ph = '••••••') => `<div class="pw"><input id="${id}" type="password" inputmode="numeric" pattern="[0-9]{6}" maxlength="6" autocomplete="${ac}" placeholder="${ph}" required><button type="button" class="eye" data-eye="${id}" aria-label="${t('showPin')}" aria-pressed="false">👁</button></div>`;
   const eyes = () => host.querySelectorAll('[data-eye]').forEach(b => b.onclick = () => { const i = host.querySelector('#' + b.dataset.eye), show = i.type === 'password'; i.type = show ? 'text' : 'password'; b.setAttribute('aria-pressed', show); b.setAttribute('aria-label', t(show ? 'hidePin' : 'showPin')); b.textContent = show ? '🙈' : '👁'; });
@@ -131,6 +142,40 @@ function renderMe(host, opts = {}) {
     host.querySelector('#sc').onclick = grab(box, () => import('../qr.js').then(q => q.scanRaw()), done);
     host.querySelector('#ph').onchange = e => e.target.files[0] && grab(box, () => import('../qr.js').then(q => q.readQRFromFile(e.target.files[0])), done)();
     host.querySelector('#pa').onclick = grab(box, () => { const v = prompt(t('pasteAsk')); return v && v.trim(); }, done);
+  }
+  const getPend = () => { try { return localStorage.getItem(PEND) || ''; } catch { return ''; } };
+  const putPend = v => { try { v ? localStorage.setItem(PEND, v) : localStorage.removeItem(PEND); } catch { /* ignore */ } };
+  /* Scan the card, ask for access, wait for the VP Internal and the President, then choose a PIN. */
+  async function verify(tk, id = lastId(), next = () => setup('', tk, id)) {
+    if (opts.lock && !rulesAccepted() && opts.onNeedRules) return opts.onNeedRules();
+    host.innerHTML = skeleton(2);
+    try {
+      const { data: d, error } = await sb.rpc('v2_access_request', { p_token: tk, p_rules: rulesAccepted() ? RULES_VERSION : '' }); if (error) throw error;
+      if (!d.ok) return setup(d.error === 'noid' ? Lx('Your Student ID is not on the system yet. Ask your Class Mayor to send it to the SAILS officers.', 'Wala pa sa sistema ang imong Student ID. Pangutana sa imong Class Mayor aron ipadala sa mga SAILS officer.') : Lx('This card is not active. Ask the SAILS Treasurer.', 'Dili aktibo kini nga card. Pangutana sa SAILS Treasurer.'));
+      putPend(tk);
+      if (d.status === 'approved') return next();
+      waiting(tk, d, next);
+    } catch (e) { setup(netErr(e) ? t('noNet') : e.message); }
+  }
+  function waiting(tk, d, next = () => setup('', tk, lastId())) {
+    const denied = d.status === 'denied', step = (label, name, at, wait) => `<div class="row"><div class="m"><b>${label}</b><small>${at ? esc(name) + ' · ' + fmtDate(at) : wait}</small></div><span class="tag ${at ? 'ok' : 'warn'}">${at ? '✓' : '…'}</span></div>`;
+    host.innerHTML = `<div id="wt"><div class="card pad" style="text-align:center"><small>${t('hello')}</small><h2 style="margin:2px 0">${esc(d.name)}</h2><small class="muted">${esc(d.student_no)}</small>
+      <p style="margin:12px 0 0">${denied ? `<b>${Lx('Not approved yet', 'Wala pa maaprobahan')}</b><br>${esc(d.deny_note || '')}<br><small class="muted">${esc(d.denied_by || '')}</small>` : Lx('Your QR card is verified. The SAILS officers now approve your access. This can take a day or two. You can close this page and come back.', 'Napamatud-an ang imong QR card. Gi-aprobahan na sa mga SAILS officer ang imong access. Mahimong molungtad og usa o duha ka adlaw. Pwede nimo isira ang panid ug balikan.')}</p></div>
+      <div class="card"><div class="row"><div class="m"><b>${Lx('QR card verified', 'Napamatud-an ang QR card')}</b></div><span class="tag ok">✓</span></div>${step(Lx('SAILS VP Internal approves', 'Mo-aprobar ang SAILS VP Internal'), d.vpi_name, d.vpi_at, Lx('waiting', 'naghulat'))}${step(Lx('SAILS President approves', 'Mo-aprobar ang SAILS President'), d.pres_name, d.pres_at, Lx('waiting', 'naghulat'))}
+        <div class="row"><div class="m"><b>${Lx('Choose your PIN', 'Pili og PIN')}</b><small>${Lx('opens after approval', 'mo-abli human sa aprobal')}</small></div><span class="tag">🔒</span></div></div>
+      <p style="text-align:center;display:flex;gap:8px;justify-content:center;flex-wrap:wrap">${denied ? `<button class="btn gold sm" id="ag">${Lx('Ask again', 'Mangayo pag-usab')}</button>` : `<button class="btn gold sm" id="ck">${Lx('Check again', 'Susiha pag-usab')}</button>`}<button class="btn ghost sm" id="bk">${t('back')}</button></p></div>`;
+    const check = async quiet => { try { const { data: x } = await sb.rpc('v2_access_status', { p_token: tk }); if (!x || !x.ok) return;
+      if (x.status === 'approved') { toast(Lx('Approved!', 'Naaprobahan!')); return next(); }
+      if (x.status !== d.status || x.vpi_at !== d.vpi_at || x.pres_at !== d.pres_at) return waiting(tk, x, next);
+      if (!quiet) toast(Lx('Still waiting for the officers', 'Naghulat pa sa mga officer')); } catch (e) { if (!quiet) toast(netErr(e) ? t('noNet') : e.message, true); } };
+    host.querySelector('#ck')?.addEventListener('click', () => check(false));
+    host.querySelector('#ag')?.addEventListener('click', () => verify(tk, lastId(), next));
+    host.querySelector('#bk').onclick = () => { putPend(''); start(); };
+    const iv = setInterval(() => { if (!host.isConnected || !host.querySelector('#wt')) return clearInterval(iv); check(true); }, 15000);
+  }
+  async function resume(tk) {
+    try { const { data: d, error } = await sb.rpc('v2_access_status', { p_token: tk }); if (error || !d || !d.ok || d.status === 'none') throw new Error('stale');
+      if (d.status === 'approved') return setup('', tk, lastId()); waiting(tk, d); } catch { putPend(''); opts.first ? setup() : start(); }
   }
   function start(err = '') {
     host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${opts.lock ? t('lockTitle') : t('mytitle')}</h3><p class="muted">${opts.lock ? t('lockDesc') : t('mydesc')}</p>
@@ -144,7 +189,7 @@ function renderMe(host, opts = {}) {
       ${opts.lock ? '' : `<details style="max-width:320px;margin:14px auto 0;text-align:left"><summary>${t('useQr')}</summary><div style="display:grid;gap:8px;margin-top:8px">${qrButtons()}</div></details>`}
       <div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
     const er = host.querySelector('#er'); eyes();
-    if (!opts.lock) qrWire(er, tk => done(tk));
+    if (!opts.lock) qrWire(er, tk => verify(tk, lastId(), () => done(tk)));
     host.querySelector('#np').onclick = e => { e.preventDefault(); setup(); };
     const gf = host.querySelector('#gf');
     if (gf) gf.onsubmit = async e => { e.preventDefault(); const b = gf.querySelector('button'); b.disabled = true; er.textContent = '';
@@ -156,27 +201,27 @@ function renderMe(host, opts = {}) {
       catch (x) { er.textContent = missing(x) ? t('pinNotReady') : netErr(x) ? t('noNet') : x.message; } btn.disabled = false; };
   }
   function setup(err = '', token = '', id = lastId()) {
-    host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${t('setupTitle')}</h3><p class="muted">${t('setupDesc')}</p>
+    host.innerHTML = `<div class="card pad" style="text-align:center"><h3>${token ? Lx('Choose your PIN', 'Pili og PIN') : Lx('Scan your QR card', 'I-scan ang imong QR card')}</h3><p class="muted">${token ? Lx('You are approved. Choose a 6-digit PIN. After that you only need your Student ID and PIN.', 'Naaprobahan ka na. Pili og 6-ka-numero nga PIN. Human niana Student ID ug PIN na lang.') : Lx('Scan the QR card the SAILS officers gave you. That shows you are on the class list. Then the VP Internal and the President approve you, and you can choose a PIN. Lost PIN? Scan again to choose a new one.', 'I-scan ang QR card nga gihatag sa mga SAILS officer. Mao kini ang pamatuod nga naa ka sa listahan sa klase. Unya mo-aprobar ang VP Internal ug President, ug makapili ka na og PIN. Nalimtan ang PIN? I-scan pag-usab aron mopili og bag-o.')}</p>
       <div style="display:grid;gap:8px;max-width:320px;margin:12px auto 0;text-align:left">
         <div style="display:grid;gap:8px" id="qrs">${token ? `<div class="tag ok" style="justify-self:start">✓ ${t('qrRead')}</div>` : qrButtons()}</div>
-        <form id="sf" style="display:grid;gap:6px"><label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(id)}">
+        ${token ? `<form id="sf" style="display:grid;gap:6px"><label for="sid">${t('studentId')}</label><input id="sid" autocomplete="username" autocapitalize="characters" spellcheck="false" placeholder="26-0000-000" required value="${esc(id)}">
           <label for="n1">${t('pinNew')}</label>${pin('n1', 'new-password')}
           <label for="n2">${t('pinConfirm')}</label>${pin('n2', 'new-password')}
-          <button class="btn gold" style="margin-top:6px">${t('pinSave')}</button></form></div>
+          <button class="btn gold" style="margin-top:6px">${t('pinSave')}</button></form>` : ''}</div>
       <p style="margin:12px 0 0"><a href="#" id="bk">${t('back')}</a></p><div class="err" id="er" role="alert" style="margin-top:10px">${esc(err)}</div></div>`;
-    const er = host.querySelector('#er'), keep = () => host.querySelector('#sid').value; eyes();
-    if (!token) qrWire(er, tk => setup('', tk, keep()));
+    const er = host.querySelector('#er'), keep = () => host.querySelector('#sid')?.value || id; eyes();
+    if (!token) qrWire(er, tk => verify(tk, keep()));
     host.querySelector('#bk').onclick = e => { e.preventDefault(); start(); };
-    host.querySelector('#sf').onsubmit = async e => { e.preventDefault(); const btn = e.target.querySelector('button'), n1 = host.querySelector('#n1').value; er.textContent = '';
+    if (token) host.querySelector('#sf').onsubmit = async e => { e.preventDefault(); const btn = e.target.querySelector('button'), n1 = host.querySelector('#n1').value; er.textContent = '';
       if (!token) return void (er.textContent = t('qrNeeded'));
       if (n1 !== host.querySelector('#n2').value) return void (er.textContent = t('pinNoMatch'));
       btn.disabled = true;
       try { const data = await callAuth({ action: 'setup', student_no: keep().trim(), token, pin: n1 });
-        if (data.ok) { await enter(data); rememberId(keep().trim()); toast(t('pinSaved')); return done(data.token); } er.textContent = pinErr(data); }
+        if (data.ok) { await enter(data); rememberId(keep().trim()); toast(t('pinSaved')); putPend(''); return done(data.token); } er.textContent = pinErr(data); }
       catch (x) { er.textContent = missing(x) ? t('pinNotReady') : netErr(x) ? t('noNet') : x.message; } btn.disabled = false; };
   }
   const saved = get();
-  if (opts.lock) start();
+  if (opts.lock) { const pend = getPend(); if (pend) resume(pend); else if (opts.first) setup(); else start(); }
   else if (saved) show(saved);
   else if (auth.member_id) sb.rpc('v2_my_token').then(r => r.data ? show(r.data) : start(), () => start());   // signed in already: no scanning needed
   else start();
@@ -184,7 +229,7 @@ function renderMe(host, opts = {}) {
 
 export async function renderPublic(root) {
   await loadAuth();
-  if (auth.require && !auth.viewer) return lockScreen(root);
+  if (!auth.viewer) return lockScreen(root);   // the class page opens only after the welcome, the rules and a sign-in
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>SAILS ’28</b><small>PIT-COMED · Batch 28</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="txt" aria-label="Display: text size and dark mode" title="Text size, dark mode, scenery">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button>${auth.kind === 'guest' ? `<button class="btn ghost sm" id="so">${t('signOut')}</button>` : ''}<a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;
@@ -409,12 +454,15 @@ export async function renderPublic(root) {
 }
 
 /* The lock: shown instead of the class page when "Require sign-in" is on and the visitor is not signed in. */
-function lockScreen(root) {
+function lockScreen(root, mode) {
+  let known = ''; try { known = localStorage.getItem('alpha-sid') || ''; } catch { /* ignore */ }
+  const again = m => lockScreen(root, m);
+  if (!mode && !rulesAccepted() && !known) return renderWelcome(root, again, { guest: true });   // first visit: welcome and rules before sign-in
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>SAILS ’28</b><small>${t('lockSub')}</small></div>
     <button class="btn ghost sm" id="txt" aria-label="Display" title="Display">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button></div>
     <main id="m" style="padding-bottom:40px;max-width:480px;margin:0 auto"></main>`;
-  root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); lockScreen(root); };
+  root.querySelector('#lang').onclick = () => { setLang(getLang() === 'ceb' ? 'en' : 'ceb'); lockScreen(root, mode); };
   root.querySelector('#txt').onclick = () => { const n = getTheme() === 'dark' ? 'light' : 'dark'; setTheme(n); };
-  renderMe(root.querySelector('#m'), { lock: true, onSignedIn: () => renderPublic(root) });
+  renderMe(root.querySelector('#m'), { lock: true, first: mode === 'first', onNeedRules: () => renderWelcome(root, again, { guest: true }), onSignedIn: () => renderPublic(root) });
   return () => {};
 }

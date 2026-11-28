@@ -51,6 +51,8 @@ const ACCESS = [
   ['Approve budget requests and liquidations', 'Decides', 'No', 'SAILS Treasurer prepares, SAILS Auditor audits, SAILS Secretary files', '—', '—'],
   ['School-wide settings, guest codes, alert key', 'Yes', 'No', 'No (SAILS Treasurer: payment note and expense rule)', '—', '—'],
   ['System health, security and guest list; add a section', 'Yes', 'No', 'VP Internal and VP External see; VP Internal adds sections', '—', '—'],
+  ['Student access (approve a student’s first sign-in)', 'Final approval; can decline or revoke', 'No', 'VP Internal approves first; Secretary reads', '—', 'Scans the QR card, then waits'],
+  ['Request log (who asked for what, and when)', 'Read', 'No', 'Secretary and VP Internal read', '—', 'Sees own requests on My status'],
   ['Reset a student PIN; sign-up lists', 'Yes (all classes)', 'Own class only', 'SAILS Treasurer resets; VPs, Secretary and Auditor read', '—', '—'],
   ['Make and print student QR cards', 'Yes', 'No', 'SAILS President, VP Internal, VP External, Secretary, Treasurer only', '—', '—'],
   ['Fund transparency requests (students ask to see the funds)', 'Read', 'No', 'SAILS Treasurer answers, SAILS Auditor verifies, then the student sees it; Secretary and VP Internal witness', '—', 'Asks, then reads the released answer'],
