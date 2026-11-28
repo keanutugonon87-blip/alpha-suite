@@ -50,6 +50,8 @@ const ACCESS = [
   ['QR scanning and masterlist (requests to the SAILS Treasurer)', 'Read', 'Read (own section)', 'SAILS Treasurer grants; Class Treasurer asks', '—', '—'],
   ['Approve budget requests and liquidations', 'Decides', 'No', 'SAILS Treasurer prepares, SAILS Auditor audits, SAILS Secretary files', '—', '—'],
   ['School-wide settings, guest codes, alert key', 'Yes', 'No', 'No (SAILS Treasurer: payment note and expense rule)', '—', '—'],
+  ['System health, security and guest list; add a section', 'Yes', 'No', 'VP Internal and VP External see; VP Internal adds sections', '—', '—'],
+  ['Reset a student PIN; sign-up lists', 'Yes (all classes)', 'Own class only', 'SAILS Treasurer resets; VPs, Secretary and Auditor read', '—', '—'],
   ['Make and print student QR cards', 'Yes', 'No', 'SAILS President, VP Internal, VP External, Secretary, Treasurer only', '—', '—'],
   ['Fund transparency requests (students ask to see the funds)', 'Read', 'No', 'SAILS Treasurer answers, SAILS Auditor verifies, then the student sees it; Secretary and VP Internal witness', '—', 'Asks, then reads the released answer'],
   ['Financial statements (monthly, yearly)', 'Read all sections', 'Own section', 'VP Internal, VP External, Treasurer, Auditor read all', '—', 'Own yearly statement'],

@@ -134,7 +134,7 @@ export async function renderStaff(root, tabId) {
   tabs = tabs.filter(t => t.id !== 'fundreq' || ['treasurer', 'auditor', 'secretary', 'vp_internal'].includes(p.role) && mode !== 'class' || p.real === 'sails_president');   // fund transparency: only these SAILS officers, never the Class Mayor or Class Treasurer
   if (mode === 'class') { if (tabId === 'pack') tabId = 'report'; tabs = tabs.filter(t => t.id !== 'pack').map(t => t.id === 'report' ? { ...t, label: 'SAILS Report', load: () => import('./classreport.js').then(m => m.mountSailsReport) } : t); }
   if (mode === 'class') tabs = tabs.filter(t => t.id !== 'vp').map(t => t.id === 'office' ? { ...t, label: 'Mayor Desk', load: () => import('./mayordesk.js').then(m => m.mountMayorDesk) } : t);
-  if (mode === 'pres') tabs = tabs.filter(t => t.id === 'office' || t.id === 'fundreq' || t.id === 'directives' || t.id === 'vp' || t.id === 'accounts');
+  if (mode === 'pres') tabs = tabs.filter(t => t.id === 'office' || t.id === 'fundreq' || t.id === 'directives' || t.id === 'vp' || t.id === 'accounts' || t.id === 'system');
   if (mode !== 'pres' && mode !== 'acting') tabs = tabs.filter(t => t.id !== 'report' || mode === 'class');
   // The President has one desk: Directives, VP Desk and Approvals sit inside it. Old links to #/staff/directives or #/staff/vp still land there.
   if (p.role === 'mayor' && mode !== 'class') { tabs = tabs.filter(t => t.id !== 'directives' && t.id !== 'vp').map(t => t.id === 'office' ? { ...t, load: () => import('./president.js').then(m => m.mountPresident) } : t); if (tabId === 'directives' || tabId === 'vp' || tabId === 'classup') { ctx.section = tabId; tabId = 'office'; } }
