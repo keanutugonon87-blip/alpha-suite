@@ -15,9 +15,9 @@ const L = (en, ceb) => getLang() === 'ceb' ? ceb : en;
 function pages() {
   return [
     { icon: '⚓', h: L('What is SAILS ’28?', 'Unsa ang SAILS ’28?'),
-      p: [L('SAILS ’28 is our class system for Batch 28 of PIT-COMED. It is one place where every student can see the class funds, their own statement, their records, announcements and the class calendar.',
-            'Ang SAILS ’28 mao ang sistema sa atong klase sa Batch 28 sa PIT-COMED. Usa ka lugar diin makita sa matag estudyante ang pondo sa klase, ang iyang statement, rekord, pahibalo ug kalendaryo.'),
-          L('Every student gets a personal dashboard that shows only their own balance, payments, violations and requests.', 'Ang matag estudyante adunay personal nga dashboard nga ang iyang balanse, bayad, paglapas ug hangyo ra ang makita.')] },
+      p: [L('SAILS ’28 is the SAILS Governance System of Batch 28 at PIT-COMED. It runs the organization’s funds and calendar in one place, so the officers and every student work from the same records.',
+            'Ang SAILS ’28 mao ang SAILS Governance System sa Batch 28 sa PIT-COMED. Gidumala niini ang pondo ug kalendaryo sa organisasyon sa usa ka lugar, aron parehas ang rekord nga gigamit sa mga officer ug sa matag estudyante.'),
+          L('Every student gets a personal dashboard. It shows only your own balance, payments, violations and requests, along with the class funds, announcements and the calendar.', 'Ang matag estudyante adunay personal nga dashboard. Ang imong balanse, bayad, paglapas ug hangyo ra ang makita, uban sa pondo sa klase, pahibalo ug kalendaryo.')] },
     { icon: '🔍', h: L('Why it exists', 'Ngano naa kini'),
       p: [L('The money belongs to the class, so every student has the right to know where it goes. Before, you had to ask around and hope the answer was right.',
             'Ang kuwarta iya sa klase, busa ang matag estudyante adunay katungod nga mahibaw-an kung asa kini gigamit. Kaniadto, mangutana pa ug mag-asa nga husto ang tubag.'),
