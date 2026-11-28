@@ -229,7 +229,7 @@ function renderMe(host, opts = {}) {
 
 export async function renderPublic(root) {
   await loadAuth();
-  if (!auth.viewer) return lockScreen(root);   // the class page opens only after the welcome, the rules and a sign-in
+  if (!['student', 'officer', 'guest'].includes(auth.kind)) return lockScreen(root);   // the class page opens only after the welcome, the rules and a sign-in (the server reports 'open' to everyone while Require sign-in is off, so go by who the visitor really is)
   root.innerHTML = `<div class="top"><span class="crest-ring"><img src="assets/wolf-crest.png" alt=""></span><div class="t"><b>SAILS ’28</b><small>PIT-COMED · Batch 28</small></div>
     <span class="chip" id="sync"><i></i><span>Live</span></span><button class="btn ghost sm" id="txt" aria-label="Display: text size and dark mode" title="Text size, dark mode, scenery">Aa</button><button class="btn ghost sm" id="lang" aria-label="Language">${getLang() === 'ceb' ? 'EN' : 'CEB'}</button>${auth.kind === 'guest' ? `<button class="btn ghost sm" id="so">${t('signOut')}</button>` : ''}<a class="btn gold sm" href="#/staff" style="text-decoration:none;display:inline-grid;align-items:center">${t('signin')}</a></div>
     <main id="m" style="padding-bottom:40px">${skeleton(5)}</main>`;

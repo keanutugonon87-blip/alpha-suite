@@ -16,6 +16,7 @@ async function route() {
   try {
     if (a === 'receipt' && b) stop = await renderReceipt(root, { code: b });
     else if (a === 'legacy' && b) stop = await renderReceipt(root, { legacy: b });
+    else if (a === 'welcome') { const w = await import('./views/welcome.js'); w.renderWelcome(root, () => { location.hash = '#/'; }, { guest: true }); stop = () => {}; }   // lets an officer preview the student welcome
     else if (a === 'staff') stop = await (await import('./views/staff.js')).renderStaff(root, b);
     else stop = await renderPublic(root);
   } catch (e) {
